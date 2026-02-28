@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Topbar from "../components/Topbar.jsx";
 import StatusBadge from "../components/StatusBadge.jsx";
 
@@ -15,8 +15,18 @@ const STATUSES = [
   "Entregado",
 ];
 
+function parseWeight(input) {
+  if (input === null || input === undefined) return NaN;
+  const s = String(input).trim().replace(",", ".");
+  return Number(s);
+}
+
 export default function OperatorPanel() {
   const [msg, setMsg] = useState("");
+
+  // Dashboard stats
+  const [stats, setStats] = useState(null);
+  const [loadingStats, setLoadingStats] = useState(false);
 
   // Crear cliente
   const [newClientNumber, setNewClientNumber] = useState("");
@@ -53,33 +63,20 @@ export default function OperatorPanel() {
   const [editDraft, setEditDraft] = useState({});
   const [savingEditId, setSavingEditId] = useState(null);
 
-  // ✅ DASHBOARD: calculado localmente (NO pega /operator/dashboard)
-  const stats = useMemo(() => {
-    const s = {
-      total: rows.length,
-      received: 0,
-      prep: 0,
-      sent: 0,
-      transit: 0,
-      ready: 0,
-      delivered: 0,
-      total_weight: 0,
-    };
-
-    for (const r of rows) {
-      const st = r.status;
-      if (st === "Recibido en depósito") s.received++;
-      if (st === "En preparación") s.prep++;
-      if (st === "Despachado") s.sent++;
-      if (st === "En tránsito") s.transit++;
-      if (st === "Listo para entrega") s.ready++;
-      if (st === "Entregado") s.delivered++;
-
-      const w = Number(r.weight_kg);
-      if (!Number.isNaN(w)) s.total_weight += w;
+  async function loadDashboard() {
+    setLoadingStats(true);
+    try {
+      const res = await fetch(`${API}/operator/dashboard`, {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      const data = await res.json();
+      if (res.ok) setStats(data.stats);
+    } catch {
+      // no-op
+    } finally {
+      setLoadingStats(false);
     }
-    return s;
-  }, [rows]);
+  }
 
   async function createClient() {
     setMsg("");
@@ -112,7 +109,7 @@ export default function OperatorPanel() {
     setNewEmail("");
     setNewPassword("");
 
-    await loadOperatorShipments();
+    await loadDashboard();
   }
 
   async function findClient() {
@@ -137,6 +134,11 @@ export default function OperatorPanel() {
     if (!packageCode || !description || !weightKg)
       return setMsg("Faltan campos obligatorios");
 
+    const weight = parseWeight(weightKg);
+    if (Number.isNaN(weight) || weight < 0) {
+      return setMsg("Peso inválido. Usá 0.5 o 0,5");
+    }
+
     const res = await fetch(`${API}/operator/shipments`, {
       method: "POST",
       headers: {
@@ -149,13 +151,24 @@ export default function OperatorPanel() {
         description,
         box_code: boxCode || null,
         tracking: tracking || null,
-        weight_kg: Number(weightKg),
+        weight_kg: weight,
         status,
       }),
     });
 
     const data = await res.json();
-    if (!res.ok) return setMsg(data?.error || "Error creando envío");
+    if (!res.ok) {
+      // si backend manda details, lo mostramos
+      const details = Array.isArray(data?.details) ? data.details : null;
+      if (details?.length) {
+        return setMsg(
+          `${data?.error || "Error"} — ${details
+            .map((d) => `${(d.path || []).join(".")}: ${d.message}`)
+            .join(" | ")}`
+        );
+      }
+      return setMsg(data?.error || data?.debug || "Error creando envío");
+    }
 
     setMsg(`Envío creado: ${data.shipment.package_code}`);
     setPackageCode("");
@@ -166,14 +179,14 @@ export default function OperatorPanel() {
     setStatus("Recibido en depósito");
 
     await loadOperatorShipments();
+    await loadDashboard();
   }
 
   async function loadOperatorShipments() {
     setMsg("");
     const qs = new URLSearchParams();
     if (opSearch.trim()) qs.set("search", opSearch.trim());
-    if (opClientNumber.trim() !== "")
-      qs.set("client_number", opClientNumber.trim());
+    if (opClientNumber.trim() !== "") qs.set("client_number", opClientNumber.trim());
 
     const res = await fetch(`${API}/operator/shipments?${qs.toString()}`, {
       headers: { Authorization: `Bearer ${getToken()}` },
@@ -232,6 +245,7 @@ export default function OperatorPanel() {
 
     setMsg(`Estado actualizado: ${newStatus}`);
     await loadOperatorShipments();
+    await loadDashboard();
 
     if (openId === shipmentId) {
       await loadEvents(shipmentId);
@@ -258,6 +272,7 @@ export default function OperatorPanel() {
     setMsg("");
     setSavingEditId(shipmentId);
 
+    const weight = parseWeight(editDraft.weight_kg);
     const payload = {
       package_code: (editDraft.package_code || "").trim(),
       description: (editDraft.description || "").trim(),
@@ -267,14 +282,10 @@ export default function OperatorPanel() {
       tracking: (editDraft.tracking || "").trim()
         ? (editDraft.tracking || "").trim()
         : null,
-      weight_kg: Number(editDraft.weight_kg),
+      weight_kg: weight,
     };
 
-    if (
-      !payload.package_code ||
-      !payload.description ||
-      Number.isNaN(payload.weight_kg)
-    ) {
+    if (!payload.package_code || !payload.description || Number.isNaN(payload.weight_kg)) {
       setSavingEditId(null);
       return setMsg("Revisá código, descripción y peso (kg)");
     }
@@ -296,10 +307,12 @@ export default function OperatorPanel() {
     setMsg("Cambios guardados");
     cancelEdit();
     await loadOperatorShipments();
+    await loadDashboard();
   }
 
   async function refreshAll() {
     await loadOperatorShipments();
+    await loadDashboard();
   }
 
   useEffect(() => {
@@ -320,49 +333,51 @@ export default function OperatorPanel() {
       <div className="cards">
         <div className="cardStat">
           <div className="k">Total envíos</div>
-          <div className="v">{stats.total}</div>
+          <div className="v">{loadingStats ? "…" : stats?.total ?? 0}</div>
           <div className="s">Todos los estados</div>
         </div>
 
         <div className="cardStat">
           <div className="k">Recibidos</div>
-          <div className="v">{stats.received}</div>
+          <div className="v">{loadingStats ? "…" : stats?.received ?? 0}</div>
           <div className="s">En depósito</div>
         </div>
 
         <div className="cardStat">
           <div className="k">Preparación</div>
-          <div className="v">{stats.prep}</div>
+          <div className="v">{loadingStats ? "…" : stats?.prep ?? 0}</div>
           <div className="s">Armado / control</div>
         </div>
 
         <div className="cardStat">
           <div className="k">Despachados</div>
-          <div className="v">{stats.sent}</div>
+          <div className="v">{loadingStats ? "…" : stats?.sent ?? 0}</div>
           <div className="s">Salieron del depósito</div>
         </div>
 
         <div className="cardStat">
           <div className="k">En tránsito</div>
-          <div className="v">{stats.transit}</div>
+          <div className="v">{loadingStats ? "…" : stats?.transit ?? 0}</div>
           <div className="s">Viajando</div>
         </div>
 
         <div className="cardStat">
           <div className="k">Listo entrega</div>
-          <div className="v">{stats.ready}</div>
+          <div className="v">{loadingStats ? "…" : stats?.ready ?? 0}</div>
           <div className="s">Última milla</div>
         </div>
 
         <div className="cardStat">
           <div className="k">Entregados</div>
-          <div className="v">{stats.delivered}</div>
+          <div className="v">{loadingStats ? "…" : stats?.delivered ?? 0}</div>
           <div className="s">Cerrados</div>
         </div>
 
         <div className="cardStat">
           <div className="k">Peso total</div>
-          <div className="v">{Number(stats.total_weight || 0).toFixed(2)}</div>
+          <div className="v">
+            {loadingStats ? "…" : Number(stats?.total_weight ?? 0).toFixed(2)}
+          </div>
           <div className="s">kg acumulados</div>
         </div>
       </div>
@@ -465,7 +480,7 @@ export default function OperatorPanel() {
           <div className="row">
             <input
               className="input"
-              placeholder="Peso (kg)"
+              placeholder="Peso (kg) — 0.5 o 0,5"
               value={weightKg}
               onChange={(e) => setWeightKg(e.target.value)}
             />
@@ -626,21 +641,12 @@ export default function OperatorPanel() {
                   </td>
 
                   <td>
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: 10,
-                        alignItems: "center",
-                      }}
-                    >
+                    <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                       <select
                         className="input"
                         value={statusDraft[r.id] || r.status}
                         onChange={(e) =>
-                          setStatusDraft((s) => ({
-                            ...s,
-                            [r.id]: e.target.value,
-                          }))
+                          setStatusDraft((s) => ({ ...s, [r.id]: e.target.value }))
                         }
                       >
                         {STATUSES.map((s) => (
@@ -729,8 +735,8 @@ export default function OperatorPanel() {
                   </tr>
                 </thead>
                 <tbody>
-                  {events.map((e) => (
-                    <tr key={e.id}>
+                  {events.map((e, idx) => (
+                    <tr key={idx}>
                       <td>{new Date(e.created_at).toLocaleString()}</td>
                       <td>{e.old_status || "-"}</td>
                       <td>
@@ -745,8 +751,7 @@ export default function OperatorPanel() {
         )}
 
         <div className="muted" style={{ marginTop: 10 }}>
-          Tip: cambiás el estado → Guardar → el cliente lo ve al instante en su
-          tabla.
+          Tip: cambiás el estado → Guardar → el cliente lo ve al instante en su tabla.
         </div>
       </div>
 
