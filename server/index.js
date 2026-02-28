@@ -394,6 +394,33 @@ app.get("/shipments/:id/events", authRequired, async (req, res) => {
   }
 });
 
+app.get(
+  "/operator/dashboard",
+  authRequired,
+  requireRole(["operator", "admin"]),
+  async (req, res) => {
+    try {
+      const stats = await db.query(`
+        SELECT
+          COUNT(*) AS total,
+          COUNT(*) FILTER (WHERE status='Recibido en depósito') AS received,
+          COUNT(*) FILTER (WHERE status='En preparación') AS prep,
+          COUNT(*) FILTER (WHERE status='Despachado') AS sent,
+          COUNT(*) FILTER (WHERE status='En tránsito') AS transit,
+          COUNT(*) FILTER (WHERE status='Listo para entrega') AS ready,
+          COUNT(*) FILTER (WHERE status='Entregado') AS delivered,
+          COALESCE(SUM(weight_kg),0) AS total_weight
+        FROM shipments
+      `);
+
+      res.json({ stats: stats.rows[0] });
+    } catch (err) {
+      console.error("DASHBOARD ERROR:", err);
+      res.status(500).json({ error: "Error dashboard" });
+    }
+  }
+);
+
 app.listen(PORT, () => {
   console.log(`API corriendo en http://localhost:${PORT}`);
 });

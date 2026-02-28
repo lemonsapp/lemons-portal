@@ -15,6 +15,15 @@ const STATUSES = [
   "Entregado",
 ];
 
+async function readJsonSafe(res) {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { raw: text };
+  }
+}
+
 export default function OperatorPanel() {
   const [msg, setMsg] = useState("");
 
@@ -63,7 +72,7 @@ export default function OperatorPanel() {
       const res = await fetch(`${API}/operator/dashboard`, {
         headers: { Authorization: `Bearer ${getToken()}` },
       });
-      const data = await res.json();
+      const data = await readJsonSafe(res);
       if (res.ok) setStats(data.stats);
     } catch {
       // no-op
@@ -79,31 +88,35 @@ export default function OperatorPanel() {
     if (!newName || !newEmail || !newPassword)
       return setMsg("Completá nombre, email y contraseña");
 
-    const res = await fetch(`${API}/operator/clients`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${getToken()}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        client_number: n,
-        name: newName,
-        email: newEmail,
-        password: newPassword,
-        role: "client",
-      }),
-    });
+    try {
+      const res = await fetch(`${API}/operator/clients`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          client_number: n,
+          name: newName,
+          email: newEmail,
+          password: newPassword,
+          role: "client",
+        }),
+      });
 
-    const data = await res.json();
-    if (!res.ok) return setMsg(data?.error || "Error creando cliente");
+      const data = await readJsonSafe(res);
+      if (!res.ok) return setMsg(data?.error || "Error creando cliente");
 
-    setMsg(`Cliente creado: #${data.user.client_number} — ${data.user.email}`);
-    setNewClientNumber("");
-    setNewName("");
-    setNewEmail("");
-    setNewPassword("");
+      setMsg(`Cliente creado: #${data.user.client_number} — ${data.user.email}`);
+      setNewClientNumber("");
+      setNewName("");
+      setNewEmail("");
+      setNewPassword("");
 
-    await loadDashboard();
+      await loadDashboard();
+    } catch (e) {
+      return setMsg("Error de conexión creando cliente");
+    }
   }
 
   async function findClient() {
@@ -113,92 +126,128 @@ export default function OperatorPanel() {
     const n = Number(clientNumber);
     if (Number.isNaN(n)) return setMsg("Número inválido");
 
-    const res = await fetch(`${API}/operator/clients?client_number=${n}`, {
-      headers: { Authorization: `Bearer ${getToken()}` },
-    });
+    try {
+      const res = await fetch(`${API}/operator/clients?client_number=${n}`, {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
 
-    const data = await res.json();
-    if (!data.user) return setMsg("Cliente no encontrado");
-    setClient(data.user);
+      const data = await readJsonSafe(res);
+      if (!res.ok) return setMsg(data?.error || "Error buscando cliente");
+
+      if (!data.user) return setMsg("Cliente no encontrado");
+      setClient(data.user);
+    } catch (e) {
+      return setMsg("Error de conexión buscando cliente");
+    }
   }
 
+  // ✅ FIX: función robusta + muestra error real si backend devuelve HTML/500
   async function createShipment() {
     setMsg("");
+
     if (!client) return setMsg("Primero buscá un cliente");
-    if (!packageCode || !description || !weightKg)
-      return setMsg("Faltan campos obligatorios");
 
-    const res = await fetch(`${API}/operator/shipments`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${getToken()}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        client_number: client.client_number,
-        package_code: packageCode,
-        description,
-        box_code: boxCode || null,
-        tracking: tracking || null,
-        weight_kg: Number(weightKg),
-        status,
-      }),
-    });
+    const w = Number(weightKg);
+    if (!packageCode.trim() || !description.trim() || Number.isNaN(w) || w <= 0) {
+      return setMsg("Revisá código, descripción y peso (kg)");
+    }
 
-    const data = await res.json();
-    if (!res.ok) return setMsg(data?.error || "Error creando envío");
+    try {
+      const res = await fetch(`${API}/operator/shipments`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          client_number: client.client_number,
 
-    setMsg(`Envío creado: ${data.shipment.package_code}`);
-    setPackageCode("");
-    setDescription("");
-    setBoxCode("");
-    setTracking("");
-    setWeightKg("");
-    setStatus("Recibido en depósito");
+          // payload principal (como veníamos usando)
+          package_code: packageCode.trim(),
+          description: description.trim(),
+          box_code: boxCode.trim() ? boxCode.trim() : null,
+          tracking: tracking.trim() ? tracking.trim() : null,
+          weight_kg: w,
+          status,
 
-    await loadOperatorShipments();
-    await loadDashboard();
+          // compat (por si tu backend/DB usara otros nombres)
+          code: packageCode.trim(),
+          box: boxCode.trim() ? boxCode.trim() : null,
+        }),
+      });
+
+      const data = await readJsonSafe(res);
+
+      if (!res.ok) {
+        console.log("CREATE SHIPMENT ERROR BODY:", data);
+        return setMsg(data?.error || `Error creando envío (${res.status})`);
+      }
+
+      setMsg(`Envío creado: ${data?.shipment?.package_code || packageCode.trim()}`);
+
+      setPackageCode("");
+      setDescription("");
+      setBoxCode("");
+      setTracking("");
+      setWeightKg("");
+      setStatus("Recibido en depósito");
+
+      await loadOperatorShipments();
+      await loadDashboard();
+    } catch (e) {
+      console.error(e);
+      return setMsg("Error de conexión creando envío");
+    }
   }
 
   async function loadOperatorShipments() {
     setMsg("");
     const qs = new URLSearchParams();
     if (opSearch.trim()) qs.set("search", opSearch.trim());
-    if (opClientNumber.trim() !== "")
-      qs.set("client_number", opClientNumber.trim());
+    if (opClientNumber.trim() !== "") qs.set("client_number", opClientNumber.trim());
 
-    const res = await fetch(`${API}/operator/shipments?${qs.toString()}`, {
-      headers: { Authorization: `Bearer ${getToken()}` },
-    });
+    try {
+      const res = await fetch(`${API}/operator/shipments?${qs.toString()}`, {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
 
-    const data = await res.json();
-    if (!res.ok) return setMsg(data?.error || "Error cargando envíos");
+      const data = await readJsonSafe(res);
+      if (!res.ok) return setMsg(data?.error || "Error cargando envíos");
 
-    const list = data.rows || [];
-    setRows(list);
+      const list = data.rows || [];
+      setRows(list);
 
-    const nextDraft = {};
-    list.forEach((r) => (nextDraft[r.id] = r.status));
-    setStatusDraft(nextDraft);
+      const nextDraft = {};
+      list.forEach((r) => (nextDraft[r.id] = r.status));
+      setStatusDraft(nextDraft);
+    } catch {
+      return setMsg("Error de conexión cargando envíos");
+    }
   }
 
   async function loadEvents(shipmentId) {
     setLoadingEvents(true);
 
-    const res = await fetch(`${API}/shipments/${shipmentId}/events`, {
-      headers: { Authorization: `Bearer ${getToken()}` },
-    });
+    try {
+      const res = await fetch(`${API}/shipments/${shipmentId}/events`, {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
 
-    const data = await res.json();
-    setLoadingEvents(false);
+      const data = await readJsonSafe(res);
+      setLoadingEvents(false);
 
-    if (!res.ok) {
-      setMsg(data?.error || "Error cargando historial");
+      if (!res.ok) {
+        setMsg(data?.error || "Error cargando historial");
+        setEvents([]);
+        return;
+      }
+
+      setEvents(data.rows || []);
+    } catch {
+      setLoadingEvents(false);
       setEvents([]);
-      return;
+      setMsg("Error de conexión cargando historial");
     }
-
-    setEvents(data.rows || []);
   }
 
   async function saveStatus(shipmentId) {
@@ -208,26 +257,31 @@ export default function OperatorPanel() {
 
     setSavingId(shipmentId);
 
-    const res = await fetch(`${API}/operator/shipments/${shipmentId}/status`, {
-      method: "PATCH",
-      headers: {
-        Authorization: `Bearer ${getToken()}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ status: newStatus }),
-    });
+    try {
+      const res = await fetch(`${API}/operator/shipments/${shipmentId}/status`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status: newStatus }),
+      });
 
-    const data = await res.json();
-    setSavingId(null);
+      const data = await readJsonSafe(res);
+      setSavingId(null);
 
-    if (!res.ok) return setMsg(data?.error || "Error actualizando estado");
+      if (!res.ok) return setMsg(data?.error || "Error actualizando estado");
 
-    setMsg(`Estado actualizado: ${newStatus}`);
-    await loadOperatorShipments();
-    await loadDashboard();
+      setMsg(`Estado actualizado: ${newStatus}`);
+      await loadOperatorShipments();
+      await loadDashboard();
 
-    if (openId === shipmentId) {
-      await loadEvents(shipmentId);
+      if (openId === shipmentId) {
+        await loadEvents(shipmentId);
+      }
+    } catch {
+      setSavingId(null);
+      setMsg("Error de conexión actualizando estado");
     }
   }
 
@@ -266,30 +320,36 @@ export default function OperatorPanel() {
     if (
       !payload.package_code ||
       !payload.description ||
-      Number.isNaN(payload.weight_kg)
+      Number.isNaN(payload.weight_kg) ||
+      payload.weight_kg <= 0
     ) {
       setSavingEditId(null);
       return setMsg("Revisá código, descripción y peso (kg)");
     }
 
-    const res = await fetch(`${API}/operator/shipments/${shipmentId}`, {
-      method: "PATCH",
-      headers: {
-        Authorization: `Bearer ${getToken()}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
+    try {
+      const res = await fetch(`${API}/operator/shipments/${shipmentId}`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
 
-    const data = await res.json();
-    setSavingEditId(null);
+      const data = await readJsonSafe(res);
+      setSavingEditId(null);
 
-    if (!res.ok) return setMsg(data?.error || "Error guardando cambios");
+      if (!res.ok) return setMsg(data?.error || "Error guardando cambios");
 
-    setMsg("Cambios guardados");
-    cancelEdit();
-    await loadOperatorShipments();
-    await loadDashboard();
+      setMsg("Cambios guardados");
+      cancelEdit();
+      await loadOperatorShipments();
+      await loadDashboard();
+    } catch {
+      setSavingEditId(null);
+      setMsg("Error de conexión guardando cambios");
+    }
   }
 
   async function refreshAll() {
@@ -628,7 +688,10 @@ export default function OperatorPanel() {
                         className="input"
                         value={statusDraft[r.id] || r.status}
                         onChange={(e) =>
-                          setStatusDraft((s) => ({ ...s, [r.id]: e.target.value }))
+                          setStatusDraft((s) => ({
+                            ...s,
+                            [r.id]: e.target.value,
+                          }))
                         }
                       >
                         {STATUSES.map((s) => (
