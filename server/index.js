@@ -9,6 +9,13 @@ const { authRequired, requireRole } = require("./auth");
 const { sendEmail } = require("./mailer");
 
 const app = express();
+app.get("/", (req, res) => {
+  res.send("LEMON’s API OK ✅ — probá /health");
+});
+
+app.get("/health", (req, res) => {
+  res.json({ ok: true });
+});
 app.use(cors({ origin: true }));
 app.use(express.json());
 

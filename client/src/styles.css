@@ -1,0 +1,407 @@
+:root{
+  --bg: #0b0f1a;
+  --panel: rgba(255,255,255,0.04);
+  --panel2: rgba(255,255,255,0.06);
+  --border: rgba(255,255,255,0.10);
+  --text: rgba(255,255,255,0.92);
+  --muted: rgba(255,255,255,0.62);
+
+  --brand: #7c5cff;      /* violeta */
+  --brand2: #22c55e;     /* verde */
+  --warn: #f59e0b;       /* naranja */
+  --danger: #ef4444;     /* rojo */
+  --info: #38bdf8;       /* celeste */
+}
+
+*{ box-sizing:border-box; }
+html,body{ height:100%; }
+body{
+  margin:0;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  background:
+    radial-gradient(1200px 600px at 10% 10%, rgba(124,92,255,0.22), transparent 60%),
+    radial-gradient(1200px 600px at 90% 0%, rgba(56,189,248,0.15), transparent 55%),
+    radial-gradient(900px 500px at 60% 120%, rgba(34,197,94,0.10), transparent 60%),
+    var(--bg);
+  color: var(--text);
+}
+
+/* layout */
+.screen{
+  max-width: 1150px;
+  margin: 0 auto;
+  padding: 18px;
+}
+
+.topbar{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  margin: 10px 0 14px;
+}
+.topbar h1{
+  margin:0;
+  font-size: 28px;
+  letter-spacing: 0.2px;
+}
+.muted{ color: var(--muted); }
+
+/* cards */
+.box{
+  background: linear-gradient(180deg, var(--panel), var(--panel2));
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 14px;
+  box-shadow: 0 16px 60px rgba(0,0,0,0.35);
+}
+.grid2{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+@media (max-width: 900px){
+  .grid2{ grid-template-columns: 1fr; }
+}
+
+/* form */
+.col{ display:flex; flex-direction:column; gap:10px; }
+.row{ display:flex; gap: 10px; }
+.filters{ display:flex; gap:10px; margin: 10px 0; }
+@media (max-width: 900px){
+  .row, .filters{ flex-direction:column; }
+}
+
+.input{
+  width:100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(0,0,0,0.22);
+  color: var(--text);
+  outline: none;
+}
+.input:focus{
+  border-color: rgba(124,92,255,0.55);
+  box-shadow: 0 0 0 4px rgba(124,92,255,0.18);
+}
+
+.btn{
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  padding: 9px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 700;
+}
+.btn:hover{
+  border-color: rgba(124,92,255,0.55);
+  box-shadow: 0 0 0 4px rgba(124,92,255,0.12);
+}
+.btn:disabled{ opacity: 0.55; cursor:not-allowed; }
+
+.btnPrimary{
+  background: linear-gradient(180deg, rgba(124,92,255,0.9), rgba(124,92,255,0.62));
+  border-color: rgba(124,92,255,0.45);
+}
+.btnDanger{
+  background: linear-gradient(180deg, rgba(239,68,68,0.85), rgba(239,68,68,0.55));
+  border-color: rgba(239,68,68,0.45);
+}
+
+/* pills */
+.pill{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(0,0,0,0.18);
+  font-weight: 800;
+  font-size: 12px;
+}
+
+/* status badges */
+.badge{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 900;
+  font-size: 12px;
+  border: 1px solid transparent;
+}
+.dot{
+  width:8px; height:8px;
+  border-radius:999px;
+  background: currentColor;
+  opacity: 0.95;
+}
+.badge--received{ color: #a78bfa; background: rgba(167,139,250,0.12); border-color: rgba(167,139,250,0.22); }
+.badge--prep{ color: var(--warn); background: rgba(245,158,11,0.12); border-color: rgba(245,158,11,0.22); }
+.badge--sent{ color: var(--info); background: rgba(56,189,248,0.12); border-color: rgba(56,189,248,0.22); }
+.badge--transit{ color: #60a5fa; background: rgba(96,165,250,0.12); border-color: rgba(96,165,250,0.22); }
+.badge--ready{ color: #34d399; background: rgba(52,211,153,0.12); border-color: rgba(52,211,153,0.22); }
+.badge--delivered{ color: var(--brand2); background: rgba(34,197,94,0.14); border-color: rgba(34,197,94,0.25); }
+
+/* tables */
+.tableWrap{ overflow:auto; border-radius: 14px; border: 1px solid var(--border); }
+.table{
+  width:100%;
+  border-collapse: collapse;
+  min-width: 980px;
+}
+.table thead th{
+  text-align:left;
+  font-size: 12px;
+  letter-spacing: 0.8px;
+  color: rgba(255,255,255,0.75);
+  padding: 12px 10px;
+  background: rgba(255,255,255,0.05);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.table tbody td{
+  padding: 12px 10px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+.table tbody tr:hover{
+  background: rgba(255,255,255,0.04);
+}
+
+.note{
+  border: 1px dashed rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.04);
+  padding: 10px 12px;
+  border-radius: 14px;
+}
+
+/* banner/toast */
+.banner{
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  background: rgba(0,0,0,0.55);
+  border: 1px solid rgba(255,255,255,0.16);
+  padding: 12px 14px;
+  border-radius: 14px;
+  backdrop-filter: blur(10px);
+  max-width: 420px;
+  box-shadow: 0 18px 55px rgba(0,0,0,0.35);
+}
+
+/* =========================
+   LOGIN (FIX)
+   ========================= */
+
+.loginPage{
+  min-height: 100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding: 28px 18px;
+}
+
+.loginCard{
+  width: 520px;
+  max-width: 94vw;
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 18px;
+  padding: 18px;
+  box-shadow: 0 18px 70px rgba(0,0,0,0.45);
+}
+
+.loginHeader{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.logoCircle{
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  border: 2px solid rgba(56,189,248,0.8);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight: 900;
+  color: rgba(56,189,248,0.95);
+  background: rgba(0,0,0,0.18);
+}
+
+.brandText{
+  font-size: 34px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+
+.loginGrid{
+  display:flex;
+  flex-direction:column;
+  gap: 10px;
+}
+
+.loginRow{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.loginLeft{
+  display:flex;
+  align-items:center;
+  gap: 8px;
+  color: rgba(255,255,255,0.75);
+  font-size: 14px;
+}
+
+.loginFooter{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.loginLink{
+  color: rgba(56,189,248,0.95);
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 14px;
+}
+.loginLink:hover{
+  text-decoration: underline;
+}
+/* =========================
+   TOPBAR (FIX)
+   ========================= */
+
+.topbarShell{
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  margin-bottom: 14px;
+  padding-top: 10px;
+}
+
+.topbarCard{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 16px;
+  padding: 12px 14px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 14px 45px rgba(0,0,0,0.35);
+}
+
+.topbarLeft{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+}
+
+.topbarLogo{
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 2px solid rgba(56,189,248,0.8);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight: 900;
+  color: rgba(56,189,248,0.95);
+  background: rgba(0,0,0,0.18);
+}
+
+.topbarTitle{
+  font-weight: 900;
+  letter-spacing: 0.2px;
+}
+
+.topbarSubtitle{
+  color: rgba(255,255,255,0.62);
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+.topbarRight{
+  display:flex;
+  align-items:center;
+  gap: 12px;
+  text-align:right;
+}
+
+.topbarUser{
+  line-height: 1.1;
+}
+
+.topbarUser b{
+  font-weight: 900;
+}
+
+.btnSmall{
+  padding: 8px 10px;
+  border-radius: 12px;
+}
+
+/* =========================
+   DASHBOARD CARDS
+   ========================= */
+
+.cards{
+  display:grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+
+@media (max-width: 1100px){
+  .cards{ grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 700px){
+  .cards{ grid-template-columns: repeat(2, 1fr); }
+}
+
+.cardStat{
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 16px;
+  padding: 12px;
+  box-shadow: 0 14px 45px rgba(0,0,0,0.30);
+  min-height: 78px;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+}
+
+.cardStat .k{
+  color: rgba(255,255,255,0.65);
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.cardStat .v{
+  font-weight: 950;
+  font-size: 26px;
+  letter-spacing: 0.2px;
+}
+
+.cardStat .s{
+  color: rgba(255,255,255,0.62);
+  font-size: 12px;
+}
