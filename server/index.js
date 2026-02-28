@@ -57,11 +57,55 @@ function toDateOnly(iso) {
 
 // Login
 app.post("/auth/login", async (req, res) => {
-  const schema = z.object({
-    email: z.string().email(),
-    password: z.string().min(1),
-    remember: z.boolean().optional(),
-  });
+  try {
+    const schema = z.object({
+      email: z.string().email(),
+      password: z.string().min(1),
+      remember: z.boolean().optional(),
+    });
+    const p = schema.safeParse(req.body);
+    if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
+
+    const { email, password, remember } = p.data;
+
+    const q = await db.query("SELECT * FROM users WHERE email=$1", [email]);
+    const user = q.rows[0];
+    if (!user) return res.status(401).json({ error: "Credenciales incorrectas" });
+
+    const ok = bcrypt.compareSync(password, user.password_hash);
+    if (!ok) return res.status(401).json({ error: "Credenciales incorrectas" });
+
+    if (!process.env.JWT_SECRET) {
+      return res.status(500).json({ error: "Falta JWT_SECRET en el servidor" });
+    }
+
+    const token = jwt.sign(
+      {
+        id: user.id,
+        role: user.role,
+        email: user.email,
+        client_number: user.client_number,
+        name: user.name,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: remember ? "30d" : "8h" }
+    );
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        role: user.role,
+        email: user.email,
+        client_number: user.client_number,
+        name: user.name,
+      },
+    });
+  } catch (err) {
+    console.error("[AUTH][LOGIN] ERROR:", err);
+    return res.status(500).json({ error: "Error interno en login" });
+  }
+});
 
   const p = schema.safeParse(req.body);
   if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
