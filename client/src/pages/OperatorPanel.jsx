@@ -16,9 +16,10 @@ const STATUSES = [
 ];
 
 function parseWeight(input) {
-  if (input === null || input === undefined) return NaN;
-  const s = String(input).trim().replace(",", ".");
-  return Number(s);
+  // acepta "0,5" o "0.5" o " 1 "
+  const s = String(input ?? "").trim().replace(",", ".");
+  const n = Number(s);
+  return Number.isFinite(n) ? n : NaN;
 }
 
 export default function OperatorPanel() {
@@ -71,8 +72,9 @@ export default function OperatorPanel() {
       });
       const data = await res.json();
       if (res.ok) setStats(data.stats);
+      else setMsg(data?.error || "Error cargando dashboard");
     } catch {
-      // no-op
+      setMsg("Error cargando dashboard");
     } finally {
       setLoadingStats(false);
     }
@@ -80,7 +82,7 @@ export default function OperatorPanel() {
 
   async function createClient() {
     setMsg("");
-    const n = Number(newClientNumber);
+    const n = Number(String(newClientNumber).trim());
     if (Number.isNaN(n) || n < 0) return setMsg("Número de cliente inválido");
     if (!newName || !newEmail || !newPassword)
       return setMsg("Completá nombre, email y contraseña");
@@ -101,7 +103,7 @@ export default function OperatorPanel() {
     });
 
     const data = await res.json();
-    if (!res.ok) return setMsg(data?.error || "Error creando cliente");
+    if (!res.ok) return setMsg(data?.error || data?.detail || "Error creando cliente");
 
     setMsg(`Cliente creado: #${data.user.client_number} — ${data.user.email}`);
     setNewClientNumber("");
@@ -116,7 +118,7 @@ export default function OperatorPanel() {
     setMsg("");
     setClient(null);
 
-    const n = Number(clientNumber);
+    const n = Number(String(clientNumber).trim());
     if (Number.isNaN(n)) return setMsg("Número inválido");
 
     const res = await fetch(`${API}/operator/clients?client_number=${n}`, {
@@ -130,14 +132,23 @@ export default function OperatorPanel() {
 
   async function createShipment() {
     setMsg("");
+
     if (!client) return setMsg("Primero buscá un cliente");
-    if (!packageCode || !description || !weightKg)
+    if (!packageCode.trim() || !description.trim() || !String(weightKg).trim())
       return setMsg("Faltan campos obligatorios");
 
-    const weight = parseWeight(weightKg);
-    if (Number.isNaN(weight) || weight < 0) {
-      return setMsg("Peso inválido. Usá 0.5 o 0,5");
-    }
+    const w = parseWeight(weightKg);
+    if (!Number.isFinite(w) || w < 0) return setMsg("Peso inválido (ej: 0.5)");
+
+    const payload = {
+      client_number: client.client_number,
+      package_code: packageCode.trim(),
+      description: description.trim(),
+      box_code: String(boxCode || "").trim() ? String(boxCode).trim() : null,
+      tracking: String(tracking || "").trim() ? String(tracking).trim() : null,
+      weight_kg: w,
+      status,
+    };
 
     const res = await fetch(`${API}/operator/shipments`, {
       method: "POST",
@@ -145,29 +156,13 @@ export default function OperatorPanel() {
         Authorization: `Bearer ${getToken()}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        client_number: client.client_number,
-        package_code: packageCode,
-        description,
-        box_code: boxCode || null,
-        tracking: tracking || null,
-        weight_kg: weight,
-        status,
-      }),
+      body: JSON.stringify(payload),
     });
 
     const data = await res.json();
     if (!res.ok) {
-      // si backend manda details, lo mostramos
-      const details = Array.isArray(data?.details) ? data.details : null;
-      if (details?.length) {
-        return setMsg(
-          `${data?.error || "Error"} — ${details
-            .map((d) => `${(d.path || []).join(".")}: ${d.message}`)
-            .join(" | ")}`
-        );
-      }
-      return setMsg(data?.error || data?.debug || "Error creando envío");
+      // ✅ si el backend devuelve detail, lo mostramos
+      return setMsg(data?.error || data?.detail || "Error creando envío");
     }
 
     setMsg(`Envío creado: ${data.shipment.package_code}`);
@@ -186,14 +181,15 @@ export default function OperatorPanel() {
     setMsg("");
     const qs = new URLSearchParams();
     if (opSearch.trim()) qs.set("search", opSearch.trim());
-    if (opClientNumber.trim() !== "") qs.set("client_number", opClientNumber.trim());
+    if (opClientNumber.trim() !== "")
+      qs.set("client_number", opClientNumber.trim());
 
     const res = await fetch(`${API}/operator/shipments?${qs.toString()}`, {
       headers: { Authorization: `Bearer ${getToken()}` },
     });
 
     const data = await res.json();
-    if (!res.ok) return setMsg(data?.error || "Error cargando envíos");
+    if (!res.ok) return setMsg(data?.error || data?.detail || "Error cargando envíos");
 
     const list = data.rows || [];
     setRows(list);
@@ -214,7 +210,7 @@ export default function OperatorPanel() {
     setLoadingEvents(false);
 
     if (!res.ok) {
-      setMsg(data?.error || "Error cargando historial");
+      setMsg(data?.error || data?.detail || "Error cargando historial");
       setEvents([]);
       return;
     }
@@ -241,7 +237,7 @@ export default function OperatorPanel() {
     const data = await res.json();
     setSavingId(null);
 
-    if (!res.ok) return setMsg(data?.error || "Error actualizando estado");
+    if (!res.ok) return setMsg(data?.error || data?.detail || "Error actualizando estado");
 
     setMsg(`Estado actualizado: ${newStatus}`);
     await loadOperatorShipments();
@@ -272,7 +268,8 @@ export default function OperatorPanel() {
     setMsg("");
     setSavingEditId(shipmentId);
 
-    const weight = parseWeight(editDraft.weight_kg);
+    const w = parseWeight(editDraft.weight_kg);
+
     const payload = {
       package_code: (editDraft.package_code || "").trim(),
       description: (editDraft.description || "").trim(),
@@ -282,10 +279,10 @@ export default function OperatorPanel() {
       tracking: (editDraft.tracking || "").trim()
         ? (editDraft.tracking || "").trim()
         : null,
-      weight_kg: weight,
+      weight_kg: w,
     };
 
-    if (!payload.package_code || !payload.description || Number.isNaN(payload.weight_kg)) {
+    if (!payload.package_code || !payload.description || !Number.isFinite(payload.weight_kg)) {
       setSavingEditId(null);
       return setMsg("Revisá código, descripción y peso (kg)");
     }
@@ -302,7 +299,7 @@ export default function OperatorPanel() {
     const data = await res.json();
     setSavingEditId(null);
 
-    if (!res.ok) return setMsg(data?.error || "Error guardando cambios");
+    if (!res.ok) return setMsg(data?.error || data?.detail || "Error guardando cambios");
 
     setMsg("Cambios guardados");
     cancelEdit();
@@ -480,7 +477,7 @@ export default function OperatorPanel() {
           <div className="row">
             <input
               className="input"
-              placeholder="Peso (kg) — 0.5 o 0,5"
+              placeholder="Peso (kg) ej: 0.5"
               value={weightKg}
               onChange={(e) => setWeightKg(e.target.value)}
             />

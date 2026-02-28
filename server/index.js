@@ -1,4 +1,5 @@
 require("dotenv").config();
+
 const express = require("express");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
@@ -8,74 +9,31 @@ const { z } = require("zod");
 const db = require("./db");
 const { authRequired, requireRole } = require("./auth");
 
+// Asegura secreto default también para auth.js
+process.env.JWT_SECRET = process.env.JWT_SECRET || "dev_secret_change_me";
+const JWT_SECRET = process.env.JWT_SECRET;
+
 const app = express();
 app.use(express.json());
 
-// CORS abierto mientras probás (después lo cerramos al dominio)
-app.use(cors({ origin: true }));
+// CORS abierto mientras probás
+app.use(
+  cors({
+    origin: true,
+    credentials: true,
+  })
+);
 
 const PORT = process.env.PORT || 4000;
-const JWT_SECRET = process.env.JWT_SECRET || "dev_secret_change_me";
-
-// ==================== HELPERS ====================
-
-function toNumberLoose(v) {
-  // acepta "0,5", "0.5", 0.5
-  if (v === null || v === undefined) return NaN;
-  const s = String(v).trim().replace(",", ".");
-  const n = Number(s);
-  return n;
-}
-
-async function ensureSchema() {
-  // Crea tablas si no existen, con las columnas que usa esta app.
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS users (
-      id SERIAL PRIMARY KEY,
-      client_number INTEGER UNIQUE NOT NULL,
-      name TEXT NOT NULL,
-      email TEXT UNIQUE NOT NULL,
-      password_hash TEXT NOT NULL,
-      role TEXT NOT NULL DEFAULT 'client',
-      created_at TIMESTAMP NOT NULL DEFAULT NOW()
-    );
-  `);
-
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS shipments (
-      id SERIAL PRIMARY KEY,
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      package_code TEXT NOT NULL,
-      description TEXT NOT NULL,
-      box_code TEXT NULL,
-      tracking TEXT NULL,
-      weight_kg NUMERIC NOT NULL DEFAULT 0,
-      status TEXT NOT NULL,
-      date_in TIMESTAMP NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMP NULL,
-      delivered_at TIMESTAMP NULL
-    );
-  `);
-
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS shipment_events (
-      id SERIAL PRIMARY KEY,
-      shipment_id INTEGER NOT NULL REFERENCES shipments(id) ON DELETE CASCADE,
-      old_status TEXT NULL,
-      new_status TEXT NOT NULL,
-      created_at TIMESTAMP NOT NULL DEFAULT NOW()
-    );
-  `);
-
-  await db.query(`CREATE INDEX IF NOT EXISTS idx_shipments_user_id ON shipments(user_id);`);
-  await db.query(`CREATE INDEX IF NOT EXISTS idx_shipments_status ON shipments(status);`);
-  await db.query(`CREATE INDEX IF NOT EXISTS idx_events_shipment_id ON shipment_events(shipment_id);`);
-}
-
-// ==================== BASIC ====================
 
 app.get("/", (req, res) => res.send("LEMON's API OK ✅ — probá /health"));
 app.get("/health", (req, res) => res.json({ ok: true }));
+
+// Helpers: aceptar números con coma o punto
+const toNumber = (v) => {
+  if (typeof v === "string") return Number(v.replace(",", "."));
+  return v;
+};
 
 // ==================== AUTH ====================
 
@@ -86,6 +44,7 @@ app.post("/auth/login", async (req, res) => {
       password: z.string().min(1),
       remember: z.boolean().optional(),
     });
+
     const p = schema.safeParse(req.body);
     if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
 
@@ -117,8 +76,8 @@ app.post("/auth/login", async (req, res) => {
       },
     });
   } catch (e) {
-    console.error("LOGIN ERROR", e);
-    res.status(500).json({ error: "Error interno" });
+    console.error("LOGIN ERROR:", e);
+    res.status(500).json({ error: "Error interno", detail: String(e.message || e) });
   }
 });
 
@@ -132,8 +91,8 @@ app.get("/auth/me", authRequired, async (req, res) => {
     if (!user) return res.status(404).json({ error: "Usuario no existe" });
     res.json({ user });
   } catch (e) {
-    console.error("ME ERROR", e);
-    res.status(500).json({ error: "Error interno" });
+    console.error("ME ERROR:", e);
+    res.status(500).json({ error: "Error interno", detail: String(e.message || e) });
   }
 });
 
@@ -146,7 +105,7 @@ app.post(
   async (req, res) => {
     try {
       const schema = z.object({
-        client_number: z.preprocess((v) => toNumberLoose(v), z.number().int().min(0)),
+        client_number: z.preprocess(toNumber, z.number().int().min(0)),
         name: z.string().min(1),
         email: z.string().email(),
         password: z.string().min(6),
@@ -169,8 +128,11 @@ app.post(
 
       res.json({ user: ins.rows[0] });
     } catch (e) {
-      console.error("CREATE CLIENT ERROR", e);
-      return res.status(500).json({ error: "Error interno" });
+      console.error("CREATE CLIENT ERROR:", e);
+      if (String(e?.message || "").toLowerCase().includes("duplicate")) {
+        return res.status(400).json({ error: "Email o client_number ya existe" });
+      }
+      res.status(500).json({ error: "Error interno", detail: String(e.message || e) });
     }
   }
 );
@@ -181,18 +143,18 @@ app.get(
   requireRole(["operator", "admin"]),
   async (req, res) => {
     try {
-      const n = toNumberLoose(req.query.client_number);
+      const n = Number(String(req.query.client_number || "").replace(",", "."));
       if (Number.isNaN(n)) return res.status(400).json({ error: "client_number inválido" });
 
       const q = await db.query(
         "SELECT id, client_number, name, email, role FROM users WHERE client_number=$1",
-        [Number(n)]
+        [n]
       );
 
       res.json({ user: q.rows[0] || null });
     } catch (e) {
-      console.error("GET CLIENT ERROR", e);
-      res.status(500).json({ error: "Error interno" });
+      console.error("GET CLIENT ERROR:", e);
+      res.status(500).json({ error: "Error interno", detail: String(e.message || e) });
     }
   }
 );
@@ -204,12 +166,12 @@ app.post(
   async (req, res) => {
     try {
       const schema = z.object({
-        client_number: z.preprocess((v) => toNumberLoose(v), z.number().int().min(0)),
+        client_number: z.preprocess(toNumber, z.number().int().min(0)),
         package_code: z.string().min(1),
         description: z.string().min(1),
         box_code: z.string().nullable().optional(),
         tracking: z.string().nullable().optional(),
-        weight_kg: z.preprocess((v) => toNumberLoose(v), z.number().min(0)),
+        weight_kg: z.preprocess(toNumber, z.number().min(0)),
         status: z.string().min(1),
       });
 
@@ -217,27 +179,27 @@ app.post(
       if (!p.success) {
         return res.status(400).json({
           error: "Datos inválidos",
-          details: p.error.issues?.map((i) => ({ path: i.path, message: i.message })) || [],
+          issues: p.error.issues,
         });
       }
 
       const d = p.data;
 
       const u = await db.query("SELECT id FROM users WHERE client_number=$1", [
-        Number(d.client_number),
+        d.client_number,
       ]);
       const user = u.rows[0];
       if (!user) return res.status(404).json({ error: "Cliente no existe" });
 
       const ins = await db.query(
         `INSERT INTO shipments
-         (user_id, package_code, description, box_code, tracking, weight_kg, status, date_in)
+          (user_id, package_code, description, box_code, tracking, weight_kg, status, date_in)
          VALUES ($1,$2,$3,$4,$5,$6,$7, NOW())
          RETURNING *`,
         [
           user.id,
-          d.package_code,
-          d.description,
+          d.package_code.trim(),
+          d.description.trim(),
           d.box_code ?? null,
           d.tracking ?? null,
           d.weight_kg,
@@ -245,6 +207,7 @@ app.post(
         ]
       );
 
+      // evento inicial
       await db.query(
         `INSERT INTO shipment_events (shipment_id, old_status, new_status)
          VALUES ($1,$2,$3)`,
@@ -253,11 +216,8 @@ app.post(
 
       res.json({ shipment: ins.rows[0] });
     } catch (e) {
-      console.error("CREATE SHIPMENT ERROR", e);
-      res.status(500).json({
-        error: "Error interno",
-        debug: String(e?.message || e),
-      });
+      console.error("CREATE SHIPMENT ERROR:", e);
+      res.status(500).json({ error: "Error interno", detail: String(e.message || e) });
     }
   }
 );
@@ -275,9 +235,9 @@ app.get(
       let where = "WHERE 1=1";
 
       if (clientNumber !== "") {
-        const n = toNumberLoose(clientNumber);
+        const n = Number(clientNumber.replace(",", "."));
         if (!Number.isNaN(n)) {
-          params.push(Number(n));
+          params.push(n);
           where += ` AND u.client_number = $${params.length}`;
         }
       }
@@ -287,7 +247,8 @@ app.get(
         const p1 = params.length;
         params.push(`%${search}%`);
         const p2 = params.length;
-        where += ` AND (sh.package_code ILIKE $${p1} OR sh.description ILIKE $${p2})`;
+
+        where += ` AND (sh.package_code ILIKE $${p1} OR sh.description ILIKE $${p2} OR sh.tracking ILIKE $${p2})`;
       }
 
       const q = await db.query(
@@ -302,8 +263,8 @@ app.get(
 
       res.json({ rows: q.rows });
     } catch (e) {
-      console.error("OP SHIPMENTS ERROR", e);
-      res.status(500).json({ error: "Error interno" });
+      console.error("OP SHIPMENTS ERROR:", e);
+      res.status(500).json({ error: "Error interno", detail: String(e.message || e) });
     }
   }
 );
@@ -321,14 +282,7 @@ app.patch(
       const shipmentId = Number(req.params.id);
       if (Number.isNaN(shipmentId)) return res.status(400).json({ error: "ID inválido" });
 
-      const s = await db.query(
-        `SELECT sh.*, u.email, u.name, u.client_number
-         FROM shipments sh
-         JOIN users u ON u.id = sh.user_id
-         WHERE sh.id=$1`,
-        [shipmentId]
-      );
-
+      const s = await db.query(`SELECT * FROM shipments WHERE id=$1`, [shipmentId]);
       const current = s.rows[0];
       if (!current) return res.status(404).json({ error: "Envío no existe" });
 
@@ -352,8 +306,52 @@ app.patch(
 
       res.json({ shipment: upd.rows[0] });
     } catch (e) {
-      console.error("PATCH STATUS ERROR", e);
-      res.status(500).json({ error: "Error interno" });
+      console.error("PATCH STATUS ERROR:", e);
+      res.status(500).json({ error: "Error interno", detail: String(e.message || e) });
+    }
+  }
+);
+
+app.patch(
+  "/operator/shipments/:id",
+  authRequired,
+  requireRole(["operator", "admin"]),
+  async (req, res) => {
+    try {
+      const schema = z.object({
+        package_code: z.string().min(1),
+        description: z.string().min(1),
+        box_code: z.string().nullable().optional(),
+        tracking: z.string().nullable().optional(),
+        weight_kg: z.preprocess(toNumber, z.number().min(0)),
+      });
+
+      const p = schema.safeParse(req.body);
+      if (!p.success) return res.status(400).json({ error: "Datos inválidos", issues: p.error.issues });
+
+      const id = Number(req.params.id);
+      if (Number.isNaN(id)) return res.status(400).json({ error: "ID inválido" });
+
+      const upd = await db.query(
+        `UPDATE shipments
+         SET package_code=$1, description=$2, box_code=$3, tracking=$4, weight_kg=$5, updated_at=NOW()
+         WHERE id=$6
+         RETURNING *`,
+        [
+          p.data.package_code.trim(),
+          p.data.description.trim(),
+          p.data.box_code ?? null,
+          p.data.tracking ?? null,
+          p.data.weight_kg,
+          id,
+        ]
+      );
+
+      if (!upd.rows[0]) return res.status(404).json({ error: "Envío no existe" });
+      res.json({ shipment: upd.rows[0] });
+    } catch (e) {
+      console.error("PATCH SHIPMENT ERROR:", e);
+      res.status(500).json({ error: "Error interno", detail: String(e.message || e) });
     }
   }
 );
@@ -372,8 +370,8 @@ app.get("/client/shipments", authRequired, async (req, res) => {
 
     res.json({ rows: q.rows });
   } catch (e) {
-    console.error("CLIENT SHIPMENTS ERROR", e);
-    res.status(500).json({ error: "Error interno" });
+    console.error("CLIENT SHIPMENTS ERROR:", e);
+    res.status(500).json({ error: "Error interno", detail: String(e.message || e) });
   }
 });
 
@@ -401,8 +399,8 @@ app.get("/shipments/:id/events", authRequired, async (req, res) => {
 
     res.json({ rows: ev.rows });
   } catch (e) {
-    console.error("EVENTS ERROR", e);
-    res.status(500).json({ error: "Error interno" });
+    console.error("EVENTS ERROR:", e);
+    res.status(500).json({ error: "Error interno", detail: String(e.message || e) });
   }
 });
 
@@ -414,35 +412,25 @@ app.get(
     try {
       const stats = await db.query(`
         SELECT
-          COUNT(*)::int AS total,
-          COUNT(*) FILTER (WHERE status='Recibido en depósito')::int AS received,
-          COUNT(*) FILTER (WHERE status='En preparación')::int AS prep,
-          COUNT(*) FILTER (WHERE status='Despachado')::int AS sent,
-          COUNT(*) FILTER (WHERE status='En tránsito')::int AS transit,
-          COUNT(*) FILTER (WHERE status='Listo para entrega')::int AS ready,
-          COUNT(*) FILTER (WHERE status='Entregado')::int AS delivered,
-          COALESCE(SUM(weight_kg),0)::float AS total_weight
+          COUNT(*) AS total,
+          COUNT(*) FILTER (WHERE status='Recibido en depósito') AS received,
+          COUNT(*) FILTER (WHERE status='En preparación') AS prep,
+          COUNT(*) FILTER (WHERE status='Despachado') AS sent,
+          COUNT(*) FILTER (WHERE status='En tránsito') AS transit,
+          COUNT(*) FILTER (WHERE status='Listo para entrega') AS ready,
+          COUNT(*) FILTER (WHERE status='Entregado') AS delivered,
+          COALESCE(SUM(weight_kg),0) AS total_weight
         FROM shipments
       `);
 
       res.json({ stats: stats.rows[0] });
-    } catch (err) {
-      console.error("DASHBOARD ERROR:", err);
-      res.status(500).json({ error: "Error dashboard" });
+    } catch (e) {
+      console.error("DASHBOARD ERROR:", e);
+      res.status(500).json({ error: "Error dashboard", detail: String(e.message || e) });
     }
   }
 );
 
-// ==================== START ====================
-
-(async () => {
-  try {
-    await ensureSchema();
-    app.listen(PORT, () => {
-      console.log(`API corriendo en http://localhost:${PORT}`);
-    });
-  } catch (e) {
-    console.error("BOOT ERROR", e);
-    process.exit(1);
-  }
-})();
+app.listen(PORT, () => {
+  console.log(`API corriendo en http://localhost:${PORT}`);
+});
