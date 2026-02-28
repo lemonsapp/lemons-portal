@@ -6,8 +6,24 @@ import OperatorPanel from "./pages/OperatorPanel.jsx";
 import ClientShipments from "./pages/ClientShipments.jsx";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
+
 const getToken = () =>
   localStorage.getItem("token") || sessionStorage.getItem("token");
+
+async function fetchMe() {
+  const token = getToken();
+  if (!token) return null;
+
+  try {
+    const res = await fetch(`${API}/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json().catch(() => ({}));
+    return res.ok ? data.user : null;
+  } catch {
+    return null;
+  }
+}
 
 function RequireAuth({ children }) {
   const [loading, setLoading] = useState(true);
@@ -15,25 +31,9 @@ function RequireAuth({ children }) {
 
   useEffect(() => {
     (async () => {
-      const token = getToken();
-      if (!token) {
-        setLoading(false);
-        setMe(null);
-        return;
-      }
-
-      try {
-        const res = await fetch(`${API}/auth/me`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const data = await res.json();
-        if (res.ok) setMe(data.user);
-        else setMe(null);
-      } catch {
-        setMe(null);
-      } finally {
-        setLoading(false);
-      }
+      const user = await fetchMe();
+      setMe(user);
+      setLoading(false);
     })();
   }, []);
 
@@ -48,25 +48,9 @@ function RequireRole({ roles, children }) {
 
   useEffect(() => {
     (async () => {
-      const token = getToken();
-      if (!token) {
-        setLoading(false);
-        setMe(null);
-        return;
-      }
-
-      try {
-        const res = await fetch(`${API}/auth/me`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const data = await res.json();
-        if (res.ok) setMe(data.user);
-        else setMe(null);
-      } catch {
-        setMe(null);
-      } finally {
-        setLoading(false);
-      }
+      const user = await fetchMe();
+      setMe(user);
+      setLoading(false);
     })();
   }, []);
 
@@ -80,8 +64,10 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Login */}
         <Route path="/" element={<Login />} />
 
+        {/* Cliente */}
         <Route
           path="/client/shipments"
           element={
@@ -91,6 +77,7 @@ export default function App() {
           }
         />
 
+        {/* Operador/Admin */}
         <Route
           path="/operator"
           element={
@@ -100,7 +87,10 @@ export default function App() {
           }
         />
 
+        {/* Alias */}
         <Route path="/client" element={<Navigate to="/client/shipments" replace />} />
+
+        {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
