@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import Topbar from "../components/Topbar.jsx";
 import StatusBadge from "../components/StatusBadge.jsx";
 
-const API = "http://localhost:4000";
+const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 const getToken = () =>
   localStorage.getItem("token") || sessionStorage.getItem("token");
 

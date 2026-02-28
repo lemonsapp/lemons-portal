@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-const API = "http://localhost:4000";
+const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
 export default function Login() {
   const [email, setEmail] = useState("admin@lemons.com");
@@ -11,6 +11,7 @@ export default function Login() {
   async function onSubmit(e) {
     e.preventDefault();
     setMsg("");
+
 
     const res = await fetch(`${API}/auth/login`, {
       method: "POST",

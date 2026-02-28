@@ -5,7 +5,7 @@ import Login from "./pages/Login.jsx";
 import OperatorPanel from "./pages/OperatorPanel.jsx";
 import ClientShipments from "./pages/ClientShipments.jsx";
 
-const API = "http://localhost:4000";
+const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 const getToken = () =>
   localStorage.getItem("token") || sessionStorage.getItem("token");
 
@@ -80,10 +80,8 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Login */}
         <Route path="/" element={<Login />} />
 
-        {/* Cliente: ruta REAL */}
         <Route
           path="/client/shipments"
           element={
@@ -93,7 +91,6 @@ export default function App() {
           }
         />
 
-        {/* Operador/Admin */}
         <Route
           path="/operator"
           element={
@@ -103,10 +100,7 @@ export default function App() {
           }
         />
 
-        {/* Alias opcional: si alguien entra a /client, lo mandamos a /client/shipments */}
         <Route path="/client" element={<Navigate to="/client/shipments" replace />} />
-
-        {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
