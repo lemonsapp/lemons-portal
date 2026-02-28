@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Topbar from "../components/Topbar.jsx";
 import StatusBadge from "../components/StatusBadge.jsx";
 
@@ -15,21 +15,8 @@ const STATUSES = [
   "Entregado",
 ];
 
-async function readJsonSafe(res) {
-  const text = await res.text();
-  try {
-    return JSON.parse(text);
-  } catch {
-    return { raw: text };
-  }
-}
-
 export default function OperatorPanel() {
   const [msg, setMsg] = useState("");
-
-  // Dashboard stats
-  const [stats, setStats] = useState(null);
-  const [loadingStats, setLoadingStats] = useState(false);
 
   // Crear cliente
   const [newClientNumber, setNewClientNumber] = useState("");
@@ -66,20 +53,33 @@ export default function OperatorPanel() {
   const [editDraft, setEditDraft] = useState({});
   const [savingEditId, setSavingEditId] = useState(null);
 
-  async function loadDashboard() {
-    setLoadingStats(true);
-    try {
-      const res = await fetch(`${API}/operator/dashboard`, {
-        headers: { Authorization: `Bearer ${getToken()}` },
-      });
-      const data = await readJsonSafe(res);
-      if (res.ok) setStats(data.stats);
-    } catch {
-      // no-op
-    } finally {
-      setLoadingStats(false);
+  // ✅ DASHBOARD: calculado localmente (NO pega /operator/dashboard)
+  const stats = useMemo(() => {
+    const s = {
+      total: rows.length,
+      received: 0,
+      prep: 0,
+      sent: 0,
+      transit: 0,
+      ready: 0,
+      delivered: 0,
+      total_weight: 0,
+    };
+
+    for (const r of rows) {
+      const st = r.status;
+      if (st === "Recibido en depósito") s.received++;
+      if (st === "En preparación") s.prep++;
+      if (st === "Despachado") s.sent++;
+      if (st === "En tránsito") s.transit++;
+      if (st === "Listo para entrega") s.ready++;
+      if (st === "Entregado") s.delivered++;
+
+      const w = Number(r.weight_kg);
+      if (!Number.isNaN(w)) s.total_weight += w;
     }
-  }
+    return s;
+  }, [rows]);
 
   async function createClient() {
     setMsg("");
@@ -88,35 +88,31 @@ export default function OperatorPanel() {
     if (!newName || !newEmail || !newPassword)
       return setMsg("Completá nombre, email y contraseña");
 
-    try {
-      const res = await fetch(`${API}/operator/clients`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${getToken()}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          client_number: n,
-          name: newName,
-          email: newEmail,
-          password: newPassword,
-          role: "client",
-        }),
-      });
+    const res = await fetch(`${API}/operator/clients`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${getToken()}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        client_number: n,
+        name: newName,
+        email: newEmail,
+        password: newPassword,
+        role: "client",
+      }),
+    });
 
-      const data = await readJsonSafe(res);
-      if (!res.ok) return setMsg(data?.error || "Error creando cliente");
+    const data = await res.json();
+    if (!res.ok) return setMsg(data?.error || "Error creando cliente");
 
-      setMsg(`Cliente creado: #${data.user.client_number} — ${data.user.email}`);
-      setNewClientNumber("");
-      setNewName("");
-      setNewEmail("");
-      setNewPassword("");
+    setMsg(`Cliente creado: #${data.user.client_number} — ${data.user.email}`);
+    setNewClientNumber("");
+    setNewName("");
+    setNewEmail("");
+    setNewPassword("");
 
-      await loadDashboard();
-    } catch (e) {
-      return setMsg("Error de conexión creando cliente");
-    }
+    await loadOperatorShipments();
   }
 
   async function findClient() {
@@ -126,128 +122,91 @@ export default function OperatorPanel() {
     const n = Number(clientNumber);
     if (Number.isNaN(n)) return setMsg("Número inválido");
 
-    try {
-      const res = await fetch(`${API}/operator/clients?client_number=${n}`, {
-        headers: { Authorization: `Bearer ${getToken()}` },
-      });
+    const res = await fetch(`${API}/operator/clients?client_number=${n}`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    });
 
-      const data = await readJsonSafe(res);
-      if (!res.ok) return setMsg(data?.error || "Error buscando cliente");
-
-      if (!data.user) return setMsg("Cliente no encontrado");
-      setClient(data.user);
-    } catch (e) {
-      return setMsg("Error de conexión buscando cliente");
-    }
+    const data = await res.json();
+    if (!data.user) return setMsg("Cliente no encontrado");
+    setClient(data.user);
   }
 
-  // ✅ FIX: función robusta + muestra error real si backend devuelve HTML/500
   async function createShipment() {
     setMsg("");
-
     if (!client) return setMsg("Primero buscá un cliente");
+    if (!packageCode || !description || !weightKg)
+      return setMsg("Faltan campos obligatorios");
 
-    const w = Number(weightKg);
-    if (!packageCode.trim() || !description.trim() || Number.isNaN(w) || w <= 0) {
-      return setMsg("Revisá código, descripción y peso (kg)");
-    }
+    const res = await fetch(`${API}/operator/shipments`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${getToken()}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        client_number: client.client_number,
+        package_code: packageCode,
+        description,
+        box_code: boxCode || null,
+        tracking: tracking || null,
+        weight_kg: Number(weightKg),
+        status,
+      }),
+    });
 
-    try {
-      const res = await fetch(`${API}/operator/shipments`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${getToken()}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          client_number: client.client_number,
+    const data = await res.json();
+    if (!res.ok) return setMsg(data?.error || "Error creando envío");
 
-          // payload principal (como veníamos usando)
-          package_code: packageCode.trim(),
-          description: description.trim(),
-          box_code: boxCode.trim() ? boxCode.trim() : null,
-          tracking: tracking.trim() ? tracking.trim() : null,
-          weight_kg: w,
-          status,
+    setMsg(`Envío creado: ${data.shipment.package_code}`);
+    setPackageCode("");
+    setDescription("");
+    setBoxCode("");
+    setTracking("");
+    setWeightKg("");
+    setStatus("Recibido en depósito");
 
-          // compat (por si tu backend/DB usara otros nombres)
-          code: packageCode.trim(),
-          box: boxCode.trim() ? boxCode.trim() : null,
-        }),
-      });
-
-      const data = await readJsonSafe(res);
-
-      if (!res.ok) {
-        console.log("CREATE SHIPMENT ERROR BODY:", data);
-        return setMsg(data?.error || `Error creando envío (${res.status})`);
-      }
-
-      setMsg(`Envío creado: ${data?.shipment?.package_code || packageCode.trim()}`);
-
-      setPackageCode("");
-      setDescription("");
-      setBoxCode("");
-      setTracking("");
-      setWeightKg("");
-      setStatus("Recibido en depósito");
-
-      await loadOperatorShipments();
-      await loadDashboard();
-    } catch (e) {
-      console.error(e);
-      return setMsg("Error de conexión creando envío");
-    }
+    await loadOperatorShipments();
   }
 
   async function loadOperatorShipments() {
     setMsg("");
     const qs = new URLSearchParams();
     if (opSearch.trim()) qs.set("search", opSearch.trim());
-    if (opClientNumber.trim() !== "") qs.set("client_number", opClientNumber.trim());
+    if (opClientNumber.trim() !== "")
+      qs.set("client_number", opClientNumber.trim());
 
-    try {
-      const res = await fetch(`${API}/operator/shipments?${qs.toString()}`, {
-        headers: { Authorization: `Bearer ${getToken()}` },
-      });
+    const res = await fetch(`${API}/operator/shipments?${qs.toString()}`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    });
 
-      const data = await readJsonSafe(res);
-      if (!res.ok) return setMsg(data?.error || "Error cargando envíos");
+    const data = await res.json();
+    if (!res.ok) return setMsg(data?.error || "Error cargando envíos");
 
-      const list = data.rows || [];
-      setRows(list);
+    const list = data.rows || [];
+    setRows(list);
 
-      const nextDraft = {};
-      list.forEach((r) => (nextDraft[r.id] = r.status));
-      setStatusDraft(nextDraft);
-    } catch {
-      return setMsg("Error de conexión cargando envíos");
-    }
+    const nextDraft = {};
+    list.forEach((r) => (nextDraft[r.id] = r.status));
+    setStatusDraft(nextDraft);
   }
 
   async function loadEvents(shipmentId) {
     setLoadingEvents(true);
 
-    try {
-      const res = await fetch(`${API}/shipments/${shipmentId}/events`, {
-        headers: { Authorization: `Bearer ${getToken()}` },
-      });
+    const res = await fetch(`${API}/shipments/${shipmentId}/events`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    });
 
-      const data = await readJsonSafe(res);
-      setLoadingEvents(false);
+    const data = await res.json();
+    setLoadingEvents(false);
 
-      if (!res.ok) {
-        setMsg(data?.error || "Error cargando historial");
-        setEvents([]);
-        return;
-      }
-
-      setEvents(data.rows || []);
-    } catch {
-      setLoadingEvents(false);
+    if (!res.ok) {
+      setMsg(data?.error || "Error cargando historial");
       setEvents([]);
-      setMsg("Error de conexión cargando historial");
+      return;
     }
+
+    setEvents(data.rows || []);
   }
 
   async function saveStatus(shipmentId) {
@@ -257,31 +216,25 @@ export default function OperatorPanel() {
 
     setSavingId(shipmentId);
 
-    try {
-      const res = await fetch(`${API}/operator/shipments/${shipmentId}/status`, {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${getToken()}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ status: newStatus }),
-      });
+    const res = await fetch(`${API}/operator/shipments/${shipmentId}/status`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${getToken()}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ status: newStatus }),
+    });
 
-      const data = await readJsonSafe(res);
-      setSavingId(null);
+    const data = await res.json();
+    setSavingId(null);
 
-      if (!res.ok) return setMsg(data?.error || "Error actualizando estado");
+    if (!res.ok) return setMsg(data?.error || "Error actualizando estado");
 
-      setMsg(`Estado actualizado: ${newStatus}`);
-      await loadOperatorShipments();
-      await loadDashboard();
+    setMsg(`Estado actualizado: ${newStatus}`);
+    await loadOperatorShipments();
 
-      if (openId === shipmentId) {
-        await loadEvents(shipmentId);
-      }
-    } catch {
-      setSavingId(null);
-      setMsg("Error de conexión actualizando estado");
+    if (openId === shipmentId) {
+      await loadEvents(shipmentId);
     }
   }
 
@@ -320,41 +273,33 @@ export default function OperatorPanel() {
     if (
       !payload.package_code ||
       !payload.description ||
-      Number.isNaN(payload.weight_kg) ||
-      payload.weight_kg <= 0
+      Number.isNaN(payload.weight_kg)
     ) {
       setSavingEditId(null);
       return setMsg("Revisá código, descripción y peso (kg)");
     }
 
-    try {
-      const res = await fetch(`${API}/operator/shipments/${shipmentId}`, {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${getToken()}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
+    const res = await fetch(`${API}/operator/shipments/${shipmentId}`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${getToken()}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
 
-      const data = await readJsonSafe(res);
-      setSavingEditId(null);
+    const data = await res.json();
+    setSavingEditId(null);
 
-      if (!res.ok) return setMsg(data?.error || "Error guardando cambios");
+    if (!res.ok) return setMsg(data?.error || "Error guardando cambios");
 
-      setMsg("Cambios guardados");
-      cancelEdit();
-      await loadOperatorShipments();
-      await loadDashboard();
-    } catch {
-      setSavingEditId(null);
-      setMsg("Error de conexión guardando cambios");
-    }
+    setMsg("Cambios guardados");
+    cancelEdit();
+    await loadOperatorShipments();
   }
 
   async function refreshAll() {
     await loadOperatorShipments();
-    await loadDashboard();
   }
 
   useEffect(() => {
@@ -375,51 +320,49 @@ export default function OperatorPanel() {
       <div className="cards">
         <div className="cardStat">
           <div className="k">Total envíos</div>
-          <div className="v">{loadingStats ? "…" : stats?.total ?? 0}</div>
+          <div className="v">{stats.total}</div>
           <div className="s">Todos los estados</div>
         </div>
 
         <div className="cardStat">
           <div className="k">Recibidos</div>
-          <div className="v">{loadingStats ? "…" : stats?.received ?? 0}</div>
+          <div className="v">{stats.received}</div>
           <div className="s">En depósito</div>
         </div>
 
         <div className="cardStat">
           <div className="k">Preparación</div>
-          <div className="v">{loadingStats ? "…" : stats?.prep ?? 0}</div>
+          <div className="v">{stats.prep}</div>
           <div className="s">Armado / control</div>
         </div>
 
         <div className="cardStat">
           <div className="k">Despachados</div>
-          <div className="v">{loadingStats ? "…" : stats?.sent ?? 0}</div>
+          <div className="v">{stats.sent}</div>
           <div className="s">Salieron del depósito</div>
         </div>
 
         <div className="cardStat">
           <div className="k">En tránsito</div>
-          <div className="v">{loadingStats ? "…" : stats?.transit ?? 0}</div>
+          <div className="v">{stats.transit}</div>
           <div className="s">Viajando</div>
         </div>
 
         <div className="cardStat">
           <div className="k">Listo entrega</div>
-          <div className="v">{loadingStats ? "…" : stats?.ready ?? 0}</div>
+          <div className="v">{stats.ready}</div>
           <div className="s">Última milla</div>
         </div>
 
         <div className="cardStat">
           <div className="k">Entregados</div>
-          <div className="v">{loadingStats ? "…" : stats?.delivered ?? 0}</div>
+          <div className="v">{stats.delivered}</div>
           <div className="s">Cerrados</div>
         </div>
 
         <div className="cardStat">
           <div className="k">Peso total</div>
-          <div className="v">
-            {loadingStats ? "…" : Number(stats?.total_weight ?? 0).toFixed(2)}
-          </div>
+          <div className="v">{Number(stats.total_weight || 0).toFixed(2)}</div>
           <div className="s">kg acumulados</div>
         </div>
       </div>
@@ -683,7 +626,13 @@ export default function OperatorPanel() {
                   </td>
 
                   <td>
-                    <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 10,
+                        alignItems: "center",
+                      }}
+                    >
                       <select
                         className="input"
                         value={statusDraft[r.id] || r.status}
@@ -796,7 +745,8 @@ export default function OperatorPanel() {
         )}
 
         <div className="muted" style={{ marginTop: 10 }}>
-          Tip: cambiás el estado → Guardar → el cliente lo ve al instante en su tabla.
+          Tip: cambiás el estado → Guardar → el cliente lo ve al instante en su
+          tabla.
         </div>
       </div>
 
