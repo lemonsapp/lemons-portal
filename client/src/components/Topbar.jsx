@@ -17,10 +17,11 @@ export default function Topbar({ title = "LEMON's" }) {
         const res = await fetch(`${API}/auth/me`, {
           headers: { Authorization: `Bearer ${token}` },
         });
+
         const data = await res.json();
         if (res.ok) setMe(data.user);
       } catch {
-        // no-op
+        // ignore
       }
     })();
   }, []);
@@ -43,14 +44,27 @@ export default function Topbar({ title = "LEMON's" }) {
         </div>
 
         <div className="topbarRight">
-          {me ? (
+          {me && (
             <div className="topbarUser">
-              <div>
-                <b>Cliente #{me.client_number}</b> — {me.name}
-              </div>
-              <div className="topbarSubtitle">{me.email}</div>
+              {me.role === "client" && (
+                <>
+                  <div>
+                    <b>Cliente #{me.client_number}</b> — {me.name}
+                  </div>
+                  <div className="topbarSubtitle">{me.email}</div>
+                </>
+              )}
+
+              {(me.role === "operator" || me.role === "admin") && (
+                <>
+                  <div>
+                    <b>{me.role.toUpperCase()}</b> — {me.name}
+                  </div>
+                  <div className="topbarSubtitle">{me.email}</div>
+                </>
+              )}
             </div>
-          ) : null}
+          )}
 
           <button className="btn btnPrimary btnSmall" onClick={logout}>
             Salir

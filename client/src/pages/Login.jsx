@@ -1,98 +1,112 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
 export default function Login() {
-  const [email, setEmail] = useState("admin@lemons.com");
-  const [password, setPassword] = useState("admin123");
+  const nav = useNavigate();
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [msg, setMsg] = useState("");
+  const [loading, setLoading] = useState(false);
 
   async function onSubmit(e) {
     e.preventDefault();
     setMsg("");
+    setLoading(true);
 
+    try {
+      const res = await fetch(`${API}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: (email || "").trim().toLowerCase(),
+          password,
+          remember,
+        }),
+      });
 
-    const res = await fetch(`${API}/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, remember }),
-    });
+      const data = await res.json().catch(() => ({}));
 
-    const data = await res.json();
+      if (!res.ok) {
+        setLoading(false);
+        return setMsg(data?.error || "Error al iniciar sesión");
+      }
 
-    if (!res.ok) {
-      setMsg(data?.error || "Error al iniciar sesión");
-      return;
-    }
+      const token = data.token;
+      const user = data.user;
 
-    if (remember) localStorage.setItem("token", data.token);
-    else sessionStorage.setItem("token", data.token);
+      if (!token || !user) {
+        setLoading(false);
+        return setMsg("Respuesta inválida del servidor");
+      }
 
-    const role = data?.user?.role;
-    if (role === "operator" || role === "admin") {
-      window.location.href = "/operator";
-    } else {
-      // ✅ ruta real del cliente
-      window.location.href = "/client/shipments";
+      // Guardar token
+      if (remember) {
+        localStorage.setItem("token", token);
+        sessionStorage.removeItem("token");
+      } else {
+        sessionStorage.setItem("token", token);
+        localStorage.removeItem("token");
+      }
+
+      // (Opcional) guardar user para mostrar arriba sin pedir /me
+      localStorage.setItem("me", JSON.stringify(user));
+
+      // ✅ REDIRECT SEGÚN ROL
+      if (user.role === "operator" || user.role === "admin") {
+        nav("/operator", { replace: true });
+      } else {
+        nav("/client/shipments", { replace: true });
+      }
+    } catch (err) {
+      setMsg("No se pudo conectar con la API");
+    } finally {
+      setLoading(false);
     }
   }
 
   return (
-    <div className="loginPage">
-      <div className="loginCard">
-        <div className="loginHeader">
-          <div className="logoCircle">L</div>
-          <div className="brandText">LEMON&apos;s</div>
+    <div className="screen">
+      <div className="box" style={{ maxWidth: 520, margin: "0 auto" }}>
+        <h1 style={{ marginBottom: 6 }}>LEMON&apos;s Portal</h1>
+        <div className="muted" style={{ marginBottom: 14 }}>
+          Iniciá sesión para ver tus envíos.
         </div>
 
-        <form onSubmit={onSubmit} className="loginGrid">
-          <label className="muted">Email</label>
+        <form onSubmit={onSubmit} className="col">
           <input
             className="input"
+            placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="tuemail@dominio.com"
-            autoComplete="email"
           />
 
-          <label className="muted" style={{ marginTop: 6 }}>
-            Contraseña
-          </label>
           <input
             className="input"
+            placeholder="Contraseña"
+            type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-            type="password"
-            autoComplete="current-password"
           />
 
-          <div className="loginRow">
-            <label className="loginLeft">
-              <input
-                type="checkbox"
-                checked={remember}
-                onChange={(e) => setRemember(e.target.checked)}
-              />
-              Recuérdeme
-            </label>
+          <label style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <input
+              type="checkbox"
+              checked={remember}
+              onChange={(e) => setRemember(e.target.checked)}
+            />
+            <span className="muted">Recordarme</span>
+          </label>
 
-            {msg ? (
-              <div style={{ color: "#ef4444", fontWeight: 800 }}>{msg}</div>
-            ) : null}
-          </div>
-
-          <div className="loginFooter">
-            <a className="loginLink" href="#">
-              Olvidaste tu contraseña?
-            </a>
-
-            <button className="btn btnPrimary btnSmall" type="submit">
-              INICIAR SESIÓN
-            </button>
-          </div>
+          <button className="btn" type="submit" disabled={loading}>
+            {loading ? "Ingresando..." : "Entrar"}
+          </button>
         </form>
+
+        {msg && <div className="banner" style={{ marginTop: 12 }}>{msg}</div>}
       </div>
     </div>
   );

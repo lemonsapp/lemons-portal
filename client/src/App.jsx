@@ -67,15 +67,15 @@ export default function App() {
         {/* Login */}
         <Route path="/" element={<Login />} />
 
-        {/* Cliente */}
-        <Route
-          path="/client/shipments"
-          element={
-            <RequireAuth>
-              <ClientShipments />
-            </RequireAuth>
-          }
-        />
+      {/* Cliente */}
+      <Route
+        path="/client/shipments"
+        element={
+          <RequireRole roles={["client"]}>
+            <ClientShipments />
+          </RequireRole>
+        }
+      />
 
         {/* Operador/Admin */}
         <Route
