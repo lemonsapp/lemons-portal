@@ -11,6 +11,7 @@ const { authRequired, requireRole } = require("./auth");
 const app = express();
 app.use(express.json());
 
+// CORS: dejalo abierto mientras probás. Luego lo cerramos a tu dominio.
 app.use(
   cors({
     origin: true,
@@ -19,6 +20,19 @@ app.use(
 
 const PORT = process.env.PORT || 4000;
 const JWT_SECRET = process.env.JWT_SECRET || "dev_secret_change_me";
+
+/** TARIFAS (USD / KG) */
+const TARIFFS = {
+  USA_NORMAL: { label: "USA NORMAL", usd_per_kg: 45 },
+  USA_EXPRESS: { label: "USA EXPRESS", usd_per_kg: 55 },
+  CHINA_NORMAL: { label: "CHINA NORMAL", usd_per_kg: 58 },
+  CHINA_EXPRESS: { label: "CHINA EXPRESS", usd_per_kg: 68 },
+  EUROPA: { label: "EUROPA", usd_per_kg: 58 },
+};
+
+function tariffRate(code) {
+  return TARIFFS[code]?.usd_per_kg ?? 45;
+}
 
 app.get("/", (req, res) => res.send("LEMON's API OK ✅ — probá /health"));
 app.get("/health", (req, res) => res.json({ ok: true }));
@@ -38,7 +52,7 @@ app.post("/auth/login", async (req, res) => {
     const { email, password } = p.data;
 
     const u = await db.query(
-      "SELECT id, email, name, role, client_number, password_hash, rate_per_kg FROM users WHERE email=$1",
+      "SELECT id, email, name, role, client_number, password_hash, tariff_code FROM users WHERE email=$1",
       [email.toLowerCase()]
     );
 
@@ -60,7 +74,8 @@ app.post("/auth/login", async (req, res) => {
         name: user.name,
         role: user.role,
         client_number: user.client_number,
-        rate_per_kg: Number(user.rate_per_kg ?? 0),
+        tariff_code: user.tariff_code || "USA_NORMAL",
+        tariff_usd_per_kg: tariffRate(user.tariff_code || "USA_NORMAL"),
       },
     });
   } catch (e) {
@@ -72,15 +87,17 @@ app.post("/auth/login", async (req, res) => {
 app.get("/auth/me", authRequired, async (req, res) => {
   try {
     const u = await db.query(
-      "SELECT id, email, name, role, client_number, rate_per_kg FROM users WHERE id=$1",
+      "SELECT id, email, name, role, client_number, tariff_code FROM users WHERE id=$1",
       [req.user.id]
     );
     const user = u.rows[0];
     if (!user) return res.status(404).json({ error: "Usuario no existe" });
+
     res.json({
       user: {
         ...user,
-        rate_per_kg: Number(user.rate_per_kg ?? 0),
+        tariff_code: user.tariff_code || "USA_NORMAL",
+        tariff_usd_per_kg: tariffRate(user.tariff_code || "USA_NORMAL"),
       },
     });
   } catch (e) {
@@ -103,7 +120,9 @@ app.post(
         email: z.string().email(),
         password: z.string().min(6),
         role: z.enum(["client", "operator", "admin"]).optional(),
-        rate_per_kg: z.number().min(0).optional(),
+        tariff_code: z
+          .enum(["USA_NORMAL", "USA_EXPRESS", "CHINA_NORMAL", "CHINA_EXPRESS", "EUROPA"])
+          .optional(),
       });
 
       const p = schema.safeParse(req.body);
@@ -112,20 +131,20 @@ app.post(
       const d = p.data;
       const password_hash = await bcrypt.hash(d.password, 10);
       const role = d.role || "client";
-      const rate = typeof d.rate_per_kg === "number" ? d.rate_per_kg : 0;
+      const tariff_code = d.tariff_code || "USA_NORMAL";
 
       const ins = await db.query(
-        `INSERT INTO users (client_number, name, email, password_hash, role, rate_per_kg)
+        `INSERT INTO users (client_number, name, email, password_hash, role, tariff_code)
          VALUES ($1,$2,$3,$4,$5,$6)
-         RETURNING id, client_number, name, email, role, rate_per_kg`,
-        [d.client_number, d.name, d.email.toLowerCase(), password_hash, role, rate]
+         RETURNING id, client_number, name, email, role, tariff_code`,
+        [d.client_number, d.name, d.email.toLowerCase(), password_hash, role, tariff_code]
       );
 
-      const user = ins.rows[0];
+      const u = ins.rows[0];
       res.json({
         user: {
-          ...user,
-          rate_per_kg: Number(user.rate_per_kg ?? 0),
+          ...u,
+          tariff_usd_per_kg: tariffRate(u.tariff_code || "USA_NORMAL"),
         },
       });
     } catch (e) {
@@ -145,19 +164,22 @@ app.get(
   async (req, res) => {
     try {
       const n = Number(req.query.client_number);
-      if (Number.isNaN(n))
-        return res.status(400).json({ error: "client_number inválido" });
+      if (Number.isNaN(n)) return res.status(400).json({ error: "client_number inválido" });
 
       const q = await db.query(
-        "SELECT id, client_number, name, email, role, rate_per_kg FROM users WHERE client_number=$1",
+        "SELECT id, client_number, name, email, role, tariff_code FROM users WHERE client_number=$1",
         [n]
       );
 
       const user = q.rows[0] || null;
+      if (!user) return res.json({ user: null });
+
       res.json({
-        user: user
-          ? { ...user, rate_per_kg: Number(user.rate_per_kg ?? 0) }
-          : null,
+        user: {
+          ...user,
+          tariff_code: user.tariff_code || "USA_NORMAL",
+          tariff_usd_per_kg: tariffRate(user.tariff_code || "USA_NORMAL"),
+        },
       });
     } catch (e) {
       console.error("GET CLIENT ERROR", e);
@@ -166,37 +188,41 @@ app.get(
   }
 );
 
-// ✅ actualizar tarifa por client_number
+// ✅ Cambiar tarifa por client_number
 app.patch(
-  "/operator/clients/:client_number/rate",
+  "/operator/clients/:client_number/tariff",
   authRequired,
   requireRole(["operator", "admin"]),
   async (req, res) => {
     try {
-      const n = Number(req.params.client_number);
-      if (Number.isNaN(n))
-        return res.status(400).json({ error: "client_number inválido" });
+      const clientNumber = Number(req.params.client_number);
+      if (Number.isNaN(clientNumber)) return res.status(400).json({ error: "client_number inválido" });
 
       const schema = z.object({
-        rate_per_kg: z.number().min(0),
+        tariff_code: z.enum(["USA_NORMAL", "USA_EXPRESS", "CHINA_NORMAL", "CHINA_EXPRESS", "EUROPA"]),
       });
       const p = schema.safeParse(req.body);
       if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
 
       const upd = await db.query(
         `UPDATE users
-         SET rate_per_kg=$1
+         SET tariff_code=$1, updated_at=NOW()
          WHERE client_number=$2
-         RETURNING id, client_number, name, email, role, rate_per_kg`,
-        [p.data.rate_per_kg, n]
+         RETURNING id, client_number, name, email, role, tariff_code`,
+        [p.data.tariff_code, clientNumber]
       );
 
       const user = upd.rows[0];
       if (!user) return res.status(404).json({ error: "Cliente no existe" });
 
-      res.json({ user: { ...user, rate_per_kg: Number(user.rate_per_kg ?? 0) } });
+      res.json({
+        user: {
+          ...user,
+          tariff_usd_per_kg: tariffRate(user.tariff_code || "USA_NORMAL"),
+        },
+      });
     } catch (e) {
-      console.error("PATCH RATE ERROR", e);
+      console.error("PATCH TARIFF ERROR", e);
       res.status(500).json({ error: "Error interno" });
     }
   }
@@ -223,10 +249,7 @@ app.post(
 
       const d = p.data;
 
-      const u = await db.query(
-        "SELECT id FROM users WHERE client_number=$1",
-        [d.client_number]
-      );
+      const u = await db.query("SELECT id FROM users WHERE client_number=$1", [d.client_number]);
       const user = u.rows[0];
       if (!user) return res.status(404).json({ error: "Cliente no existe" });
 
@@ -246,6 +269,7 @@ app.post(
         ]
       );
 
+      // evento inicial
       await db.query(
         `INSERT INTO shipment_events (shipment_id, old_status, new_status)
          VALUES ($1,$2,$3)`,
@@ -289,7 +313,7 @@ app.get(
       }
 
       const q = await db.query(
-        `SELECT sh.*, u.client_number, u.name, u.email, u.rate_per_kg
+        `SELECT sh.*, u.client_number, u.name, u.email, u.tariff_code
          FROM shipments sh
          JOIN users u ON u.id = sh.user_id
          ${where}
@@ -298,14 +322,59 @@ app.get(
         params
       );
 
-      res.json({
-        rows: q.rows.map((r) => ({
-          ...r,
-          rate_per_kg: Number(r.rate_per_kg ?? 0),
-        })),
-      });
+      // agrego tarifa calculada para que el front pueda usarla
+      const rows = (q.rows || []).map((r) => ({
+        ...r,
+        tariff_code: r.tariff_code || "USA_NORMAL",
+        tariff_usd_per_kg: tariffRate(r.tariff_code || "USA_NORMAL"),
+      }));
+
+      res.json({ rows });
     } catch (e) {
       console.error("OP SHIPMENTS ERROR", e);
+      res.status(500).json({ error: "Error interno" });
+    }
+  }
+);
+
+app.patch(
+  "/operator/shipments/:id",
+  authRequired,
+  requireRole(["operator", "admin"]),
+  async (req, res) => {
+    try {
+      const schema = z.object({
+        package_code: z.string().min(1),
+        description: z.string().min(1),
+        box_code: z.string().nullable().optional(),
+        tracking: z.string().nullable().optional(),
+        weight_kg: z.number().min(0),
+      });
+      const p = schema.safeParse(req.body);
+      if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
+
+      const id = Number(req.params.id);
+      if (Number.isNaN(id)) return res.status(400).json({ error: "ID inválido" });
+
+      const upd = await db.query(
+        `UPDATE shipments
+         SET package_code=$1, description=$2, box_code=$3, tracking=$4, weight_kg=$5, updated_at=NOW()
+         WHERE id=$6
+         RETURNING *`,
+        [
+          p.data.package_code,
+          p.data.description,
+          p.data.box_code ?? null,
+          p.data.tracking ?? null,
+          p.data.weight_kg,
+          id,
+        ]
+      );
+
+      if (!upd.rows[0]) return res.status(404).json({ error: "Envío no existe" });
+      res.json({ shipment: upd.rows[0] });
+    } catch (e) {
+      console.error("PATCH SHIPMENT ERROR", e);
       res.status(500).json({ error: "Error interno" });
     }
   }
@@ -322,8 +391,7 @@ app.patch(
       if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
 
       const shipmentId = Number(req.params.id);
-      if (Number.isNaN(shipmentId))
-        return res.status(400).json({ error: "ID inválido" });
+      if (Number.isNaN(shipmentId)) return res.status(400).json({ error: "ID inválido" });
 
       const s = await db.query(
         `SELECT sh.*, u.email, u.name, u.client_number
@@ -348,6 +416,7 @@ app.patch(
         [newStatus, shipmentId]
       );
 
+      // evento
       await db.query(
         `INSERT INTO shipment_events (shipment_id, old_status, new_status)
          VALUES ($1,$2,$3)`,
@@ -367,21 +436,14 @@ app.patch(
 app.get("/client/shipments", authRequired, async (req, res) => {
   try {
     const q = await db.query(
-      `SELECT sh.id, sh.package_code, sh.description, sh.box_code, sh.tracking, sh.weight_kg, sh.status, sh.date_in,
-              u.rate_per_kg
-       FROM shipments sh
-       JOIN users u ON u.id = sh.user_id
-       WHERE sh.user_id=$1
-       ORDER BY sh.id DESC`,
+      `SELECT id, package_code, description, box_code, tracking, weight_kg, status, date_in
+       FROM shipments
+       WHERE user_id=$1
+       ORDER BY id DESC`,
       [req.user.id]
     );
 
-    res.json({
-      rows: q.rows.map((r) => ({
-        ...r,
-        rate_per_kg: Number(r.rate_per_kg ?? 0),
-      })),
-    });
+    res.json({ rows: q.rows });
   } catch (e) {
     console.error("CLIENT SHIPMENTS ERROR", e);
     res.status(500).json({ error: "Error interno" });
@@ -391,12 +453,9 @@ app.get("/client/shipments", authRequired, async (req, res) => {
 app.get("/shipments/:id/events", authRequired, async (req, res) => {
   try {
     const shipmentId = Number(req.params.id);
-    if (Number.isNaN(shipmentId))
-      return res.status(400).json({ error: "ID inválido" });
+    if (Number.isNaN(shipmentId)) return res.status(400).json({ error: "ID inválido" });
 
-    const sh = await db.query("SELECT id, user_id FROM shipments WHERE id=$1", [
-      shipmentId,
-    ]);
+    const sh = await db.query("SELECT id, user_id FROM shipments WHERE id=$1", [shipmentId]);
     const shipment = sh.rows[0];
     if (!shipment) return res.status(404).json({ error: "Envío no existe" });
 
