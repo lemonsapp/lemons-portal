@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import Topbar from "../components/Topbar.jsx";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
-const getToken = () => localStorage.getItem("token") || sessionStorage.getItem("token");
+const getToken = () =>
+  localStorage.getItem("token") || sessionStorage.getItem("token");
 
 export default function ClientShipments() {
   const [me, setMe] = useState(null);
@@ -69,19 +70,33 @@ export default function ClientShipments() {
                 <th>TRACKING</th>
                 <th>PESO [KG]</th>
                 <th>ESTADO</th>
+                <th>TARIFA</th>
+                <th>TOTAL</th>
+                <th>PAGO</th>
                 <th>HISTORIAL</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.id}>
-                  <td><span className="pill">{r.package_code}</span></td>
+                  <td>
+                    <span className="pill">{r.package_code}</span>
+                  </td>
                   <td>{r.date_in}</td>
                   <td>{r.description}</td>
                   <td>{r.box_code || "-"}</td>
                   <td>{r.tracking || "-"}</td>
                   <td>{Number(r.weight_kg).toFixed(2)}</td>
                   <td>{r.status}</td>
+                  <td>
+                    USD {Number(r.rate_per_kg ?? 0).toFixed(2)}/kg
+                  </td>
+                  <td>
+                    <b>
+                      {r.currency || "USD"} {Number(r.total_usd ?? 0).toFixed(2)}
+                    </b>
+                  </td>
+                  <td>{r.payment_status || "pending"}</td>
                   <td>
                     <button
                       className="btn"
@@ -98,7 +113,7 @@ export default function ClientShipments() {
 
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="muted" style={{ padding: 14 }}>
+                  <td colSpan={11} className="muted" style={{ padding: 14 }}>
                     No hay envíos todavía.
                   </td>
                 </tr>
@@ -112,7 +127,7 @@ export default function ClientShipments() {
             <h3>Historial</h3>
             <ul>
               {events.map((e, idx) => (
-                <li key={idx}>
+                <li key={e.id || idx}>
                   {new Date(e.created_at).toLocaleString()} — {e.old_status || "-"} →{" "}
                   <b>{e.new_status}</b>
                 </li>
