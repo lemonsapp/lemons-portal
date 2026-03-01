@@ -10,88 +10,68 @@ const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 const getToken = () =>
   localStorage.getItem("token") || sessionStorage.getItem("token");
 
-const clearToken = () => {
-  localStorage.removeItem("token");
-  sessionStorage.removeItem("token");
-};
-
 async function fetchMe() {
   const token = getToken();
-  if (!token) return { user: null, ok: false };
+  if (!token) return null;
 
   try {
     const res = await fetch(`${API}/auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) return { user: null, ok: false };
-
-    return { user: data.user || null, ok: true };
+    return res.ok ? data.user : null;
   } catch {
-    return { user: null, ok: false };
+    return null;
   }
 }
 
-function RequireAuth({ children }) {
-  const [loading, setLoading] = useState(true);
-  const [me, setMe] = useState(null);
+function Loading() {
+  return <div style={{ padding: 20 }}>Cargando…</div>;
+}
 
-  useEffect(() => {
-    (async () => {
-      const { user, ok } = await fetchMe();
-      if (!ok) {
-        clearToken();
-        setMe(null);
-      } else {
-        setMe(user);
-      }
-      setLoading(false);
-    })();
-  }, []);
-
-  if (loading) return <div style={{ padding: 20 }}>Cargando…</div>;
+function RequireAuth({ me, loading, children }) {
+  if (loading) return <Loading />;
   if (!me) return <Navigate to="/" replace />;
   return children;
 }
 
-function RequireRole({ roles, children }) {
-  const [loading, setLoading] = useState(true);
-  const [me, setMe] = useState(null);
-
-  useEffect(() => {
-    (async () => {
-      const { user, ok } = await fetchMe();
-      if (!ok) {
-        clearToken();
-        setMe(null);
-      } else {
-        setMe(user);
-      }
-      setLoading(false);
-    })();
-  }, []);
-
-  if (loading) return <div style={{ padding: 20 }}>Cargando…</div>;
+function RequireRole({ me, loading, roles, redirectTo, children }) {
+  if (loading) return <Loading />;
   if (!me) return <Navigate to="/" replace />;
-  if (!roles.includes(me.role)) return <Navigate to="/client/shipments" replace />;
+  if (!roles.includes(me.role)) return <Navigate to={redirectTo} replace />;
   return children;
 }
 
 export default function App() {
+  const [loading, setLoading] = useState(true);
+  const [me, setMe] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      const user = await fetchMe();
+      setMe(user);
+      setLoading(false);
+    })();
+  }, []);
+
   return (
     <BrowserRouter>
       <Routes>
         {/* Login */}
         <Route path="/" element={<Login />} />
 
-        {/* Cliente */}
+        {/* Cliente (solo cliente) */}
         <Route
           path="/client/shipments"
           element={
-            <RequireAuth>
+            <RequireRole
+              me={me}
+              loading={loading}
+              roles={["client"]}
+              redirectTo="/operator"
+            >
               <ClientShipments />
-            </RequireAuth>
+            </RequireRole>
           }
         />
 
@@ -99,14 +79,22 @@ export default function App() {
         <Route
           path="/operator"
           element={
-            <RequireRole roles={["operator", "admin"]}>
+            <RequireRole
+              me={me}
+              loading={loading}
+              roles={["operator", "admin"]}
+              redirectTo="/client/shipments"
+            >
               <OperatorPanel />
             </RequireRole>
           }
         />
 
         {/* Alias */}
-        <Route path="/client" element={<Navigate to="/client/shipments" replace />} />
+        <Route
+          path="/client"
+          element={<Navigate to="/client/shipments" replace />}
+        />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
