@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import Topbar from "./components/Topbar.jsx";
-import StatusBadge from "./components/StatusBadge.jsx";
+import Topbar from "../components/Topbar.jsx";
+import StatusBadge from "../components/StatusBadge.jsx";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 const getToken = () =>
@@ -19,21 +19,8 @@ const ORIGINS = ["USA", "CHINA", "EUROPA"];
 const SERVICES_BY_ORIGIN = {
   USA: ["NORMAL", "EXPRESS"],
   CHINA: ["NORMAL", "EXPRESS"],
-  EUROPA: ["NORMAL"],
+  EUROPA: ["NORMAL"], // Europa solo una tarifa
 };
-
-const DEFAULT_RATES = {
-  usa_normal: 45,
-  usa_express: 55,
-  china_normal: 58,
-  china_express: 68,
-  europa: 58,
-};
-
-function toNum(v) {
-  const n = Number(String(v).replace(",", "."));
-  return Number.isNaN(n) ? 0 : n;
-}
 
 export default function OperatorPanel() {
   const [msg, setMsg] = useState("");
@@ -52,9 +39,15 @@ export default function OperatorPanel() {
   const [clientNumber, setClientNumber] = useState("");
   const [client, setClient] = useState(null);
 
-  // ====== TARIFAS (POR CLIENTE - DB) ======
-  const [rates, setRates] = useState({ ...DEFAULT_RATES });
-  const [savingRates, setSavingRates] = useState(false);
+  // ====== TARIFAS (local UI) ======
+  // defaults: USA N 45 / USA E 55 / CHINA N 58 / CHINA E 68 / EUROPA 58
+  const [rates, setRates] = useState({
+    usa_normal: 45,
+    usa_express: 55,
+    china_normal: 58,
+    china_express: 68,
+    europa: 58,
+  });
 
   // Crear envío
   const [packageCode, setPackageCode] = useState("");
@@ -64,7 +57,7 @@ export default function OperatorPanel() {
   const [weightKg, setWeightKg] = useState("");
   const [status, setStatus] = useState("Recibido en depósito");
 
-  // Origen + servicio
+  // NUEVO: origen + servicio
   const [origin, setOrigin] = useState("USA");
   const [service, setService] = useState("NORMAL");
 
@@ -85,23 +78,24 @@ export default function OperatorPanel() {
   const [editDraft, setEditDraft] = useState({});
   const [savingEditId, setSavingEditId] = useState(null);
 
-  // ===== tarifa aplicada según selección =====
+  // ===== helpers tarifa =====
   const rateForSelection = useMemo(() => {
-    if (origin === "USA" && service === "NORMAL") return toNum(rates.usa_normal);
-    if (origin === "USA" && service === "EXPRESS") return toNum(rates.usa_express);
-    if (origin === "CHINA" && service === "NORMAL") return toNum(rates.china_normal);
-    if (origin === "CHINA" && service === "EXPRESS") return toNum(rates.china_express);
-    if (origin === "EUROPA") return toNum(rates.europa);
+    if (origin === "USA" && service === "NORMAL") return Number(rates.usa_normal || 0);
+    if (origin === "USA" && service === "EXPRESS") return Number(rates.usa_express || 0);
+    if (origin === "CHINA" && service === "NORMAL") return Number(rates.china_normal || 0);
+    if (origin === "CHINA" && service === "EXPRESS") return Number(rates.china_express || 0);
+    if (origin === "EUROPA") return Number(rates.europa || 0);
     return 0;
   }, [origin, service, rates]);
 
   const estimated = useMemo(() => {
-    const w = toNum(weightKg);
-    if (!w || w <= 0) return 0;
+    const w = Number(String(weightKg).replace(",", "."));
+    if (Number.isNaN(w) || w <= 0) return 0;
     return w * rateForSelection;
   }, [weightKg, rateForSelection]);
 
   useEffect(() => {
+    // si cambia origin, ajusto service válido
     const allowed = SERVICES_BY_ORIGIN[origin] || ["NORMAL"];
     if (!allowed.includes(service)) setService(allowed[0]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -169,62 +163,7 @@ export default function OperatorPanel() {
 
     const data = await res.json();
     if (!data.user) return setMsg("Cliente no encontrado");
-
     setClient(data.user);
-
-    // ✅ cargar tarifas por cliente desde DB
-    setRates({
-      usa_normal: data.user.rate_usa_normal ?? DEFAULT_RATES.usa_normal,
-      usa_express: data.user.rate_usa_express ?? DEFAULT_RATES.usa_express,
-      china_normal: data.user.rate_china_normal ?? DEFAULT_RATES.china_normal,
-      china_express: data.user.rate_china_express ?? DEFAULT_RATES.china_express,
-      europa: data.user.rate_europa ?? DEFAULT_RATES.europa,
-    });
-  }
-
-  async function saveClientRates() {
-    setMsg("");
-    if (!client) return setMsg("Primero buscá un cliente");
-
-    setSavingRates(true);
-    try {
-      const payload = {
-        rate_usa_normal: toNum(rates.usa_normal),
-        rate_usa_express: toNum(rates.usa_express),
-        rate_china_normal: toNum(rates.china_normal),
-        rate_china_express: toNum(rates.china_express),
-        rate_europa: toNum(rates.europa),
-      };
-
-      const res = await fetch(
-        `${API}/operator/clients/${client.client_number}/rates`,
-        {
-          method: "PATCH",
-          headers: {
-            Authorization: `Bearer ${getToken()}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(payload),
-        }
-      );
-
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) return setMsg(data?.error || "Error guardando tarifas");
-
-      setMsg("Tarifas guardadas ✅");
-
-      // refresco client con lo que devolvió backend
-      setClient(data.user);
-      setRates({
-        usa_normal: data.user.rate_usa_normal,
-        usa_express: data.user.rate_usa_express,
-        china_normal: data.user.rate_china_normal,
-        china_express: data.user.rate_china_express,
-        europa: data.user.rate_europa,
-      });
-    } finally {
-      setSavingRates(false);
-    }
   }
 
   async function createShipment() {
@@ -233,12 +172,8 @@ export default function OperatorPanel() {
     if (!packageCode || !description || !weightKg)
       return setMsg("Faltan campos obligatorios");
 
-    const weightParsed = toNum(weightKg);
-    if (!weightParsed || weightParsed <= 0) return setMsg("Peso inválido");
-
-    const appliedRate = rateForSelection;
-    const appliedService = origin === "EUROPA" ? "NORMAL" : service;
-    const est = Number((weightParsed * appliedRate).toFixed(2));
+    const weightParsed = Number(String(weightKg).replace(",", "."));
+    if (Number.isNaN(weightParsed) || weightParsed <= 0) return setMsg("Peso inválido");
 
     const res = await fetch(`${API}/operator/shipments`, {
       method: "POST",
@@ -248,24 +183,25 @@ export default function OperatorPanel() {
       },
       body: JSON.stringify({
         client_number: client.client_number,
-        package_code: packageCode.trim(),
-        description: description.trim(),
-        box_code: (boxCode || "").trim() ? boxCode.trim() : null,
-        tracking: (tracking || "").trim() ? tracking.trim() : null,
+        package_code: packageCode,
+        description,
+        box_code: boxCode || null,
+        tracking: tracking || null,
         weight_kg: weightParsed,
         status,
 
+        // NUEVO
         origin,
-        service: appliedService,
-        rate_usd_per_kg: appliedRate,
-        estimated_usd: est,
+        service: origin === "EUROPA" ? "NORMAL" : service,
+        rate_usd_per_kg: rateForSelection,
+        estimated_usd: Number((weightParsed * rateForSelection).toFixed(2)),
       }),
     });
 
-    const data = await res.json().catch(() => ({}));
+    const data = await res.json();
     if (!res.ok) return setMsg(data?.error || "Error interno");
 
-    setMsg(`Envío creado: ${data.shipment?.code || packageCode}`);
+    setMsg(`Envío creado: ${data.shipment?.code || data.shipment?.package_code || packageCode}`);
     setPackageCode("");
     setDescription("");
     setBoxCode("");
@@ -283,13 +219,14 @@ export default function OperatorPanel() {
     setMsg("");
     const qs = new URLSearchParams();
     if (opSearch.trim()) qs.set("search", opSearch.trim());
-    if (opClientNumber.trim() !== "") qs.set("client_number", opClientNumber.trim());
+    if (opClientNumber.trim() !== "")
+      qs.set("client_number", opClientNumber.trim());
 
     const res = await fetch(`${API}/operator/shipments?${qs.toString()}`, {
       headers: { Authorization: `Bearer ${getToken()}` },
     });
 
-    const data = await res.json().catch(() => ({}));
+    const data = await res.json();
     if (!res.ok) return setMsg(data?.error || "Error cargando envíos");
 
     const list = data.rows || [];
@@ -307,7 +244,7 @@ export default function OperatorPanel() {
       headers: { Authorization: `Bearer ${getToken()}` },
     });
 
-    const data = await res.json().catch(() => ({}));
+    const data = await res.json();
     setLoadingEvents(false);
 
     if (!res.ok) {
@@ -335,7 +272,7 @@ export default function OperatorPanel() {
       body: JSON.stringify({ status: newStatus }),
     });
 
-    const data = await res.json().catch(() => ({}));
+    const data = await res.json();
     setSavingId(null);
 
     if (!res.ok) return setMsg(data?.error || "Error actualizando estado");
@@ -352,7 +289,7 @@ export default function OperatorPanel() {
   function startEdit(r) {
     setEditId(r.id);
     setEditDraft({
-      package_code: r.code ?? "",
+      package_code: r.code ?? r.package_code ?? "",
       description: r.description ?? "",
       box_code: r.box_code ?? "",
       tracking: r.tracking ?? "",
@@ -377,17 +314,31 @@ export default function OperatorPanel() {
     const payload = {
       package_code: (editDraft.package_code || "").trim(),
       description: (editDraft.description || "").trim(),
-      box_code: (editDraft.box_code || "").trim() ? (editDraft.box_code || "").trim() : null,
-      tracking: (editDraft.tracking || "").trim() ? (editDraft.tracking || "").trim() : null,
-      weight_kg: toNum(editDraft.weight_kg),
+      box_code: (editDraft.box_code || "").trim()
+        ? (editDraft.box_code || "").trim()
+        : null,
+      tracking: (editDraft.tracking || "").trim()
+        ? (editDraft.tracking || "").trim()
+        : null,
+      weight_kg: Number(String(editDraft.weight_kg).replace(",", ".")),
 
       origin: (editDraft.origin || "").trim() || null,
       service: (editDraft.service || "").trim() || null,
-      rate_usd_per_kg: editDraft.rate_usd_per_kg === "" ? null : toNum(editDraft.rate_usd_per_kg),
-      estimated_usd: editDraft.estimated_usd === "" ? null : toNum(editDraft.estimated_usd),
+      rate_usd_per_kg:
+        editDraft.rate_usd_per_kg === "" || editDraft.rate_usd_per_kg == null
+          ? null
+          : Number(String(editDraft.rate_usd_per_kg).replace(",", ".")),
+      estimated_usd:
+        editDraft.estimated_usd === "" || editDraft.estimated_usd == null
+          ? null
+          : Number(String(editDraft.estimated_usd).replace(",", ".")),
     };
 
-    if (!payload.package_code || !payload.description || !payload.weight_kg) {
+    if (
+      !payload.package_code ||
+      !payload.description ||
+      Number.isNaN(payload.weight_kg)
+    ) {
       setSavingEditId(null);
       return setMsg("Revisá código, descripción y peso (kg)");
     }
@@ -401,7 +352,7 @@ export default function OperatorPanel() {
       body: JSON.stringify(payload),
     });
 
-    const data = await res.json().catch(() => ({}));
+    const data = await res.json();
     setSavingEditId(null);
 
     if (!res.ok) return setMsg(data?.error || "Error guardando cambios");
@@ -477,7 +428,9 @@ export default function OperatorPanel() {
 
         <div className="cardStat">
           <div className="k">Peso total</div>
-          <div className="v">{loadingStats ? "…" : Number(stats?.total_weight ?? 0).toFixed(2)}</div>
+          <div className="v">
+            {loadingStats ? "…" : Number(stats?.total_weight ?? 0).toFixed(2)}
+          </div>
           <div className="s">kg acumulados</div>
         </div>
       </div>
@@ -492,8 +445,18 @@ export default function OperatorPanel() {
               value={newClientNumber}
               onChange={(e) => setNewClientNumber(e.target.value)}
             />
-            <input className="input" placeholder="Nombre" value={newName} onChange={(e) => setNewName(e.target.value)} />
-            <input className="input" placeholder="Email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
+            <input
+              className="input"
+              placeholder="Nombre"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+            />
+            <input
+              className="input"
+              placeholder="Email"
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+            />
             <input
               className="input"
               placeholder="Contraseña (mín 6)"
@@ -528,72 +491,68 @@ export default function OperatorPanel() {
               </div>
               <div className="muted">{client.email}</div>
 
-              {/* ✅ Tarifas con labels al lado (como pediste) */}
-              <div style={{ marginTop: 12 }}>
-                <b>Tarifas del cliente (USD/kg)</b>
+              {/* Tarifa editable (por ahora global UI; si querés por-cliente en DB lo hacemos en el próximo paso) */}
+              <div style={{ marginTop: 10 }}>
+                <b>Tarifas (USD/kg)</b>
                 <div className="muted" style={{ marginBottom: 8 }}>
-                  Se guardan en la base y se usan al crear envíos.
+                  Editalas acá y se usan para calcular el estimado del envío.
                 </div>
 
-                <div className="col" style={{ gap: 10 }}>
-                  <div className="row" style={{ gap: 10 }}>
-                    <div style={{ width: 140 }} className="muted">
-                      USA NORMAL
-                    </div>
+                <div className="grid2" style={{ gap: 10 }}>
+                  <div className="col">
+                    <label className="muted">USA Normal</label>
                     <input
                       className="input"
                       value={rates.usa_normal}
-                      onChange={(e) => setRates((r) => ({ ...r, usa_normal: e.target.value }))}
+                      onChange={(e) =>
+                        setRates((r) => ({ ...r, usa_normal: e.target.value }))
+                      }
                     />
                   </div>
 
-                  <div className="row" style={{ gap: 10 }}>
-                    <div style={{ width: 140 }} className="muted">
-                      USA EXPRESS
-                    </div>
+                  <div className="col">
+                    <label className="muted">USA Express</label>
                     <input
                       className="input"
                       value={rates.usa_express}
-                      onChange={(e) => setRates((r) => ({ ...r, usa_express: e.target.value }))}
+                      onChange={(e) =>
+                        setRates((r) => ({ ...r, usa_express: e.target.value }))
+                      }
                     />
                   </div>
 
-                  <div className="row" style={{ gap: 10 }}>
-                    <div style={{ width: 140 }} className="muted">
-                      CHINA NORMAL
-                    </div>
+                  <div className="col">
+                    <label className="muted">China Normal</label>
                     <input
                       className="input"
                       value={rates.china_normal}
-                      onChange={(e) => setRates((r) => ({ ...r, china_normal: e.target.value }))}
+                      onChange={(e) =>
+                        setRates((r) => ({ ...r, china_normal: e.target.value }))
+                      }
                     />
                   </div>
 
-                  <div className="row" style={{ gap: 10 }}>
-                    <div style={{ width: 140 }} className="muted">
-                      CHINA EXPRESS
-                    </div>
+                  <div className="col">
+                    <label className="muted">China Express</label>
                     <input
                       className="input"
                       value={rates.china_express}
-                      onChange={(e) => setRates((r) => ({ ...r, china_express: e.target.value }))}
+                      onChange={(e) =>
+                        setRates((r) => ({ ...r, china_express: e.target.value }))
+                      }
                     />
                   </div>
 
-                  <div className="row" style={{ gap: 10 }}>
-                    <div style={{ width: 140 }} className="muted">
-                      EUROPA
-                    </div>
+                  <div className="col" style={{ gridColumn: "1 / span 2" }}>
+                    <label className="muted">Europa</label>
                     <input
                       className="input"
                       value={rates.europa}
-                      onChange={(e) => setRates((r) => ({ ...r, europa: e.target.value }))}
+                      onChange={(e) =>
+                        setRates((r) => ({ ...r, europa: e.target.value }))
+                      }
                     />
                   </div>
-
-                  <button className="btn" onClick={saveClientRates} disabled={savingRates}>
-                    {savingRates ? "Guardando..." : "Guardar tarifas del cliente"}
-                  </button>
                 </div>
               </div>
             </div>
@@ -604,20 +563,52 @@ export default function OperatorPanel() {
       <div className="box" style={{ marginTop: 12 }}>
         <h2>Crear nuevo envío</h2>
         <div className="col">
-          <div className="muted">Primero buscá un cliente arriba, y después cargá el envío.</div>
+          <div className="muted">
+            Primero buscá un cliente arriba, y después cargá el envío.
+          </div>
 
-          <input className="input" placeholder="Código de paquete" value={packageCode} onChange={(e) => setPackageCode(e.target.value)} />
-          <input className="input" placeholder="Descripción item" value={description} onChange={(e) => setDescription(e.target.value)} />
+          <input
+            className="input"
+            placeholder="Código de paquete"
+            value={packageCode}
+            onChange={(e) => setPackageCode(e.target.value)}
+          />
+          <input
+            className="input"
+            placeholder="Descripción item"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
 
           <div className="row">
-            <input className="input" placeholder="Caja (opcional)" value={boxCode} onChange={(e) => setBoxCode(e.target.value)} />
-            <input className="input" placeholder="Tracking (opcional)" value={tracking} onChange={(e) => setTracking(e.target.value)} />
+            <input
+              className="input"
+              placeholder="Caja (opcional)"
+              value={boxCode}
+              onChange={(e) => setBoxCode(e.target.value)}
+            />
+            <input
+              className="input"
+              placeholder="Tracking (opcional)"
+              value={tracking}
+              onChange={(e) => setTracking(e.target.value)}
+            />
           </div>
 
           <div className="row">
-            <input className="input" placeholder="Peso (kg) ej: 0.5" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} />
+            <input
+              className="input"
+              placeholder="Peso (kg) ej: 0.5"
+              value={weightKg}
+              onChange={(e) => setWeightKg(e.target.value)}
+            />
 
-            <select className="input" value={origin} onChange={(e) => setOrigin(e.target.value)}>
+            <select
+              className="input"
+              value={origin}
+              onChange={(e) => setOrigin(e.target.value)}
+              title="Origen"
+            >
               {ORIGINS.map((o) => (
                 <option key={o} value={o}>
                   Origen: {o}
@@ -630,6 +621,7 @@ export default function OperatorPanel() {
               value={origin === "EUROPA" ? "NORMAL" : service}
               onChange={(e) => setService(e.target.value)}
               disabled={origin === "EUROPA"}
+              title="Servicio"
             >
               {(SERVICES_BY_ORIGIN[origin] || ["NORMAL"]).map((s) => (
                 <option key={s} value={s}>
@@ -640,7 +632,11 @@ export default function OperatorPanel() {
           </div>
 
           <div className="row">
-            <select className="input" value={status} onChange={(e) => setStatus(e.target.value)}>
+            <select
+              className="input"
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+            >
               {STATUSES.map((s) => (
                 <option key={s} value={s}>
                   {s}
@@ -652,8 +648,8 @@ export default function OperatorPanel() {
               <StatusBadge status={status} />
             </div>
 
-            <div className="note" style={{ marginLeft: "auto", minWidth: 320 }}>
-              <div className="muted">Tarifa aplicada (cliente)</div>
+            <div className="note" style={{ marginLeft: "auto", minWidth: 280 }}>
+              <div className="muted">Tarifa aplicada</div>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <b>
                   {origin} {origin === "EUROPA" ? "" : service}
@@ -679,7 +675,7 @@ export default function OperatorPanel() {
         <div className="filters">
           <input
             className="input"
-            placeholder="Buscar: código, tracking, descripción..."
+            placeholder="Buscar: código, tracking, descripción, caja..."
             value={opSearch}
             onChange={(e) => setOpSearch(e.target.value)}
           />
@@ -705,10 +701,12 @@ export default function OperatorPanel() {
                 <th>CAJA</th>
                 <th>TRACKING</th>
                 <th>PESO [KG]</th>
+
                 <th>ORIGEN</th>
                 <th>SERVICIO</th>
                 <th>TARIFA</th>
                 <th>ESTIMADO</th>
+
                 <th>ESTADO</th>
                 <th>GUARDAR</th>
                 <th>HISTORIAL</th>
@@ -729,10 +727,15 @@ export default function OperatorPanel() {
                       <input
                         className="input"
                         value={editDraft.package_code || ""}
-                        onChange={(e) => setEditDraft((d) => ({ ...d, package_code: e.target.value }))}
+                        onChange={(e) =>
+                          setEditDraft((d) => ({
+                            ...d,
+                            package_code: e.target.value,
+                          }))
+                        }
                       />
                     ) : (
-                      <span className="pill">{r.code}</span>
+                      <span className="pill">{r.code || r.package_code}</span>
                     )}
                   </td>
 
@@ -743,7 +746,12 @@ export default function OperatorPanel() {
                       <input
                         className="input"
                         value={editDraft.description || ""}
-                        onChange={(e) => setEditDraft((d) => ({ ...d, description: e.target.value }))}
+                        onChange={(e) =>
+                          setEditDraft((d) => ({
+                            ...d,
+                            description: e.target.value,
+                          }))
+                        }
                       />
                     ) : (
                       r.description
@@ -755,7 +763,12 @@ export default function OperatorPanel() {
                       <input
                         className="input"
                         value={editDraft.box_code || ""}
-                        onChange={(e) => setEditDraft((d) => ({ ...d, box_code: e.target.value }))}
+                        onChange={(e) =>
+                          setEditDraft((d) => ({
+                            ...d,
+                            box_code: e.target.value,
+                          }))
+                        }
                       />
                     ) : (
                       r.box_code || "-"
@@ -767,7 +780,12 @@ export default function OperatorPanel() {
                       <input
                         className="input"
                         value={editDraft.tracking || ""}
-                        onChange={(e) => setEditDraft((d) => ({ ...d, tracking: e.target.value }))}
+                        onChange={(e) =>
+                          setEditDraft((d) => ({
+                            ...d,
+                            tracking: e.target.value,
+                          }))
+                        }
                       />
                     ) : (
                       r.tracking || "-"
@@ -779,24 +797,102 @@ export default function OperatorPanel() {
                       <input
                         className="input"
                         value={editDraft.weight_kg || ""}
-                        onChange={(e) => setEditDraft((d) => ({ ...d, weight_kg: e.target.value }))}
+                        onChange={(e) =>
+                          setEditDraft((d) => ({
+                            ...d,
+                            weight_kg: e.target.value,
+                          }))
+                        }
                       />
                     ) : (
                       Number(r.weight_kg).toFixed(2)
                     )}
                   </td>
 
-                  <td>{r.origin || "-"}</td>
-                  <td>{r.service || "-"}</td>
-                  <td>{r.rate_usd_per_kg != null ? `$${Number(r.rate_usd_per_kg).toFixed(2)}/kg` : "-"}</td>
-                  <td>{r.estimated_usd != null ? `$${Number(r.estimated_usd).toFixed(2)}` : "-"}</td>
+                  {/* NUEVO: ORIGEN/SERVICIO/TARIFA/ESTIMADO */}
+                  <td>
+                    {editId === r.id ? (
+                      <select
+                        className="input"
+                        value={editDraft.origin || "USA"}
+                        onChange={(e) =>
+                          setEditDraft((d) => ({ ...d, origin: e.target.value }))
+                        }
+                      >
+                        {ORIGINS.map((o) => (
+                          <option key={o} value={o}>
+                            {o}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      r.origin || "-"
+                    )}
+                  </td>
+
+                  <td>
+                    {editId === r.id ? (
+                      <select
+                        className="input"
+                        value={editDraft.service || "NORMAL"}
+                        onChange={(e) =>
+                          setEditDraft((d) => ({ ...d, service: e.target.value }))
+                        }
+                      >
+                        <option value="NORMAL">NORMAL</option>
+                        <option value="EXPRESS">EXPRESS</option>
+                      </select>
+                    ) : (
+                      r.service || "-"
+                    )}
+                  </td>
+
+                  <td>
+                    {editId === r.id ? (
+                      <input
+                        className="input"
+                        value={editDraft.rate_usd_per_kg || ""}
+                        onChange={(e) =>
+                          setEditDraft((d) => ({
+                            ...d,
+                            rate_usd_per_kg: e.target.value,
+                          }))
+                        }
+                      />
+                    ) : (
+                      r.rate_usd_per_kg != null
+                        ? `$${Number(r.rate_usd_per_kg).toFixed(2)}/kg`
+                        : "-"
+                    )}
+                  </td>
+
+                  <td>
+                    {editId === r.id ? (
+                      <input
+                        className="input"
+                        value={editDraft.estimated_usd || ""}
+                        onChange={(e) =>
+                          setEditDraft((d) => ({
+                            ...d,
+                            estimated_usd: e.target.value,
+                          }))
+                        }
+                      />
+                    ) : (
+                      r.estimated_usd != null
+                        ? `$${Number(r.estimated_usd).toFixed(2)}`
+                        : "-"
+                    )}
+                  </td>
 
                   <td>
                     <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                       <select
                         className="input"
                         value={statusDraft[r.id] || r.status}
-                        onChange={(e) => setStatusDraft((s) => ({ ...s, [r.id]: e.target.value }))}
+                        onChange={(e) =>
+                          setStatusDraft((s) => ({ ...s, [r.id]: e.target.value }))
+                        }
                       >
                         {STATUSES.map((s) => (
                           <option key={s} value={s}>
@@ -810,7 +906,11 @@ export default function OperatorPanel() {
                   </td>
 
                   <td>
-                    <button className="btn" onClick={() => saveStatus(r.id)} disabled={savingId === r.id}>
+                    <button
+                      className="btn"
+                      onClick={() => saveStatus(r.id)}
+                      disabled={savingId === r.id}
+                    >
                       {savingId === r.id ? "..." : "Guardar"}
                     </button>
                   </td>
@@ -831,7 +931,11 @@ export default function OperatorPanel() {
                   <td>
                     {editId === r.id ? (
                       <div style={{ display: "flex", gap: 8 }}>
-                        <button className="btn" onClick={() => saveEdit(r.id)} disabled={savingEditId === r.id}>
+                        <button
+                          className="btn"
+                          onClick={() => saveEdit(r.id)}
+                          disabled={savingEditId === r.id}
+                        >
                           {savingEditId === r.id ? "..." : "Guardar"}
                         </button>
                         <button className="btn" onClick={cancelEdit}>
@@ -850,7 +954,7 @@ export default function OperatorPanel() {
               {rows.length === 0 && (
                 <tr>
                   <td colSpan={15} className="muted" style={{ padding: 14 }}>
-                    No hay resultados.
+                    No hay resultados. Probá con el botón ↻ o ajustá el filtro.
                   </td>
                 </tr>
               )}
@@ -876,8 +980,8 @@ export default function OperatorPanel() {
                   </tr>
                 </thead>
                 <tbody>
-                  {events.map((e, idx) => (
-                    <tr key={e.id || idx}>
+                  {events.map((e) => (
+                    <tr key={e.id || e.created_at}>
                       <td>{new Date(e.created_at).toLocaleString()}</td>
                       <td>{e.old_status || "-"}</td>
                       <td>
