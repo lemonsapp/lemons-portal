@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
-
 const getToken = () =>
   localStorage.getItem("token") || sessionStorage.getItem("token");
 
@@ -17,11 +16,10 @@ export default function Topbar({ title = "LEMON's" }) {
         const res = await fetch(`${API}/auth/me`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (res.ok) setMe(data.user);
       } catch {
-        // ignore
+        // no-op
       }
     })();
   }, []);
@@ -31,7 +29,10 @@ export default function Topbar({ title = "LEMON's" }) {
     sessionStorage.removeItem("token");
     window.location.href = "/";
   }
-console.log("TOPBAR ME:", me);
+
+  const label =
+    me?.role === "operator" || me?.role === "admin" ? "Staff" : "Cliente";
+
   return (
     <div className="topbarShell">
       <div className="topbarCard">
@@ -44,27 +45,14 @@ console.log("TOPBAR ME:", me);
         </div>
 
         <div className="topbarRight">
-          {me && (
+          {me ? (
             <div className="topbarUser">
-              {me.role === "client" && (
-                <>
-                  <div>
-                    <b>Cliente #{me.client_number}</b> — {me.name}
-                  </div>
-                  <div className="topbarSubtitle">{me.email}</div>
-                </>
-              )}
-
-              {(me.role === "operator" || me.role === "admin") && (
-                <>
-                  <div>
-                    <b>{me.role.toUpperCase()}</b> — {me.name}
-                  </div>
-                  <div className="topbarSubtitle">{me.email}</div>
-                </>
-              )}
+              <div>
+                <b>{label} #{me.client_number}</b> — {me.name}
+              </div>
+              <div className="topbarSubtitle">{me.email}</div>
             </div>
-          )}
+          ) : null}
 
           <button className="btn btnPrimary btnSmall" onClick={logout}>
             Salir

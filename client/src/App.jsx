@@ -1,100 +1,116 @@
-import { useState } from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+
+import Login from "./pages/Login.jsx";
+import OperatorPanel from "./pages/OperatorPanel.jsx";
+import ClientShipments from "./pages/ClientShipments.jsx";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
-export default function Login() {
-  const [email, setEmail] = useState("admin@lemons.com");
-  const [password, setPassword] = useState("admin123");
-  const [remember, setRemember] = useState(true);
-  const [msg, setMsg] = useState("");
+const getToken = () =>
+  localStorage.getItem("token") || sessionStorage.getItem("token");
 
-  async function onSubmit(e) {
-    e.preventDefault();
-    setMsg("");
+const clearToken = () => {
+  localStorage.removeItem("token");
+  sessionStorage.removeItem("token");
+};
 
-    const res = await fetch(`${API}/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, remember }),
+async function fetchMe() {
+  const token = getToken();
+  if (!token) return { user: null, ok: false };
+
+  try {
+    const res = await fetch(`${API}/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
     });
 
     const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { user: null, ok: false };
 
-    if (!res.ok) {
-      setMsg(data?.error || "Error al iniciar sesión");
-      return;
-    }
-
-    // ✅ IMPORTANTÍSIMO: limpiezas para evitar token viejo pisando sesión
-    localStorage.removeItem("token");
-    sessionStorage.removeItem("token");
-
-    // ✅ Guardar token en 1 solo lugar según remember
-    if (remember) localStorage.setItem("token", data.token);
-    else sessionStorage.setItem("token", data.token);
-
-    const role = data?.user?.role;
-    if (role === "operator" || role === "admin") {
-      window.location.href = "/operator";
-    } else {
-      window.location.href = "/client/shipments";
-    }
+    return { user: data.user || null, ok: true };
+  } catch {
+    return { user: null, ok: false };
   }
+}
 
+function RequireAuth({ children }) {
+  const [loading, setLoading] = useState(true);
+  const [me, setMe] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      const { user, ok } = await fetchMe();
+      if (!ok) {
+        clearToken();
+        setMe(null);
+      } else {
+        setMe(user);
+      }
+      setLoading(false);
+    })();
+  }, []);
+
+  if (loading) return <div style={{ padding: 20 }}>Cargando…</div>;
+  if (!me) return <Navigate to="/" replace />;
+  return children;
+}
+
+function RequireRole({ roles, children }) {
+  const [loading, setLoading] = useState(true);
+  const [me, setMe] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      const { user, ok } = await fetchMe();
+      if (!ok) {
+        clearToken();
+        setMe(null);
+      } else {
+        setMe(user);
+      }
+      setLoading(false);
+    })();
+  }, []);
+
+  if (loading) return <div style={{ padding: 20 }}>Cargando…</div>;
+  if (!me) return <Navigate to="/" replace />;
+  if (!roles.includes(me.role)) return <Navigate to="/client/shipments" replace />;
+  return children;
+}
+
+export default function App() {
   return (
-    <div className="loginPage">
-      <div className="loginCard">
-        <div className="loginHeader">
-          <div className="logoCircle">L</div>
-          <div className="brandText">LEMON&apos;s</div>
-        </div>
+    <BrowserRouter>
+      <Routes>
+        {/* Login */}
+        <Route path="/" element={<Login />} />
 
-        <form onSubmit={onSubmit} className="loginGrid">
-          <label className="muted">Email</label>
-          <input
-            className="input"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="tuemail@dominio.com"
-            autoComplete="email"
-          />
+        {/* Cliente */}
+        <Route
+          path="/client/shipments"
+          element={
+            <RequireAuth>
+              <ClientShipments />
+            </RequireAuth>
+          }
+        />
 
-          <label className="muted" style={{ marginTop: 6 }}>
-            Contraseña
-          </label>
-          <input
-            className="input"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-            type="password"
-            autoComplete="current-password"
-          />
+        {/* Operador/Admin */}
+        <Route
+          path="/operator"
+          element={
+            <RequireRole roles={["operator", "admin"]}>
+              <OperatorPanel />
+            </RequireRole>
+          }
+        />
 
-          <div className="loginRow">
-            <label className="loginLeft">
-              <input
-                type="checkbox"
-                checked={remember}
-                onChange={(e) => setRemember(e.target.checked)}
-              />
-              Recuérdeme
-            </label>
+        {/* Alias */}
+        <Route path="/client" element={<Navigate to="/client/shipments" replace />} />
 
-            {msg ? <div style={{ color: "#ef4444", fontWeight: 800 }}>{msg}</div> : null}
-          </div>
-
-          <div className="loginFooter">
-            <a className="loginLink" href="#">
-              Olvidaste tu contraseña?
-            </a>
-
-            <button className="btn btnPrimary btnSmall" type="submit">
-              INICIAR SESIÓN
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
   );
 }

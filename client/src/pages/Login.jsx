@@ -3,41 +3,70 @@ import { useState } from "react";
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
 export default function Login() {
-  const [email, setEmail] = useState("admin@lemons.com");
-  const [password, setPassword] = useState("admin123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [msg, setMsg] = useState("");
+
+  const clearToken = () => {
+    localStorage.removeItem("token");
+    sessionStorage.removeItem("token");
+  };
 
   async function onSubmit(e) {
     e.preventDefault();
     setMsg("");
+    clearToken();
 
-    const res = await fetch(`${API}/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, remember }),
-    });
-
-    const data = await res.json().catch(() => ({}));
+    let res, data;
+    try {
+      res = await fetch(`${API}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, remember }),
+      });
+      data = await res.json().catch(() => ({}));
+    } catch {
+      setMsg("No pude conectar con la API. Revisá VITE_API_URL y Render.");
+      return;
+    }
 
     if (!res.ok) {
       setMsg(data?.error || "Error al iniciar sesión");
       return;
     }
 
-    // ✅ IMPORTANTÍSIMO: limpiezas para evitar token viejo pisando sesión
-    localStorage.removeItem("token");
-    sessionStorage.removeItem("token");
-
-    // ✅ Guardar token en 1 solo lugar según remember
-    if (remember) localStorage.setItem("token", data.token);
-    else sessionStorage.setItem("token", data.token);
-
-    const role = data?.user?.role;
-    if (role === "operator" || role === "admin") {
-      window.location.href = "/operator";
+    // Guardar token
+    if (remember) {
+      localStorage.setItem("token", data.token);
+      sessionStorage.removeItem("token");
     } else {
-      window.location.href = "/client/shipments";
+      sessionStorage.setItem("token", data.token);
+      localStorage.removeItem("token");
+    }
+
+    // Validar token con /auth/me (esto corta el loop)
+    try {
+      const meRes = await fetch(`${API}/auth/me`, {
+        headers: { Authorization: `Bearer ${data.token}` },
+      });
+      const meData = await meRes.json().catch(() => ({}));
+
+      if (!meRes.ok || !meData.user) {
+        clearToken();
+        setMsg(meData?.error || "Token inválido. Probá de nuevo.");
+        return;
+      }
+
+      const role = meData.user.role;
+      if (role === "operator" || role === "admin") {
+        window.location.href = "/operator";
+      } else {
+        window.location.href = "/client/shipments";
+      }
+    } catch {
+      clearToken();
+      setMsg("Falló la verificación de sesión (/auth/me). Revisá la API.");
     }
   }
 
@@ -81,7 +110,9 @@ export default function Login() {
               Recuérdeme
             </label>
 
-            {msg ? <div style={{ color: "#ef4444", fontWeight: 800 }}>{msg}</div> : null}
+            {msg ? (
+              <div style={{ color: "#ef4444", fontWeight: 800 }}>{msg}</div>
+            ) : null}
           </div>
 
           <div className="loginFooter">
