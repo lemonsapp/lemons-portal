@@ -1,88 +1,100 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { useEffect, useState } from "react";
-
-import Login from "./pages/Login.jsx";
-import OperatorPanel from "./pages/OperatorPanel.jsx";
-import ClientShipments from "./pages/ClientShipments.jsx";
+import { useState } from "react";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
-const getToken = () =>
-  localStorage.getItem("token") || sessionStorage.getItem("token");
+export default function Login() {
+  const [email, setEmail] = useState("admin@lemons.com");
+  const [password, setPassword] = useState("admin123");
+  const [remember, setRemember] = useState(true);
+  const [msg, setMsg] = useState("");
 
-export default function App() {
-  const [loading, setLoading] = useState(true);
-  const [me, setMe] = useState(null);
+  async function onSubmit(e) {
+    e.preventDefault();
+    setMsg("");
 
-  useEffect(() => {
-    (async () => {
-      const token = getToken();
-      if (!token) {
-        setMe(null);
-        setLoading(false);
-        return;
-      }
+    const res = await fetch(`${API}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, remember }),
+    });
 
-      try {
-        const res = await fetch(`${API}/auth/me`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+    const data = await res.json().catch(() => ({}));
 
-        const data = await res.json().catch(() => ({}));
-        if (res.ok) setMe(data.user);
-        else setMe(null);
-      } catch {
-        setMe(null);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+    if (!res.ok) {
+      setMsg(data?.error || "Error al iniciar sesión");
+      return;
+    }
 
-  if (loading) return <div style={{ padding: 20 }}>Cargando…</div>;
+    // ✅ IMPORTANTÍSIMO: limpiezas para evitar token viejo pisando sesión
+    localStorage.removeItem("token");
+    sessionStorage.removeItem("token");
+
+    // ✅ Guardar token en 1 solo lugar según remember
+    if (remember) localStorage.setItem("token", data.token);
+    else sessionStorage.setItem("token", data.token);
+
+    const role = data?.user?.role;
+    if (role === "operator" || role === "admin") {
+      window.location.href = "/operator";
+    } else {
+      window.location.href = "/client/shipments";
+    }
+  }
 
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Login />} />
+    <div className="loginPage">
+      <div className="loginCard">
+        <div className="loginHeader">
+          <div className="logoCircle">L</div>
+          <div className="brandText">LEMON&apos;s</div>
+        </div>
 
-        <Route
-          path="/client/shipments"
-          element={
-            me ? (
-              me.role === "client" ? (
-                <ClientShipments />
-              ) : (
-                <Navigate to="/operator" replace />
-              )
-            ) : (
-              <Navigate to="/" replace />
-            )
-          }
-        />
+        <form onSubmit={onSubmit} className="loginGrid">
+          <label className="muted">Email</label>
+          <input
+            className="input"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="tuemail@dominio.com"
+            autoComplete="email"
+          />
 
-        <Route
-          path="/operator"
-          element={
-            me ? (
-              me.role === "operator" || me.role === "admin" ? (
-                <OperatorPanel />
-              ) : (
-                <Navigate to="/client/shipments" replace />
-              )
-            ) : (
-              <Navigate to="/" replace />
-            )
-          }
-        />
+          <label className="muted" style={{ marginTop: 6 }}>
+            Contraseña
+          </label>
+          <input
+            className="input"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+            type="password"
+            autoComplete="current-password"
+          />
 
-        <Route
-          path="/client"
-          element={<Navigate to="/client/shipments" replace />}
-        />
+          <div className="loginRow">
+            <label className="loginLeft">
+              <input
+                type="checkbox"
+                checked={remember}
+                onChange={(e) => setRemember(e.target.checked)}
+              />
+              Recuérdeme
+            </label>
 
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
+            {msg ? <div style={{ color: "#ef4444", fontWeight: 800 }}>{msg}</div> : null}
+          </div>
+
+          <div className="loginFooter">
+            <a className="loginLink" href="#">
+              Olvidaste tu contraseña?
+            </a>
+
+            <button className="btn btnPrimary btnSmall" type="submit">
+              INICIAR SESIÓN
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }

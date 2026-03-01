@@ -31,7 +31,7 @@ export default function Topbar({ title = "LEMON's" }) {
     sessionStorage.removeItem("token");
     window.location.href = "/";
   }
-
+console.log("TOPBAR ME:", me);
   return (
     <div className="topbarShell">
       <div className="topbarCard">
