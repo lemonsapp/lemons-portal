@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Topbar from "../components/Topbar.jsx";
-import StatusBadge from "../components/StatusBadge.jsx";
+import StatusBadge from "./components/StatusBadge.jsx";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 const getToken = () =>
