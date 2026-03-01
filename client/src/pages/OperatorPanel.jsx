@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Topbar from "../components/Topbar.jsx";
 import StatusBadge from "../components/StatusBadge.jsx";
 
@@ -14,6 +14,13 @@ const STATUSES = [
   "Listo para entrega",
   "Entregado",
 ];
+
+const ORIGINS = ["USA", "CHINA", "EUROPA"];
+const SERVICES_BY_ORIGIN = {
+  USA: ["NORMAL", "EXPRESS"],
+  CHINA: ["NORMAL", "EXPRESS"],
+  EUROPA: ["NORMAL"], // Europa solo una tarifa
+};
 
 export default function OperatorPanel() {
   const [msg, setMsg] = useState("");
@@ -32,15 +39,15 @@ export default function OperatorPanel() {
   const [clientNumber, setClientNumber] = useState("");
   const [client, setClient] = useState(null);
 
-  // Tarifas cliente
-  const [tariffsDraft, setTariffsDraft] = useState({
-    rate_usa_normal: "45",
-    rate_usa_express: "55",
-    rate_china_normal: "58",
-    rate_china_express: "68",
-    rate_europa: "58",
+  // ====== TARIFAS (local UI) ======
+  // defaults: USA N 45 / USA E 55 / CHINA N 58 / CHINA E 68 / EUROPA 58
+  const [rates, setRates] = useState({
+    usa_normal: 45,
+    usa_express: 55,
+    china_normal: 58,
+    china_express: 68,
+    europa: 58,
   });
-  const [savingTariffs, setSavingTariffs] = useState(false);
 
   // Crear envío
   const [packageCode, setPackageCode] = useState("");
@@ -49,6 +56,10 @@ export default function OperatorPanel() {
   const [tracking, setTracking] = useState("");
   const [weightKg, setWeightKg] = useState("");
   const [status, setStatus] = useState("Recibido en depósito");
+
+  // NUEVO: origen + servicio
+  const [origin, setOrigin] = useState("USA");
+  const [service, setService] = useState("NORMAL");
 
   // Gestión envíos (tabla)
   const [opSearch, setOpSearch] = useState("");
@@ -66,6 +77,29 @@ export default function OperatorPanel() {
   const [editId, setEditId] = useState(null);
   const [editDraft, setEditDraft] = useState({});
   const [savingEditId, setSavingEditId] = useState(null);
+
+  // ===== helpers tarifa =====
+  const rateForSelection = useMemo(() => {
+    if (origin === "USA" && service === "NORMAL") return Number(rates.usa_normal || 0);
+    if (origin === "USA" && service === "EXPRESS") return Number(rates.usa_express || 0);
+    if (origin === "CHINA" && service === "NORMAL") return Number(rates.china_normal || 0);
+    if (origin === "CHINA" && service === "EXPRESS") return Number(rates.china_express || 0);
+    if (origin === "EUROPA") return Number(rates.europa || 0);
+    return 0;
+  }, [origin, service, rates]);
+
+  const estimated = useMemo(() => {
+    const w = Number(String(weightKg).replace(",", "."));
+    if (Number.isNaN(w) || w <= 0) return 0;
+    return w * rateForSelection;
+  }, [weightKg, rateForSelection]);
+
+  useEffect(() => {
+    // si cambia origin, ajusto service válido
+    const allowed = SERVICES_BY_ORIGIN[origin] || ["NORMAL"];
+    if (!allowed.includes(service)) setService(allowed[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [origin]);
 
   async function loadDashboard() {
     setLoadingStats(true);
@@ -129,77 +163,7 @@ export default function OperatorPanel() {
 
     const data = await res.json();
     if (!data.user) return setMsg("Cliente no encontrado");
-
     setClient(data.user);
-
-    // Si el backend ya devuelve tarifas del cliente, las cargamos.
-    // (si no existen, queda por defecto)
-    const t = data.user?.tariffs || data.user?.rates || null;
-    if (t) {
-      setTariffsDraft((prev) => ({
-        ...prev,
-        rate_usa_normal:
-          t.rate_usa_normal != null ? String(t.rate_usa_normal) : prev.rate_usa_normal,
-        rate_usa_express:
-          t.rate_usa_express != null ? String(t.rate_usa_express) : prev.rate_usa_express,
-        rate_china_normal:
-          t.rate_china_normal != null ? String(t.rate_china_normal) : prev.rate_china_normal,
-        rate_china_express:
-          t.rate_china_express != null
-            ? String(t.rate_china_express)
-            : prev.rate_china_express,
-        rate_europa: t.rate_europa != null ? String(t.rate_europa) : prev.rate_europa,
-      }));
-    }
-  }
-
-  async function saveClientTariffs() {
-    setMsg("");
-    if (!client) return setMsg("Primero buscá un cliente");
-
-    const cleanNumber = (v) => {
-      if (v == null) return null;
-      const s = String(v).trim().replace(",", ".");
-      const n = Number(s);
-      return Number.isFinite(n) ? n : null;
-    };
-
-    const payload = {
-      rate_usa_normal: cleanNumber(tariffsDraft.rate_usa_normal),
-      rate_usa_express: cleanNumber(tariffsDraft.rate_usa_express),
-      rate_china_normal: cleanNumber(tariffsDraft.rate_china_normal),
-      rate_china_express: cleanNumber(tariffsDraft.rate_china_express),
-      rate_europa: cleanNumber(tariffsDraft.rate_europa),
-    };
-
-    // Validación básica
-    const anyInvalid =
-      payload.rate_usa_normal == null ||
-      payload.rate_usa_express == null ||
-      payload.rate_china_normal == null ||
-      payload.rate_china_express == null ||
-      payload.rate_europa == null;
-
-    if (anyInvalid) return setMsg("Revisá las tarifas: tienen que ser números válidos");
-
-    setSavingTariffs(true);
-
-    // Endpoint esperado: /operator/clients/:id/tariffs (si tu backend usa otro, decime cuál)
-    const res = await fetch(`${API}/operator/clients/${client.id}/tariffs`, {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${getToken()}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-
-    const data = await res.json();
-    setSavingTariffs(false);
-
-    if (!res.ok) return setMsg(data?.error || "Error guardando tarifas");
-
-    setMsg("Tarifas guardadas ✅");
   }
 
   async function createShipment() {
@@ -207,6 +171,9 @@ export default function OperatorPanel() {
     if (!client) return setMsg("Primero buscá un cliente");
     if (!packageCode || !description || !weightKg)
       return setMsg("Faltan campos obligatorios");
+
+    const weightParsed = Number(String(weightKg).replace(",", "."));
+    if (Number.isNaN(weightParsed) || weightParsed <= 0) return setMsg("Peso inválido");
 
     const res = await fetch(`${API}/operator/shipments`, {
       method: "POST",
@@ -220,21 +187,29 @@ export default function OperatorPanel() {
         description,
         box_code: boxCode || null,
         tracking: tracking || null,
-        weight_kg: Number(String(weightKg).replace(",", ".")),
+        weight_kg: weightParsed,
         status,
+
+        // NUEVO
+        origin,
+        service: origin === "EUROPA" ? "NORMAL" : service,
+        rate_usd_per_kg: rateForSelection,
+        estimated_usd: Number((weightParsed * rateForSelection).toFixed(2)),
       }),
     });
 
     const data = await res.json();
-    if (!res.ok) return setMsg(data?.error || "Error creando envío");
+    if (!res.ok) return setMsg(data?.error || "Error interno");
 
-    setMsg(`Envío creado: ${data.shipment.package_code}`);
+    setMsg(`Envío creado: ${data.shipment?.code || data.shipment?.package_code || packageCode}`);
     setPackageCode("");
     setDescription("");
     setBoxCode("");
     setTracking("");
     setWeightKg("");
     setStatus("Recibido en depósito");
+    setOrigin("USA");
+    setService("NORMAL");
 
     await loadOperatorShipments();
     await loadDashboard();
@@ -314,11 +289,16 @@ export default function OperatorPanel() {
   function startEdit(r) {
     setEditId(r.id);
     setEditDraft({
-      package_code: r.package_code ?? "",
+      package_code: r.code ?? r.package_code ?? "",
       description: r.description ?? "",
       box_code: r.box_code ?? "",
       tracking: r.tracking ?? "",
       weight_kg: String(r.weight_kg ?? ""),
+
+      origin: r.origin ?? "USA",
+      service: r.service ?? "NORMAL",
+      rate_usd_per_kg: String(r.rate_usd_per_kg ?? ""),
+      estimated_usd: String(r.estimated_usd ?? ""),
     });
   }
 
@@ -341,6 +321,17 @@ export default function OperatorPanel() {
         ? (editDraft.tracking || "").trim()
         : null,
       weight_kg: Number(String(editDraft.weight_kg).replace(",", ".")),
+
+      origin: (editDraft.origin || "").trim() || null,
+      service: (editDraft.service || "").trim() || null,
+      rate_usd_per_kg:
+        editDraft.rate_usd_per_kg === "" || editDraft.rate_usd_per_kg == null
+          ? null
+          : Number(String(editDraft.rate_usd_per_kg).replace(",", ".")),
+      estimated_usd:
+        editDraft.estimated_usd === "" || editDraft.estimated_usd == null
+          ? null
+          : Number(String(editDraft.estimated_usd).replace(",", ".")),
     };
 
     if (
@@ -500,111 +491,70 @@ export default function OperatorPanel() {
               </div>
               <div className="muted">{client.email}</div>
 
-              <div className="muted" style={{ marginTop: 10 }}>
-                <b>Tarifas del cliente (USD/kg)</b>
-              </div>
-
-              {/* ✅ CAMBIO: cada input con su label al lado */}
-              <div className="col" style={{ marginTop: 10, gap: 10 }}>
-                <div className="row" style={{ gap: 10, alignItems: "center" }}>
-                  <div className="muted" style={{ minWidth: 190 }}>
-                    USA Normal (USD/kg)
-                  </div>
-                  <input
-                    className="input"
-                    style={{ flex: 1 }}
-                    value={tariffsDraft.rate_usa_normal}
-                    onChange={(e) =>
-                      setTariffsDraft((d) => ({
-                        ...d,
-                        rate_usa_normal: e.target.value,
-                      }))
-                    }
-                    placeholder="45"
-                  />
+              {/* Tarifa editable (por ahora global UI; si querés por-cliente en DB lo hacemos en el próximo paso) */}
+              <div style={{ marginTop: 10 }}>
+                <b>Tarifas (USD/kg)</b>
+                <div className="muted" style={{ marginBottom: 8 }}>
+                  Editalas acá y se usan para calcular el estimado del envío.
                 </div>
 
-                <div className="row" style={{ gap: 10, alignItems: "center" }}>
-                  <div className="muted" style={{ minWidth: 190 }}>
-                    USA Express (USD/kg)
+                <div className="grid2" style={{ gap: 10 }}>
+                  <div className="col">
+                    <label className="muted">USA Normal</label>
+                    <input
+                      className="input"
+                      value={rates.usa_normal}
+                      onChange={(e) =>
+                        setRates((r) => ({ ...r, usa_normal: e.target.value }))
+                      }
+                    />
                   </div>
-                  <input
-                    className="input"
-                    style={{ flex: 1 }}
-                    value={tariffsDraft.rate_usa_express}
-                    onChange={(e) =>
-                      setTariffsDraft((d) => ({
-                        ...d,
-                        rate_usa_express: e.target.value,
-                      }))
-                    }
-                    placeholder="55"
-                  />
-                </div>
 
-                <div className="row" style={{ gap: 10, alignItems: "center" }}>
-                  <div className="muted" style={{ minWidth: 190 }}>
-                    China Normal (USD/kg)
+                  <div className="col">
+                    <label className="muted">USA Express</label>
+                    <input
+                      className="input"
+                      value={rates.usa_express}
+                      onChange={(e) =>
+                        setRates((r) => ({ ...r, usa_express: e.target.value }))
+                      }
+                    />
                   </div>
-                  <input
-                    className="input"
-                    style={{ flex: 1 }}
-                    value={tariffsDraft.rate_china_normal}
-                    onChange={(e) =>
-                      setTariffsDraft((d) => ({
-                        ...d,
-                        rate_china_normal: e.target.value,
-                      }))
-                    }
-                    placeholder="58"
-                  />
-                </div>
 
-                <div className="row" style={{ gap: 10, alignItems: "center" }}>
-                  <div className="muted" style={{ minWidth: 190 }}>
-                    China Express (USD/kg)
+                  <div className="col">
+                    <label className="muted">China Normal</label>
+                    <input
+                      className="input"
+                      value={rates.china_normal}
+                      onChange={(e) =>
+                        setRates((r) => ({ ...r, china_normal: e.target.value }))
+                      }
+                    />
                   </div>
-                  <input
-                    className="input"
-                    style={{ flex: 1 }}
-                    value={tariffsDraft.rate_china_express}
-                    onChange={(e) =>
-                      setTariffsDraft((d) => ({
-                        ...d,
-                        rate_china_express: e.target.value,
-                      }))
-                    }
-                    placeholder="68"
-                  />
-                </div>
 
-                <div className="row" style={{ gap: 10, alignItems: "center" }}>
-                  <div className="muted" style={{ minWidth: 190 }}>
-                    Europa (USD/kg)
+                  <div className="col">
+                    <label className="muted">China Express</label>
+                    <input
+                      className="input"
+                      value={rates.china_express}
+                      onChange={(e) =>
+                        setRates((r) => ({ ...r, china_express: e.target.value }))
+                      }
+                    />
                   </div>
-                  <input
-                    className="input"
-                    style={{ flex: 1 }}
-                    value={tariffsDraft.rate_europa}
-                    onChange={(e) =>
-                      setTariffsDraft((d) => ({
-                        ...d,
-                        rate_europa: e.target.value,
-                      }))
-                    }
-                    placeholder="58"
-                  />
+
+                  <div className="col" style={{ gridColumn: "1 / span 2" }}>
+                    <label className="muted">Europa</label>
+                    <input
+                      className="input"
+                      value={rates.europa}
+                      onChange={(e) =>
+                        setRates((r) => ({ ...r, europa: e.target.value }))
+                      }
+                    />
+                  </div>
                 </div>
               </div>
-
-              <button
-                className="btn"
-                style={{ marginTop: 10 }}
-                onClick={saveClientTariffs}
-                disabled={savingTariffs}
-              >
-                {savingTariffs ? "Guardando..." : "Guardar tarifas"}
-              </button>
             </div>
           )}
         </div>
@@ -652,6 +602,36 @@ export default function OperatorPanel() {
               value={weightKg}
               onChange={(e) => setWeightKg(e.target.value)}
             />
+
+            <select
+              className="input"
+              value={origin}
+              onChange={(e) => setOrigin(e.target.value)}
+              title="Origen"
+            >
+              {ORIGINS.map((o) => (
+                <option key={o} value={o}>
+                  Origen: {o}
+                </option>
+              ))}
+            </select>
+
+            <select
+              className="input"
+              value={origin === "EUROPA" ? "NORMAL" : service}
+              onChange={(e) => setService(e.target.value)}
+              disabled={origin === "EUROPA"}
+              title="Servicio"
+            >
+              {(SERVICES_BY_ORIGIN[origin] || ["NORMAL"]).map((s) => (
+                <option key={s} value={s}>
+                  Servicio: {s}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="row">
             <select
               className="input"
               value={status}
@@ -663,8 +643,23 @@ export default function OperatorPanel() {
                 </option>
               ))}
             </select>
+
             <div style={{ display: "flex", alignItems: "center" }}>
               <StatusBadge status={status} />
+            </div>
+
+            <div className="note" style={{ marginLeft: "auto", minWidth: 280 }}>
+              <div className="muted">Tarifa aplicada</div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <b>
+                  {origin} {origin === "EUROPA" ? "" : service}
+                </b>
+                <b>${Number(rateForSelection || 0).toFixed(2)} / kg</b>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span className="muted">Estimado (USD)</span>
+                <b>${Number(estimated || 0).toFixed(2)}</b>
+              </div>
             </div>
           </div>
 
@@ -706,6 +701,12 @@ export default function OperatorPanel() {
                 <th>CAJA</th>
                 <th>TRACKING</th>
                 <th>PESO [KG]</th>
+
+                <th>ORIGEN</th>
+                <th>SERVICIO</th>
+                <th>TARIFA</th>
+                <th>ESTIMADO</th>
+
                 <th>ESTADO</th>
                 <th>GUARDAR</th>
                 <th>HISTORIAL</th>
@@ -734,7 +735,7 @@ export default function OperatorPanel() {
                         }
                       />
                     ) : (
-                      <span className="pill">{r.package_code}</span>
+                      <span className="pill">{r.code || r.package_code}</span>
                     )}
                   </td>
 
@@ -808,6 +809,82 @@ export default function OperatorPanel() {
                     )}
                   </td>
 
+                  {/* NUEVO: ORIGEN/SERVICIO/TARIFA/ESTIMADO */}
+                  <td>
+                    {editId === r.id ? (
+                      <select
+                        className="input"
+                        value={editDraft.origin || "USA"}
+                        onChange={(e) =>
+                          setEditDraft((d) => ({ ...d, origin: e.target.value }))
+                        }
+                      >
+                        {ORIGINS.map((o) => (
+                          <option key={o} value={o}>
+                            {o}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      r.origin || "-"
+                    )}
+                  </td>
+
+                  <td>
+                    {editId === r.id ? (
+                      <select
+                        className="input"
+                        value={editDraft.service || "NORMAL"}
+                        onChange={(e) =>
+                          setEditDraft((d) => ({ ...d, service: e.target.value }))
+                        }
+                      >
+                        <option value="NORMAL">NORMAL</option>
+                        <option value="EXPRESS">EXPRESS</option>
+                      </select>
+                    ) : (
+                      r.service || "-"
+                    )}
+                  </td>
+
+                  <td>
+                    {editId === r.id ? (
+                      <input
+                        className="input"
+                        value={editDraft.rate_usd_per_kg || ""}
+                        onChange={(e) =>
+                          setEditDraft((d) => ({
+                            ...d,
+                            rate_usd_per_kg: e.target.value,
+                          }))
+                        }
+                      />
+                    ) : (
+                      r.rate_usd_per_kg != null
+                        ? `$${Number(r.rate_usd_per_kg).toFixed(2)}/kg`
+                        : "-"
+                    )}
+                  </td>
+
+                  <td>
+                    {editId === r.id ? (
+                      <input
+                        className="input"
+                        value={editDraft.estimated_usd || ""}
+                        onChange={(e) =>
+                          setEditDraft((d) => ({
+                            ...d,
+                            estimated_usd: e.target.value,
+                          }))
+                        }
+                      />
+                    ) : (
+                      r.estimated_usd != null
+                        ? `$${Number(r.estimated_usd).toFixed(2)}`
+                        : "-"
+                    )}
+                  </td>
+
                   <td>
                     <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                       <select
@@ -876,7 +953,7 @@ export default function OperatorPanel() {
 
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="muted" style={{ padding: 14 }}>
+                  <td colSpan={15} className="muted" style={{ padding: 14 }}>
                     No hay resultados. Probá con el botón ↻ o ajustá el filtro.
                   </td>
                 </tr>
@@ -904,7 +981,7 @@ export default function OperatorPanel() {
                 </thead>
                 <tbody>
                   {events.map((e) => (
-                    <tr key={e.id}>
+                    <tr key={e.id || e.created_at}>
                       <td>{new Date(e.created_at).toLocaleString()}</td>
                       <td>{e.old_status || "-"}</td>
                       <td>

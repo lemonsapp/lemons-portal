@@ -11,7 +11,7 @@ const { authRequired, requireRole } = require("./auth");
 const app = express();
 app.use(express.json());
 
-// CORS: dejalo abierto mientras probás. Luego lo cerramos a tu dominio.
+// CORS abierto mientras probás
 app.use(
   cors({
     origin: true,
@@ -23,22 +23,6 @@ const JWT_SECRET = process.env.JWT_SECRET || "dev_secret_change_me";
 
 app.get("/", (req, res) => res.send("LEMON's API OK ✅ — probá /health"));
 app.get("/health", (req, res) => res.json({ ok: true }));
-
-// Helpers
-function getClientRate(userRow, origin_country, service_level) {
-  const origin = String(origin_country || "").toUpperCase();
-  const level = String(service_level || "").toUpperCase();
-
-  if (origin === "USA" && level === "NORMAL") return Number(userRow.rate_usa_normal);
-  if (origin === "USA" && level === "EXPRESS") return Number(userRow.rate_usa_express);
-
-  if (origin === "CHINA" && level === "NORMAL") return Number(userRow.rate_china_normal);
-  if (origin === "CHINA" && level === "EXPRESS") return Number(userRow.rate_china_express);
-
-  if (origin === "EUROPA") return Number(userRow.rate_europa);
-
-  return null;
-}
 
 // ==================== AUTH ====================
 
@@ -65,7 +49,9 @@ app.post("/auth/login", async (req, res) => {
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) return res.status(401).json({ error: "Credenciales inválidas" });
 
-    const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: "7d" });
+    const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, {
+      expiresIn: "7d",
+    });
 
     res.json({
       token,
@@ -86,9 +72,7 @@ app.post("/auth/login", async (req, res) => {
 app.get("/auth/me", authRequired, async (req, res) => {
   try {
     const u = await db.query(
-      `SELECT id, email, name, role, client_number,
-              rate_usa_normal, rate_usa_express, rate_china_normal, rate_china_express, rate_europa
-       FROM users WHERE id=$1`,
+      "SELECT id, email, name, role, client_number FROM users WHERE id=$1",
       [req.user.id]
     );
     const user = u.rows[0];
@@ -126,8 +110,7 @@ app.post(
       const ins = await db.query(
         `INSERT INTO users (client_number, name, email, password_hash, role)
          VALUES ($1,$2,$3,$4,$5)
-         RETURNING id, client_number, name, email, role,
-                   rate_usa_normal, rate_usa_express, rate_china_normal, rate_china_express, rate_europa`,
+         RETURNING id, client_number, name, email, role`,
         [d.client_number, d.name, d.email.toLowerCase(), password_hash, role]
       );
 
@@ -152,9 +135,7 @@ app.get(
       if (Number.isNaN(n)) return res.status(400).json({ error: "client_number inválido" });
 
       const q = await db.query(
-        `SELECT id, client_number, name, email, role,
-                rate_usa_normal, rate_usa_express, rate_china_normal, rate_china_express, rate_europa
-         FROM users WHERE client_number=$1`,
+        "SELECT id, client_number, name, email, role FROM users WHERE client_number=$1",
         [n]
       );
 
@@ -166,57 +147,12 @@ app.get(
   }
 );
 
-// Editar tarifas de un cliente
-app.patch(
-  "/operator/clients/:id/tariffs",
-  authRequired,
-  requireRole(["operator", "admin"]),
-  async (req, res) => {
-    try {
-      const schema = z.object({
-        rate_usa_normal: z.number().min(0),
-        rate_usa_express: z.number().min(0),
-        rate_china_normal: z.number().min(0),
-        rate_china_express: z.number().min(0),
-        rate_europa: z.number().min(0),
-      });
-
-      const p = schema.safeParse(req.body);
-      if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
-
-      const id = Number(req.params.id);
-      if (Number.isNaN(id)) return res.status(400).json({ error: "ID inválido" });
-
-      const upd = await db.query(
-        `UPDATE users
-         SET rate_usa_normal=$1,
-             rate_usa_express=$2,
-             rate_china_normal=$3,
-             rate_china_express=$4,
-             rate_europa=$5
-         WHERE id=$6
-         RETURNING id, client_number, name, email, role,
-                   rate_usa_normal, rate_usa_express, rate_china_normal, rate_china_express, rate_europa`,
-        [
-          p.data.rate_usa_normal,
-          p.data.rate_usa_express,
-          p.data.rate_china_normal,
-          p.data.rate_china_express,
-          p.data.rate_europa,
-          id,
-        ]
-      );
-
-      if (!upd.rows[0]) return res.status(404).json({ error: "Cliente no existe" });
-      res.json({ user: upd.rows[0] });
-    } catch (e) {
-      console.error("PATCH TARIFFS ERROR", e);
-      res.status(500).json({ error: "Error interno" });
-    }
-  }
-);
-
-// Crear envío (con país + tipo => calcula tarifa)
+/**
+ * CREATE SHIPMENT
+ * IMPORTANTE:
+ *  - tu DB pide shipments.code NOT NULL -> acá lo llenamos con package_code
+ *  - guardamos origin, service, rate_usd_per_kg, estimated_usd
+ */
 app.post(
   "/operator/shipments",
   authRequired,
@@ -232,8 +168,11 @@ app.post(
         weight_kg: z.number().min(0),
         status: z.string().min(1),
 
-        origin_country: z.enum(["USA", "CHINA", "EUROPA"]),
-        service_level: z.enum(["NORMAL", "EXPRESS"]).optional(),
+        // NUEVO
+        origin: z.enum(["USA", "CHINA", "EUROPA"]).optional(),
+        service: z.enum(["NORMAL", "EXPRESS"]).optional(),
+        rate_usd_per_kg: z.number().min(0).optional(),
+        estimated_usd: z.number().min(0).optional(),
       });
 
       const p = schema.safeParse(req.body);
@@ -241,39 +180,27 @@ app.post(
 
       const d = p.data;
 
-      const u = await db.query(
-        `SELECT id,
-                rate_usa_normal, rate_usa_express, rate_china_normal, rate_china_express, rate_europa
-         FROM users WHERE client_number=$1`,
-        [d.client_number]
-      );
+      const u = await db.query("SELECT id FROM users WHERE client_number=$1", [d.client_number]);
       const user = u.rows[0];
       if (!user) return res.status(404).json({ error: "Cliente no existe" });
 
-      const level = d.origin_country === "EUROPA" ? "NORMAL" : (d.service_level || "NORMAL");
-      const rate = getClientRate(user, d.origin_country, level);
-      if (rate == null) return res.status(400).json({ error: "Tarifa no configurada para esa opción" });
-
-      const estimated = Number(d.weight_kg) * Number(rate);
-
       const ins = await db.query(
         `INSERT INTO shipments
-         (user_id, package_code, description, box_code, tracking, weight_kg, status, date_in,
-          origin_country, service_level, rate_usd_per_kg, estimated_usd)
-         VALUES ($1,$2,$3,$4,$5,$6,$7, NOW(), $8,$9,$10,$11)
+         (user_id, code, description, box_code, tracking, weight_kg, status, date_in, origin, service, rate_usd_per_kg, estimated_usd, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7, NOW(), $8, $9, $10, $11, NOW())
          RETURNING *`,
         [
           user.id,
-          d.package_code,
+          d.package_code, // <--- DB: code
           d.description,
           d.box_code ?? null,
           d.tracking ?? null,
           d.weight_kg,
           d.status,
-          d.origin_country,
-          level,
-          rate,
-          estimated,
+          d.origin ?? null,
+          d.service ?? null,
+          d.rate_usd_per_kg ?? null,
+          d.estimated_usd ?? null,
         ]
       );
 
@@ -316,7 +243,7 @@ app.get(
         const p1 = params.length;
         params.push(`%${search}%`);
         const p2 = params.length;
-        where += ` AND (sh.package_code ILIKE $${p1} OR sh.description ILIKE $${p2} OR COALESCE(sh.tracking,'') ILIKE $${p1})`;
+        where += ` AND (sh.code ILIKE $${p1} OR sh.description ILIKE $${p2})`;
       }
 
       const q = await db.query(
@@ -337,7 +264,6 @@ app.get(
   }
 );
 
-// Editar envío (recalcula tarifa/estimado si cambia país/tipo/peso)
 app.patch(
   "/operator/shipments/:id",
   authRequired,
@@ -350,8 +276,12 @@ app.patch(
         box_code: z.string().nullable().optional(),
         tracking: z.string().nullable().optional(),
         weight_kg: z.number().min(0),
-        origin_country: z.enum(["USA", "CHINA", "EUROPA"]),
-        service_level: z.enum(["NORMAL", "EXPRESS"]).optional(),
+
+        // NUEVO: editar lane/tarifa también si querés
+        origin: z.string().nullable().optional(),
+        service: z.string().nullable().optional(),
+        rate_usd_per_kg: z.number().nullable().optional(),
+        estimated_usd: z.number().nullable().optional(),
       });
       const p = schema.safeParse(req.body);
       if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
@@ -359,26 +289,10 @@ app.patch(
       const id = Number(req.params.id);
       if (Number.isNaN(id)) return res.status(400).json({ error: "ID inválido" });
 
-      const current = await db.query(
-        `SELECT sh.id, sh.user_id, u.rate_usa_normal, u.rate_usa_express, u.rate_china_normal, u.rate_china_express, u.rate_europa
-         FROM shipments sh
-         JOIN users u ON u.id = sh.user_id
-         WHERE sh.id=$1`,
-        [id]
-      );
-      const row = current.rows[0];
-      if (!row) return res.status(404).json({ error: "Envío no existe" });
-
-      const level = p.data.origin_country === "EUROPA" ? "NORMAL" : (p.data.service_level || "NORMAL");
-      const rate = getClientRate(row, p.data.origin_country, level);
-      if (rate == null) return res.status(400).json({ error: "Tarifa no configurada para esa opción" });
-
-      const estimated = Number(p.data.weight_kg) * Number(rate);
-
       const upd = await db.query(
         `UPDATE shipments
-         SET package_code=$1, description=$2, box_code=$3, tracking=$4, weight_kg=$5,
-             origin_country=$6, service_level=$7, rate_usd_per_kg=$8, estimated_usd=$9,
+         SET code=$1, description=$2, box_code=$3, tracking=$4, weight_kg=$5,
+             origin=$6, service=$7, rate_usd_per_kg=$8, estimated_usd=$9,
              updated_at=NOW()
          WHERE id=$10
          RETURNING *`,
@@ -388,14 +302,17 @@ app.patch(
           p.data.box_code ?? null,
           p.data.tracking ?? null,
           p.data.weight_kg,
-          p.data.origin_country,
-          level,
-          rate,
-          estimated,
+
+          p.data.origin ?? null,
+          p.data.service ?? null,
+          p.data.rate_usd_per_kg ?? null,
+          p.data.estimated_usd ?? null,
+
           id,
         ]
       );
 
+      if (!upd.rows[0]) return res.status(404).json({ error: "Envío no existe" });
       res.json({ shipment: upd.rows[0] });
     } catch (e) {
       console.error("PATCH SHIPMENT ERROR", e);
@@ -459,8 +376,8 @@ app.patch(
 app.get("/client/shipments", authRequired, async (req, res) => {
   try {
     const q = await db.query(
-      `SELECT id, package_code, description, box_code, tracking, weight_kg, status, date_in,
-              origin_country, service_level, rate_usd_per_kg, estimated_usd
+      `SELECT id, code, description, box_code, tracking, weight_kg, status, date_in,
+              origin, service, rate_usd_per_kg, estimated_usd
        FROM shipments
        WHERE user_id=$1
        ORDER BY id DESC`,
