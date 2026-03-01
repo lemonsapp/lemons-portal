@@ -21,21 +21,24 @@ app.use(
 const PORT = process.env.PORT || 4000;
 const JWT_SECRET = process.env.JWT_SECRET || "dev_secret_change_me";
 
-/** TARIFAS (USD / KG) */
-const TARIFFS = {
-  USA_NORMAL: { label: "USA NORMAL", usd_per_kg: 45 },
-  USA_EXPRESS: { label: "USA EXPRESS", usd_per_kg: 55 },
-  CHINA_NORMAL: { label: "CHINA NORMAL", usd_per_kg: 58 },
-  CHINA_EXPRESS: { label: "CHINA EXPRESS", usd_per_kg: 68 },
-  EUROPA: { label: "EUROPA", usd_per_kg: 58 },
-};
-
-function tariffRate(code) {
-  return TARIFFS[code]?.usd_per_kg ?? 45;
-}
-
 app.get("/", (req, res) => res.send("LEMON's API OK ✅ — probá /health"));
 app.get("/health", (req, res) => res.json({ ok: true }));
+
+// Helpers
+function getClientRate(userRow, origin_country, service_level) {
+  const origin = String(origin_country || "").toUpperCase();
+  const level = String(service_level || "").toUpperCase();
+
+  if (origin === "USA" && level === "NORMAL") return Number(userRow.rate_usa_normal);
+  if (origin === "USA" && level === "EXPRESS") return Number(userRow.rate_usa_express);
+
+  if (origin === "CHINA" && level === "NORMAL") return Number(userRow.rate_china_normal);
+  if (origin === "CHINA" && level === "EXPRESS") return Number(userRow.rate_china_express);
+
+  if (origin === "EUROPA") return Number(userRow.rate_europa);
+
+  return null;
+}
 
 // ==================== AUTH ====================
 
@@ -52,7 +55,7 @@ app.post("/auth/login", async (req, res) => {
     const { email, password } = p.data;
 
     const u = await db.query(
-      "SELECT id, email, name, role, client_number, password_hash, tariff_code FROM users WHERE email=$1",
+      "SELECT id, email, name, role, client_number, password_hash FROM users WHERE email=$1",
       [email.toLowerCase()]
     );
 
@@ -62,9 +65,7 @@ app.post("/auth/login", async (req, res) => {
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) return res.status(401).json({ error: "Credenciales inválidas" });
 
-    const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, {
-      expiresIn: "7d",
-    });
+    const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: "7d" });
 
     res.json({
       token,
@@ -74,8 +75,6 @@ app.post("/auth/login", async (req, res) => {
         name: user.name,
         role: user.role,
         client_number: user.client_number,
-        tariff_code: user.tariff_code || "USA_NORMAL",
-        tariff_usd_per_kg: tariffRate(user.tariff_code || "USA_NORMAL"),
       },
     });
   } catch (e) {
@@ -87,19 +86,14 @@ app.post("/auth/login", async (req, res) => {
 app.get("/auth/me", authRequired, async (req, res) => {
   try {
     const u = await db.query(
-      "SELECT id, email, name, role, client_number, tariff_code FROM users WHERE id=$1",
+      `SELECT id, email, name, role, client_number,
+              rate_usa_normal, rate_usa_express, rate_china_normal, rate_china_express, rate_europa
+       FROM users WHERE id=$1`,
       [req.user.id]
     );
     const user = u.rows[0];
     if (!user) return res.status(404).json({ error: "Usuario no existe" });
-
-    res.json({
-      user: {
-        ...user,
-        tariff_code: user.tariff_code || "USA_NORMAL",
-        tariff_usd_per_kg: tariffRate(user.tariff_code || "USA_NORMAL"),
-      },
-    });
+    res.json({ user });
   } catch (e) {
     console.error("ME ERROR", e);
     res.status(500).json({ error: "Error interno" });
@@ -120,9 +114,6 @@ app.post(
         email: z.string().email(),
         password: z.string().min(6),
         role: z.enum(["client", "operator", "admin"]).optional(),
-        tariff_code: z
-          .enum(["USA_NORMAL", "USA_EXPRESS", "CHINA_NORMAL", "CHINA_EXPRESS", "EUROPA"])
-          .optional(),
       });
 
       const p = schema.safeParse(req.body);
@@ -131,22 +122,16 @@ app.post(
       const d = p.data;
       const password_hash = await bcrypt.hash(d.password, 10);
       const role = d.role || "client";
-      const tariff_code = d.tariff_code || "USA_NORMAL";
 
       const ins = await db.query(
-        `INSERT INTO users (client_number, name, email, password_hash, role, tariff_code)
-         VALUES ($1,$2,$3,$4,$5,$6)
-         RETURNING id, client_number, name, email, role, tariff_code`,
-        [d.client_number, d.name, d.email.toLowerCase(), password_hash, role, tariff_code]
+        `INSERT INTO users (client_number, name, email, password_hash, role)
+         VALUES ($1,$2,$3,$4,$5)
+         RETURNING id, client_number, name, email, role,
+                   rate_usa_normal, rate_usa_express, rate_china_normal, rate_china_express, rate_europa`,
+        [d.client_number, d.name, d.email.toLowerCase(), password_hash, role]
       );
 
-      const u = ins.rows[0];
-      res.json({
-        user: {
-          ...u,
-          tariff_usd_per_kg: tariffRate(u.tariff_code || "USA_NORMAL"),
-        },
-      });
+      res.json({ user: ins.rows[0] });
     } catch (e) {
       console.error("CREATE CLIENT ERROR", e);
       if (String(e?.message || "").includes("duplicate")) {
@@ -167,20 +152,13 @@ app.get(
       if (Number.isNaN(n)) return res.status(400).json({ error: "client_number inválido" });
 
       const q = await db.query(
-        "SELECT id, client_number, name, email, role, tariff_code FROM users WHERE client_number=$1",
+        `SELECT id, client_number, name, email, role,
+                rate_usa_normal, rate_usa_express, rate_china_normal, rate_china_express, rate_europa
+         FROM users WHERE client_number=$1`,
         [n]
       );
 
-      const user = q.rows[0] || null;
-      if (!user) return res.json({ user: null });
-
-      res.json({
-        user: {
-          ...user,
-          tariff_code: user.tariff_code || "USA_NORMAL",
-          tariff_usd_per_kg: tariffRate(user.tariff_code || "USA_NORMAL"),
-        },
-      });
+      res.json({ user: q.rows[0] || null });
     } catch (e) {
       console.error("GET CLIENT ERROR", e);
       res.status(500).json({ error: "Error interno" });
@@ -188,46 +166,57 @@ app.get(
   }
 );
 
-// ✅ Cambiar tarifa por client_number
+// Editar tarifas de un cliente
 app.patch(
-  "/operator/clients/:client_number/tariff",
+  "/operator/clients/:id/tariffs",
   authRequired,
   requireRole(["operator", "admin"]),
   async (req, res) => {
     try {
-      const clientNumber = Number(req.params.client_number);
-      if (Number.isNaN(clientNumber)) return res.status(400).json({ error: "client_number inválido" });
-
       const schema = z.object({
-        tariff_code: z.enum(["USA_NORMAL", "USA_EXPRESS", "CHINA_NORMAL", "CHINA_EXPRESS", "EUROPA"]),
+        rate_usa_normal: z.number().min(0),
+        rate_usa_express: z.number().min(0),
+        rate_china_normal: z.number().min(0),
+        rate_china_express: z.number().min(0),
+        rate_europa: z.number().min(0),
       });
+
       const p = schema.safeParse(req.body);
       if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
 
+      const id = Number(req.params.id);
+      if (Number.isNaN(id)) return res.status(400).json({ error: "ID inválido" });
+
       const upd = await db.query(
         `UPDATE users
-         SET tariff_code=$1, updated_at=NOW()
-         WHERE client_number=$2
-         RETURNING id, client_number, name, email, role, tariff_code`,
-        [p.data.tariff_code, clientNumber]
+         SET rate_usa_normal=$1,
+             rate_usa_express=$2,
+             rate_china_normal=$3,
+             rate_china_express=$4,
+             rate_europa=$5
+         WHERE id=$6
+         RETURNING id, client_number, name, email, role,
+                   rate_usa_normal, rate_usa_express, rate_china_normal, rate_china_express, rate_europa`,
+        [
+          p.data.rate_usa_normal,
+          p.data.rate_usa_express,
+          p.data.rate_china_normal,
+          p.data.rate_china_express,
+          p.data.rate_europa,
+          id,
+        ]
       );
 
-      const user = upd.rows[0];
-      if (!user) return res.status(404).json({ error: "Cliente no existe" });
-
-      res.json({
-        user: {
-          ...user,
-          tariff_usd_per_kg: tariffRate(user.tariff_code || "USA_NORMAL"),
-        },
-      });
+      if (!upd.rows[0]) return res.status(404).json({ error: "Cliente no existe" });
+      res.json({ user: upd.rows[0] });
     } catch (e) {
-      console.error("PATCH TARIFF ERROR", e);
+      console.error("PATCH TARIFFS ERROR", e);
       res.status(500).json({ error: "Error interno" });
     }
   }
 );
 
+// Crear envío (con país + tipo => calcula tarifa)
 app.post(
   "/operator/shipments",
   authRequired,
@@ -242,6 +231,9 @@ app.post(
         tracking: z.string().nullable().optional(),
         weight_kg: z.number().min(0),
         status: z.string().min(1),
+
+        origin_country: z.enum(["USA", "CHINA", "EUROPA"]),
+        service_level: z.enum(["NORMAL", "EXPRESS"]).optional(),
       });
 
       const p = schema.safeParse(req.body);
@@ -249,14 +241,26 @@ app.post(
 
       const d = p.data;
 
-      const u = await db.query("SELECT id FROM users WHERE client_number=$1", [d.client_number]);
+      const u = await db.query(
+        `SELECT id,
+                rate_usa_normal, rate_usa_express, rate_china_normal, rate_china_express, rate_europa
+         FROM users WHERE client_number=$1`,
+        [d.client_number]
+      );
       const user = u.rows[0];
       if (!user) return res.status(404).json({ error: "Cliente no existe" });
 
+      const level = d.origin_country === "EUROPA" ? "NORMAL" : (d.service_level || "NORMAL");
+      const rate = getClientRate(user, d.origin_country, level);
+      if (rate == null) return res.status(400).json({ error: "Tarifa no configurada para esa opción" });
+
+      const estimated = Number(d.weight_kg) * Number(rate);
+
       const ins = await db.query(
         `INSERT INTO shipments
-         (user_id, package_code, description, box_code, tracking, weight_kg, status, date_in)
-         VALUES ($1,$2,$3,$4,$5,$6,$7, NOW())
+         (user_id, package_code, description, box_code, tracking, weight_kg, status, date_in,
+          origin_country, service_level, rate_usd_per_kg, estimated_usd)
+         VALUES ($1,$2,$3,$4,$5,$6,$7, NOW(), $8,$9,$10,$11)
          RETURNING *`,
         [
           user.id,
@@ -266,10 +270,13 @@ app.post(
           d.tracking ?? null,
           d.weight_kg,
           d.status,
+          d.origin_country,
+          level,
+          rate,
+          estimated,
         ]
       );
 
-      // evento inicial
       await db.query(
         `INSERT INTO shipment_events (shipment_id, old_status, new_status)
          VALUES ($1,$2,$3)`,
@@ -309,11 +316,11 @@ app.get(
         const p1 = params.length;
         params.push(`%${search}%`);
         const p2 = params.length;
-        where += ` AND (sh.package_code ILIKE $${p1} OR sh.description ILIKE $${p2})`;
+        where += ` AND (sh.package_code ILIKE $${p1} OR sh.description ILIKE $${p2} OR COALESCE(sh.tracking,'') ILIKE $${p1})`;
       }
 
       const q = await db.query(
-        `SELECT sh.*, u.client_number, u.name, u.email, u.tariff_code
+        `SELECT sh.*, u.client_number, u.name, u.email
          FROM shipments sh
          JOIN users u ON u.id = sh.user_id
          ${where}
@@ -322,14 +329,7 @@ app.get(
         params
       );
 
-      // agrego tarifa calculada para que el front pueda usarla
-      const rows = (q.rows || []).map((r) => ({
-        ...r,
-        tariff_code: r.tariff_code || "USA_NORMAL",
-        tariff_usd_per_kg: tariffRate(r.tariff_code || "USA_NORMAL"),
-      }));
-
-      res.json({ rows });
+      res.json({ rows: q.rows });
     } catch (e) {
       console.error("OP SHIPMENTS ERROR", e);
       res.status(500).json({ error: "Error interno" });
@@ -337,6 +337,7 @@ app.get(
   }
 );
 
+// Editar envío (recalcula tarifa/estimado si cambia país/tipo/peso)
 app.patch(
   "/operator/shipments/:id",
   authRequired,
@@ -349,6 +350,8 @@ app.patch(
         box_code: z.string().nullable().optional(),
         tracking: z.string().nullable().optional(),
         weight_kg: z.number().min(0),
+        origin_country: z.enum(["USA", "CHINA", "EUROPA"]),
+        service_level: z.enum(["NORMAL", "EXPRESS"]).optional(),
       });
       const p = schema.safeParse(req.body);
       if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
@@ -356,10 +359,28 @@ app.patch(
       const id = Number(req.params.id);
       if (Number.isNaN(id)) return res.status(400).json({ error: "ID inválido" });
 
+      const current = await db.query(
+        `SELECT sh.id, sh.user_id, u.rate_usa_normal, u.rate_usa_express, u.rate_china_normal, u.rate_china_express, u.rate_europa
+         FROM shipments sh
+         JOIN users u ON u.id = sh.user_id
+         WHERE sh.id=$1`,
+        [id]
+      );
+      const row = current.rows[0];
+      if (!row) return res.status(404).json({ error: "Envío no existe" });
+
+      const level = p.data.origin_country === "EUROPA" ? "NORMAL" : (p.data.service_level || "NORMAL");
+      const rate = getClientRate(row, p.data.origin_country, level);
+      if (rate == null) return res.status(400).json({ error: "Tarifa no configurada para esa opción" });
+
+      const estimated = Number(p.data.weight_kg) * Number(rate);
+
       const upd = await db.query(
         `UPDATE shipments
-         SET package_code=$1, description=$2, box_code=$3, tracking=$4, weight_kg=$5, updated_at=NOW()
-         WHERE id=$6
+         SET package_code=$1, description=$2, box_code=$3, tracking=$4, weight_kg=$5,
+             origin_country=$6, service_level=$7, rate_usd_per_kg=$8, estimated_usd=$9,
+             updated_at=NOW()
+         WHERE id=$10
          RETURNING *`,
         [
           p.data.package_code,
@@ -367,11 +388,14 @@ app.patch(
           p.data.box_code ?? null,
           p.data.tracking ?? null,
           p.data.weight_kg,
+          p.data.origin_country,
+          level,
+          rate,
+          estimated,
           id,
         ]
       );
 
-      if (!upd.rows[0]) return res.status(404).json({ error: "Envío no existe" });
       res.json({ shipment: upd.rows[0] });
     } catch (e) {
       console.error("PATCH SHIPMENT ERROR", e);
@@ -416,7 +440,6 @@ app.patch(
         [newStatus, shipmentId]
       );
 
-      // evento
       await db.query(
         `INSERT INTO shipment_events (shipment_id, old_status, new_status)
          VALUES ($1,$2,$3)`,
@@ -436,7 +459,8 @@ app.patch(
 app.get("/client/shipments", authRequired, async (req, res) => {
   try {
     const q = await db.query(
-      `SELECT id, package_code, description, box_code, tracking, weight_kg, status, date_in
+      `SELECT id, package_code, description, box_code, tracking, weight_kg, status, date_in,
+              origin_country, service_level, rate_usd_per_kg, estimated_usd
        FROM shipments
        WHERE user_id=$1
        ORDER BY id DESC`,

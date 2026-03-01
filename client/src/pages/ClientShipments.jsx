@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Topbar from "../components/Topbar.jsx";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
-const getToken = () =>
-  localStorage.getItem("token") || sessionStorage.getItem("token");
+const getToken = () => localStorage.getItem("token") || sessionStorage.getItem("token");
 
 export default function ClientShipments() {
   const [me, setMe] = useState(null);
@@ -40,11 +39,6 @@ export default function ClientShipments() {
     loadShipments();
   }, []);
 
-  const rate = useMemo(() => {
-    const n = Number(me?.tariff_usd_per_kg);
-    return Number.isFinite(n) ? n : 0;
-  }, [me]);
-
   return (
     <div className="screen">
       <Topbar
@@ -56,10 +50,6 @@ export default function ClientShipments() {
                 <b>Cliente #{me.client_number}</b> — {me.name}
               </div>
               <div className="muted">{me.email}</div>
-              <div className="muted" style={{ marginTop: 6 }}>
-                Tarifa: <b>{me.tariff_code}</b> —{" "}
-                <b>USD {rate.toFixed(2)}/kg</b>
-              </div>
             </div>
           ) : null
         }
@@ -78,47 +68,45 @@ export default function ClientShipments() {
                 <th>CAJA</th>
                 <th>TRACKING</th>
                 <th>PESO [KG]</th>
-                <th>ESTADO</th>
+                <th>ORIGEN</th>
+                <th>SERVICIO</th>
+                <th>USD/KG</th>
                 <th>ESTIMADO (USD)</th>
+                <th>ESTADO</th>
                 <th>HISTORIAL</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => {
-                const kg = Number(r.weight_kg);
-                const est = Number.isFinite(kg) ? kg * rate : 0;
-                return (
-                  <tr key={r.id}>
-                    <td>
-                      <span className="pill">{r.package_code}</span>
-                    </td>
-                    <td>{r.date_in}</td>
-                    <td>{r.description}</td>
-                    <td>{r.box_code || "-"}</td>
-                    <td>{r.tracking || "-"}</td>
-                    <td>{Number(r.weight_kg).toFixed(2)}</td>
-                    <td>{r.status}</td>
-                    <td>
-                      <b>{est.toFixed(2)}</b>
-                    </td>
-                    <td>
-                      <button
-                        className="btn"
-                        onClick={() => {
-                          setOpenId(r.id);
-                          loadEvents(r.id);
-                        }}
-                      >
-                        Ver
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
+              {rows.map((r) => (
+                <tr key={r.id}>
+                  <td><span className="pill">{r.package_code}</span></td>
+                  <td>{r.date_in}</td>
+                  <td>{r.description}</td>
+                  <td>{r.box_code || "-"}</td>
+                  <td>{r.tracking || "-"}</td>
+                  <td>{Number(r.weight_kg).toFixed(2)}</td>
+                  <td>{r.origin_country || "-"}</td>
+                  <td>{r.service_level || "-"}</td>
+                  <td>{r.rate_usd_per_kg != null ? Number(r.rate_usd_per_kg).toFixed(2) : "-"}</td>
+                  <td><b>{r.estimated_usd != null ? Number(r.estimated_usd).toFixed(2) : "-"}</b></td>
+                  <td>{r.status}</td>
+                  <td>
+                    <button
+                      className="btn"
+                      onClick={() => {
+                        setOpenId(r.id);
+                        loadEvents(r.id);
+                      }}
+                    >
+                      Ver
+                    </button>
+                  </td>
+                </tr>
+              ))}
 
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="muted" style={{ padding: 14 }}>
+                  <td colSpan={12} className="muted" style={{ padding: 14 }}>
                     No hay envíos todavía.
                   </td>
                 </tr>
@@ -133,13 +121,11 @@ export default function ClientShipments() {
             <ul>
               {events.map((e, idx) => (
                 <li key={idx}>
-                  {new Date(e.created_at).toLocaleString()} —{" "}
-                  {e.old_status || "-"} → <b>{e.new_status}</b>
+                  {new Date(e.created_at).toLocaleString()} — {e.old_status || "-"} →{" "}
+                  <b>{e.new_status}</b>
                 </li>
               ))}
-              {events.length === 0 && (
-                <li className="muted">Sin eventos todavía.</li>
-              )}
+              {events.length === 0 && <li className="muted">Sin eventos todavía.</li>}
             </ul>
           </div>
         )}

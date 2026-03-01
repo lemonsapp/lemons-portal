@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Topbar from "../components/Topbar.jsx";
 import StatusBadge from "../components/StatusBadge.jsx";
 
@@ -15,13 +15,14 @@ const STATUSES = [
   "Entregado",
 ];
 
-const TARIFFS = [
-  { code: "USA_NORMAL", label: "USA NORMAL — USD 45/kg" },
-  { code: "USA_EXPRESS", label: "USA EXPRESS — USD 55/kg" },
-  { code: "CHINA_NORMAL", label: "CHINA NORMAL — USD 58/kg" },
-  { code: "CHINA_EXPRESS", label: "CHINA EXPRESS — USD 68/kg" },
-  { code: "EUROPA", label: "EUROPA — USD 58/kg" },
-];
+const ORIGINS = ["USA", "CHINA", "EUROPA"];
+const SERVICE_LEVELS = ["NORMAL", "EXPRESS"];
+
+function parseKg(v) {
+  const s = String(v ?? "").trim().replace(",", ".");
+  const n = Number(s);
+  return Number.isFinite(n) ? n : NaN;
+}
 
 export default function OperatorPanel() {
   const [msg, setMsg] = useState("");
@@ -35,15 +36,14 @@ export default function OperatorPanel() {
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const [newTariff, setNewTariff] = useState("USA_NORMAL");
 
   // Buscar cliente (para crear envío)
   const [clientNumber, setClientNumber] = useState("");
   const [client, setClient] = useState(null);
 
-  // Tarifa por cliente
-  const [tariffDraft, setTariffDraft] = useState("USA_NORMAL");
-  const [savingTariff, setSavingTariff] = useState(false);
+  // Tarifas editables por cliente
+  const [tariffsDraft, setTariffsDraft] = useState(null);
+  const [savingTariffs, setSavingTariffs] = useState(false);
 
   // Crear envío
   const [packageCode, setPackageCode] = useState("");
@@ -52,6 +52,9 @@ export default function OperatorPanel() {
   const [tracking, setTracking] = useState("");
   const [weightKg, setWeightKg] = useState("");
   const [status, setStatus] = useState("Recibido en depósito");
+
+  const [originCountry, setOriginCountry] = useState("USA");
+  const [serviceLevel, setServiceLevel] = useState("NORMAL");
 
   // Gestión envíos (tabla)
   const [opSearch, setOpSearch] = useState("");
@@ -104,7 +107,6 @@ export default function OperatorPanel() {
         email: newEmail,
         password: newPassword,
         role: "client",
-        tariff_code: newTariff,
       }),
     });
 
@@ -116,7 +118,6 @@ export default function OperatorPanel() {
     setNewName("");
     setNewEmail("");
     setNewPassword("");
-    setNewTariff("USA_NORMAL");
 
     await loadDashboard();
   }
@@ -124,6 +125,7 @@ export default function OperatorPanel() {
   async function findClient() {
     setMsg("");
     setClient(null);
+    setTariffsDraft(null);
 
     const n = Number(clientNumber);
     if (Number.isNaN(n)) return setMsg("Número inválido");
@@ -136,43 +138,73 @@ export default function OperatorPanel() {
     if (!data.user) return setMsg("Cliente no encontrado");
 
     setClient(data.user);
-    setTariffDraft(data.user.tariff_code || "USA_NORMAL");
+    setTariffsDraft({
+      rate_usa_normal: Number(data.user.rate_usa_normal ?? 45),
+      rate_usa_express: Number(data.user.rate_usa_express ?? 55),
+      rate_china_normal: Number(data.user.rate_china_normal ?? 58),
+      rate_china_express: Number(data.user.rate_china_express ?? 68),
+      rate_europa: Number(data.user.rate_europa ?? 58),
+    });
   }
 
-  async function saveClientTariff() {
+  async function saveClientTariffs() {
     setMsg("");
-    if (!client) return setMsg("Primero buscá un cliente");
-    setSavingTariff(true);
+    if (!client || !tariffsDraft) return;
 
-    const res = await fetch(
-      `${API}/operator/clients/${client.client_number}/tariff`,
-      {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${getToken()}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ tariff_code: tariffDraft }),
-      }
-    );
+    const payload = {
+      rate_usa_normal: Number(tariffsDraft.rate_usa_normal),
+      rate_usa_express: Number(tariffsDraft.rate_usa_express),
+      rate_china_normal: Number(tariffsDraft.rate_china_normal),
+      rate_china_express: Number(tariffsDraft.rate_china_express),
+      rate_europa: Number(tariffsDraft.rate_europa),
+    };
 
+    if (Object.values(payload).some((v) => !Number.isFinite(v) || v < 0)) {
+      return setMsg("Tarifas inválidas (deben ser números >= 0)");
+    }
+
+    setSavingTariffs(true);
+    const res = await fetch(`${API}/operator/clients/${client.id}/tariffs`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${getToken()}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
     const data = await res.json();
-    setSavingTariff(false);
+    setSavingTariffs(false);
 
-    if (!res.ok) return setMsg(data?.error || "Error guardando tarifa");
+    if (!res.ok) return setMsg(data?.error || "Error guardando tarifas");
 
     setClient(data.user);
-    setMsg(
-      `Tarifa actualizada para Cliente #${data.user.client_number}: ${data.user.tariff_code} (USD ${data.user.tariff_usd_per_kg}/kg)`
-    );
+    setTariffsDraft({
+      rate_usa_normal: Number(data.user.rate_usa_normal),
+      rate_usa_express: Number(data.user.rate_usa_express),
+      rate_china_normal: Number(data.user.rate_china_normal),
+      rate_china_express: Number(data.user.rate_china_express),
+      rate_europa: Number(data.user.rate_europa),
+    });
+
+    setMsg("Tarifas guardadas ✅");
   }
 
-  function parseKg(input) {
-    // acepta 0,5 o 0.5
-    const s = String(input || "").trim().replace(",", ".");
-    const n = Number(s);
-    return Number.isFinite(n) ? n : NaN;
-  }
+  const currentRate = useMemo(() => {
+    if (!tariffsDraft) return null;
+    if (originCountry === "USA" && serviceLevel === "NORMAL") return Number(tariffsDraft.rate_usa_normal);
+    if (originCountry === "USA" && serviceLevel === "EXPRESS") return Number(tariffsDraft.rate_usa_express);
+    if (originCountry === "CHINA" && serviceLevel === "NORMAL") return Number(tariffsDraft.rate_china_normal);
+    if (originCountry === "CHINA" && serviceLevel === "EXPRESS") return Number(tariffsDraft.rate_china_express);
+    if (originCountry === "EUROPA") return Number(tariffsDraft.rate_europa);
+    return null;
+  }, [tariffsDraft, originCountry, serviceLevel]);
+
+  const estimatedUsd = useMemo(() => {
+    const kg = parseKg(weightKg);
+    if (!Number.isFinite(kg) || kg < 0) return null;
+    if (!Number.isFinite(Number(currentRate))) return null;
+    return kg * Number(currentRate);
+  }, [weightKg, currentRate]);
 
   async function createShipment() {
     setMsg("");
@@ -181,7 +213,20 @@ export default function OperatorPanel() {
       return setMsg("Faltan campos obligatorios");
 
     const kg = parseKg(weightKg);
-    if (!Number.isFinite(kg) || kg <= 0) return setMsg("Peso inválido");
+    if (!Number.isFinite(kg) || kg < 0) return setMsg("Peso inválido (ej: 0.5)");
+
+    const payload = {
+      client_number: client.client_number,
+      package_code: packageCode,
+      description,
+      box_code: boxCode || null,
+      tracking: tracking || null,
+      weight_kg: kg,
+      status,
+
+      origin_country: originCountry,
+      service_level: originCountry === "EUROPA" ? "NORMAL" : serviceLevel,
+    };
 
     const res = await fetch(`${API}/operator/shipments`, {
       method: "POST",
@@ -189,15 +234,7 @@ export default function OperatorPanel() {
         Authorization: `Bearer ${getToken()}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        client_number: client.client_number,
-        package_code: packageCode,
-        description,
-        box_code: boxCode || null,
-        tracking: tracking || null,
-        weight_kg: kg,
-        status,
-      }),
+      body: JSON.stringify(payload),
     });
 
     const data = await res.json();
@@ -294,6 +331,8 @@ export default function OperatorPanel() {
       box_code: r.box_code ?? "",
       tracking: r.tracking ?? "",
       weight_kg: String(r.weight_kg ?? ""),
+      origin_country: r.origin_country ?? "USA",
+      service_level: r.service_level ?? "NORMAL",
     });
   }
 
@@ -307,7 +346,6 @@ export default function OperatorPanel() {
     setSavingEditId(shipmentId);
 
     const kg = parseKg(editDraft.weight_kg);
-
     const payload = {
       package_code: (editDraft.package_code || "").trim(),
       description: (editDraft.description || "").trim(),
@@ -318,6 +356,8 @@ export default function OperatorPanel() {
         ? (editDraft.tracking || "").trim()
         : null,
       weight_kg: kg,
+      origin_country: (editDraft.origin_country || "USA").toUpperCase(),
+      service_level: (editDraft.service_level || "NORMAL").toUpperCase(),
     };
 
     if (!payload.package_code || !payload.description || !Number.isFinite(payload.weight_kg)) {
@@ -339,7 +379,7 @@ export default function OperatorPanel() {
 
     if (!res.ok) return setMsg(data?.error || "Error guardando cambios");
 
-    setMsg("Cambios guardados");
+    setMsg("Cambios guardados ✅");
     cancelEdit();
     await loadOperatorShipments();
     await loadDashboard();
@@ -446,19 +486,6 @@ export default function OperatorPanel() {
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
             />
-
-            <select
-              className="input"
-              value={newTariff}
-              onChange={(e) => setNewTariff(e.target.value)}
-            >
-              {TARIFFS.map((t) => (
-                <option key={t.code} value={t.code}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-
             <button className="btn" onClick={createClient}>
               Crear cliente
             </button>
@@ -480,34 +507,57 @@ export default function OperatorPanel() {
           </div>
 
           {client && (
-            <div className="note">
+            <div className="note" style={{ marginTop: 10 }}>
               <div>
                 <b>Cliente #{client.client_number}</b> — {client.name}
               </div>
               <div className="muted">{client.email}</div>
+            </div>
+          )}
 
-              <div style={{ marginTop: 10 }} className="row">
-                <select
-                  className="input"
-                  value={tariffDraft}
-                  onChange={(e) => setTariffDraft(e.target.value)}
-                >
-                  {TARIFFS.map((t) => (
-                    <option key={t.code} value={t.code}>
-                      {t.label}
-                    </option>
-                  ))}
-                </select>
-
-                <button className="btn" onClick={saveClientTariff} disabled={savingTariff}>
-                  {savingTariff ? "..." : "Guardar tarifa"}
-                </button>
-              </div>
-
+          {client && tariffsDraft && (
+            <div className="note" style={{ marginTop: 10 }}>
+              <b>Tarifas del cliente (USD/kg)</b>
               <div className="muted" style={{ marginTop: 6 }}>
-                Actual: <b>{client.tariff_code}</b> — USD{" "}
-                <b>{Number(client.tariff_usd_per_kg || 0).toFixed(2)}</b>/kg
+                USA Normal 45 — USA Express 55 — China Normal 58 — China Express 68 — Europa 58 (por defecto)
               </div>
+
+              <div className="grid2" style={{ marginTop: 10 }}>
+                <input
+                  className="input"
+                  value={tariffsDraft.rate_usa_normal}
+                  onChange={(e) => setTariffsDraft((d) => ({ ...d, rate_usa_normal: e.target.value }))}
+                  placeholder="USA Normal"
+                />
+                <input
+                  className="input"
+                  value={tariffsDraft.rate_usa_express}
+                  onChange={(e) => setTariffsDraft((d) => ({ ...d, rate_usa_express: e.target.value }))}
+                  placeholder="USA Express"
+                />
+                <input
+                  className="input"
+                  value={tariffsDraft.rate_china_normal}
+                  onChange={(e) => setTariffsDraft((d) => ({ ...d, rate_china_normal: e.target.value }))}
+                  placeholder="China Normal"
+                />
+                <input
+                  className="input"
+                  value={tariffsDraft.rate_china_express}
+                  onChange={(e) => setTariffsDraft((d) => ({ ...d, rate_china_express: e.target.value }))}
+                  placeholder="China Express"
+                />
+                <input
+                  className="input"
+                  value={tariffsDraft.rate_europa}
+                  onChange={(e) => setTariffsDraft((d) => ({ ...d, rate_europa: e.target.value }))}
+                  placeholder="Europa"
+                />
+              </div>
+
+              <button className="btn" style={{ marginTop: 10 }} onClick={saveClientTariffs} disabled={savingTariffs}>
+                {savingTariffs ? "Guardando..." : "Guardar tarifas"}
+              </button>
             </div>
           )}
         </div>
@@ -555,7 +605,40 @@ export default function OperatorPanel() {
               value={weightKg}
               onChange={(e) => setWeightKg(e.target.value)}
             />
-            <select className="input" value={status} onChange={(e) => setStatus(e.target.value)}>
+
+            <select
+              className="input"
+              value={originCountry}
+              onChange={(e) => setOriginCountry(e.target.value)}
+            >
+              {ORIGINS.map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
+            </select>
+
+            <select
+              className="input"
+              value={originCountry === "EUROPA" ? "NORMAL" : serviceLevel}
+              onChange={(e) => setServiceLevel(e.target.value)}
+              disabled={originCountry === "EUROPA"}
+              title={originCountry === "EUROPA" ? "Europa no tiene Express por ahora" : ""}
+            >
+              {SERVICE_LEVELS.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="row">
+            <select
+              className="input"
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+            >
               {STATUSES.map((s) => (
                 <option key={s} value={s}>
                   {s}
@@ -564,6 +647,17 @@ export default function OperatorPanel() {
             </select>
             <div style={{ display: "flex", alignItems: "center" }}>
               <StatusBadge status={status} />
+            </div>
+          </div>
+
+          <div className="note">
+            <div>
+              <b>Tarifa aplicada:</b>{" "}
+              {currentRate != null ? `$${Number(currentRate).toFixed(2)} USD/kg` : "—"}
+            </div>
+            <div>
+              <b>Estimado:</b>{" "}
+              {estimatedUsd != null ? `$${Number(estimatedUsd).toFixed(2)} USD` : "—"}
             </div>
           </div>
 
@@ -605,6 +699,10 @@ export default function OperatorPanel() {
                 <th>CAJA</th>
                 <th>TRACKING</th>
                 <th>PESO [KG]</th>
+                <th>ORIGEN</th>
+                <th>SERVICIO</th>
+                <th>USD/KG</th>
+                <th>ESTIMADO</th>
                 <th>ESTADO</th>
                 <th>GUARDAR</th>
                 <th>HISTORIAL</th>
@@ -708,6 +806,46 @@ export default function OperatorPanel() {
                   </td>
 
                   <td>
+                    {editId === r.id ? (
+                      <select
+                        className="input"
+                        value={editDraft.origin_country || "USA"}
+                        onChange={(e) =>
+                          setEditDraft((d) => ({ ...d, origin_country: e.target.value }))
+                        }
+                      >
+                        {ORIGINS.map((o) => (
+                          <option key={o} value={o}>{o}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      r.origin_country || "-"
+                    )}
+                  </td>
+
+                  <td>
+                    {editId === r.id ? (
+                      <select
+                        className="input"
+                        value={(editDraft.origin_country === "EUROPA") ? "NORMAL" : (editDraft.service_level || "NORMAL")}
+                        onChange={(e) =>
+                          setEditDraft((d) => ({ ...d, service_level: e.target.value }))
+                        }
+                        disabled={editDraft.origin_country === "EUROPA"}
+                      >
+                        {SERVICE_LEVELS.map((s) => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      r.service_level || "-"
+                    )}
+                  </td>
+
+                  <td>{r.rate_usd_per_kg != null ? Number(r.rate_usd_per_kg).toFixed(2) : "-"}</td>
+                  <td>{r.estimated_usd != null ? Number(r.estimated_usd).toFixed(2) : "-"}</td>
+
+                  <td>
                     <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                       <select
                         className="input"
@@ -775,7 +913,7 @@ export default function OperatorPanel() {
 
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="muted" style={{ padding: 14 }}>
+                  <td colSpan={15} className="muted" style={{ padding: 14 }}>
                     No hay resultados. Probá con el botón ↻ o ajustá el filtro.
                   </td>
                 </tr>
