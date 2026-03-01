@@ -1,185 +1,532 @@
-import { useEffect, useState } from "react";
-import Topbar from "../components/Topbar.jsx";
-import StatusBadge from "../components/StatusBadge.jsx";
+require("dotenv").config();
+const express = require("express");
+const cors = require("cors");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const { z } = require("zod");
 
-const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
-const getToken = () =>
-  localStorage.getItem("token") || sessionStorage.getItem("token");
+const db = require("./db");
+const { authRequired, requireRole } = require("./auth");
 
-export default function ClientShipments() {
-  const [me, setMe] = useState(null);
-  const [rows, setRows] = useState([]);
-  const [openId, setOpenId] = useState(null);
-  const [events, setEvents] = useState([]);
-  const [msg, setMsg] = useState("");
+const app = express();
+app.use(express.json());
 
-  async function loadMe() {
+// CORS abierto mientras probás
+app.use(
+  cors({
+    origin: true,
+  })
+);
+
+const PORT = process.env.PORT || 4000;
+const JWT_SECRET = process.env.JWT_SECRET || "dev_secret_change_me";
+
+// Defaults tarifas
+const DEFAULT_RATES = {
+  rate_usa_normal: 45,
+  rate_usa_express: 55,
+  rate_china_normal: 58,
+  rate_china_express: 68,
+  rate_europa: 58,
+};
+
+app.get("/", (req, res) => res.send("LEMON's API OK ✅ — probá /health"));
+app.get("/health", (req, res) => res.json({ ok: true }));
+
+// ==================== AUTH ====================
+
+app.post("/auth/login", async (req, res) => {
+  try {
+    const schema = z.object({
+      email: z.string().email(),
+      password: z.string().min(1),
+      remember: z.boolean().optional(),
+    });
+    const p = schema.safeParse(req.body);
+    if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
+
+    const { email, password } = p.data;
+
+    const u = await db.query(
+      "SELECT id, email, name, role, client_number, password_hash FROM users WHERE email=$1",
+      [email.toLowerCase()]
+    );
+
+    const user = u.rows[0];
+    if (!user) return res.status(401).json({ error: "Credenciales inválidas" });
+
+    const ok = await bcrypt.compare(password, user.password_hash);
+    if (!ok) return res.status(401).json({ error: "Credenciales inválidas" });
+
+    const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, {
+      expiresIn: "7d",
+    });
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        client_number: user.client_number,
+      },
+    });
+  } catch (e) {
+    console.error("LOGIN ERROR", e);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+app.get("/auth/me", authRequired, async (req, res) => {
+  try {
+    const u = await db.query(
+      "SELECT id, email, name, role, client_number FROM users WHERE id=$1",
+      [req.user.id]
+    );
+    const user = u.rows[0];
+    if (!user) return res.status(404).json({ error: "Usuario no existe" });
+    res.json({ user });
+  } catch (e) {
+    console.error("ME ERROR", e);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// ==================== OPERATOR / ADMIN ====================
+
+app.post(
+  "/operator/clients",
+  authRequired,
+  requireRole(["operator", "admin"]),
+  async (req, res) => {
     try {
-      const res = await fetch(`${API}/auth/me`, {
-        headers: { Authorization: `Bearer ${getToken()}` },
+      const schema = z.object({
+        client_number: z.number().int().min(0),
+        name: z.string().min(1),
+        email: z.string().email(),
+        password: z.string().min(6),
+        role: z.enum(["client", "operator", "admin"]).optional(),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) return setMsg(data?.error || "No autorizado");
-      setMe(data.user);
-    } catch {
-      setMsg("No se pudo cargar el usuario.");
+
+      const p = schema.safeParse(req.body);
+      if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
+
+      const d = p.data;
+      const password_hash = await bcrypt.hash(d.password, 10);
+      const role = d.role || "client";
+
+      const ins = await db.query(
+        `INSERT INTO users (
+          client_number, name, email, password_hash, role,
+          rate_usa_normal, rate_usa_express, rate_china_normal, rate_china_express, rate_europa
+        )
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         RETURNING id, client_number, name, email, role,
+                   rate_usa_normal, rate_usa_express, rate_china_normal, rate_china_express, rate_europa`,
+        [
+          d.client_number,
+          d.name,
+          d.email.toLowerCase(),
+          password_hash,
+          role,
+          DEFAULT_RATES.rate_usa_normal,
+          DEFAULT_RATES.rate_usa_express,
+          DEFAULT_RATES.rate_china_normal,
+          DEFAULT_RATES.rate_china_express,
+          DEFAULT_RATES.rate_europa,
+        ]
+      );
+
+      res.json({ user: ins.rows[0] });
+    } catch (e) {
+      console.error("CREATE CLIENT ERROR", e);
+      if (String(e?.message || "").includes("duplicate")) {
+        return res.status(400).json({ error: "Email o client_number ya existe" });
+      }
+      res.status(500).json({ error: "Error interno" });
     }
   }
+);
 
-  async function loadShipments() {
+app.get(
+  "/operator/clients",
+  authRequired,
+  requireRole(["operator", "admin"]),
+  async (req, res) => {
     try {
-      const res = await fetch(`${API}/client/shipments`, {
-        headers: { Authorization: `Bearer ${getToken()}` },
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) return setMsg(data?.error || "No se pudieron cargar envíos");
-      setRows(data.rows || []);
-    } catch {
-      setMsg("No se pudieron cargar los envíos.");
+      const n = Number(req.query.client_number);
+      if (Number.isNaN(n)) return res.status(400).json({ error: "client_number inválido" });
+
+      const q = await db.query(
+        `SELECT id, client_number, name, email, role,
+                rate_usa_normal, rate_usa_express, rate_china_normal, rate_china_express, rate_europa
+         FROM users
+         WHERE client_number=$1`,
+        [n]
+      );
+
+      res.json({ user: q.rows[0] || null });
+    } catch (e) {
+      console.error("GET CLIENT ERROR", e);
+      res.status(500).json({ error: "Error interno" });
     }
   }
+);
 
-  async function loadEvents(id) {
+// ✅ NUEVO: guardar tarifas por cliente
+app.patch(
+  "/operator/clients/:client_number/rates",
+  authRequired,
+  requireRole(["operator", "admin"]),
+  async (req, res) => {
     try {
-      const res = await fetch(`${API}/shipments/${id}/events`, {
-        headers: { Authorization: `Bearer ${getToken()}` },
+      const clientNumber = Number(req.params.client_number);
+      if (Number.isNaN(clientNumber)) {
+        return res.status(400).json({ error: "client_number inválido" });
+      }
+
+      const schema = z.object({
+        rate_usa_normal: z.number().min(0),
+        rate_usa_express: z.number().min(0),
+        rate_china_normal: z.number().min(0),
+        rate_china_express: z.number().min(0),
+        rate_europa: z.number().min(0),
       });
-      const data = await res.json().catch(() => ({}));
-      setEvents(res.ok ? data.rows || [] : []);
-    } catch {
-      setEvents([]);
+
+      const p = schema.safeParse(req.body);
+      if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
+
+      const upd = await db.query(
+        `UPDATE users
+         SET rate_usa_normal=$1,
+             rate_usa_express=$2,
+             rate_china_normal=$3,
+             rate_china_express=$4,
+             rate_europa=$5
+         WHERE client_number=$6
+         RETURNING id, client_number, name, email, role,
+                   rate_usa_normal, rate_usa_express, rate_china_normal, rate_china_express, rate_europa`,
+        [
+          p.data.rate_usa_normal,
+          p.data.rate_usa_express,
+          p.data.rate_china_normal,
+          p.data.rate_china_express,
+          p.data.rate_europa,
+          clientNumber,
+        ]
+      );
+
+      if (!upd.rows[0]) return res.status(404).json({ error: "Cliente no existe" });
+      res.json({ user: upd.rows[0] });
+    } catch (e) {
+      console.error("PATCH CLIENT RATES ERROR", e);
+      res.status(500).json({ error: "Error interno" });
     }
   }
+);
 
-  useEffect(() => {
-    loadMe();
-    loadShipments();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+/**
+ * CREATE SHIPMENT
+ *  - DB: shipments.code NOT NULL -> lo llenamos con package_code
+ *  - guardamos origin, service, rate_usd_per_kg, estimated_usd
+ */
+app.post(
+  "/operator/shipments",
+  authRequired,
+  requireRole(["operator", "admin"]),
+  async (req, res) => {
+    try {
+      const schema = z.object({
+        client_number: z.number().int().min(0),
+        package_code: z.string().min(1),
+        description: z.string().min(1),
+        box_code: z.string().nullable().optional(),
+        tracking: z.string().nullable().optional(),
+        weight_kg: z.number().min(0),
+        status: z.string().min(1),
 
-  return (
-    <div className="screen">
-      <Topbar title="Mis envíos" />
+        origin: z.enum(["USA", "CHINA", "EUROPA"]).optional(),
+        service: z.enum(["NORMAL", "EXPRESS"]).optional(),
+        rate_usd_per_kg: z.number().min(0).optional(),
+        estimated_usd: z.number().min(0).optional(),
+      });
 
-      <div className="box">
-        <h2>Envíos</h2>
+      const p = schema.safeParse(req.body);
+      if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
 
-        {me ? (
-          <div className="note" style={{ marginBottom: 12 }}>
-            <div>
-              <b>Cliente #{me.client_number}</b> — {me.name}
-            </div>
-            <div className="muted">{me.email}</div>
-          </div>
-        ) : null}
+      const d = p.data;
 
-        <div className="tableWrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>CÓDIGO</th>
-                <th>FECHA</th>
-                <th>DESCRIPCIÓN</th>
-                <th>CAJA</th>
-                <th>TRACKING</th>
-                <th>PESO [KG]</th>
-                <th>ORIGEN</th>
-                <th>SERVICIO</th>
-                <th>TARIFA</th>
-                <th>ESTIMADO</th>
-                <th>ESTADO</th>
-                <th>HISTORIAL</th>
-              </tr>
-            </thead>
+      const u = await db.query(
+        `SELECT id FROM users WHERE client_number=$1`,
+        [d.client_number]
+      );
+      const user = u.rows[0];
+      if (!user) return res.status(404).json({ error: "Cliente no existe" });
 
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.id}>
-                  <td>
-                    <span className="pill">{r.package_code || r.code}</span>
-                  </td>
-                  <td>{r.date_in}</td>
-                  <td>{r.description}</td>
-                  <td>{r.box_code || "-"}</td>
-                  <td>{r.tracking || "-"}</td>
-                  <td>{Number(r.weight_kg ?? 0).toFixed(2)}</td>
-                  <td>{r.origin || "-"}</td>
-                  <td>{r.service || "-"}</td>
-                  <td>
-                    {r.rate_usd_per_kg != null
-                      ? `$${Number(r.rate_usd_per_kg).toFixed(2)}/kg`
-                      : "-"}
-                  </td>
-                  <td>
-                    {r.estimated_usd != null
-                      ? `$${Number(r.estimated_usd).toFixed(2)}`
-                      : "-"}
-                  </td>
-                  <td>
-                    <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                      <span>{r.status}</span>
-                      <StatusBadge status={r.status} />
-                    </div>
-                  </td>
-                  <td>
-                    <button
-                      className="btn"
-                      onClick={() => {
-                        const next = openId === r.id ? null : r.id;
-                        setOpenId(next);
-                        if (next) loadEvents(r.id);
-                      }}
-                    >
-                      {openId === r.id ? "Cerrar" : "Ver"}
-                    </button>
-                  </td>
-                </tr>
-              ))}
+      const ins = await db.query(
+        `INSERT INTO shipments
+         (user_id, code, description, box_code, tracking, weight_kg, status, date_in,
+          origin, service, rate_usd_per_kg, estimated_usd, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7, NOW(), $8, $9, $10, $11, NOW())
+         RETURNING *`,
+        [
+          user.id,
+          d.package_code,
+          d.description,
+          d.box_code ?? null,
+          d.tracking ?? null,
+          d.weight_kg,
+          d.status,
+          d.origin ?? null,
+          d.service ?? null,
+          d.rate_usd_per_kg ?? null,
+          d.estimated_usd ?? null,
+        ]
+      );
 
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={12} className="muted" style={{ padding: 14 }}>
-                    No hay envíos todavía.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+      await db.query(
+        `INSERT INTO shipment_events (shipment_id, old_status, new_status)
+         VALUES ($1,$2,$3)`,
+        [ins.rows[0].id, null, d.status]
+      );
 
-        {openId && (
-          <div style={{ marginTop: 14 }}>
-            <h3 style={{ margin: "8px 0" }}>Historial del envío #{openId}</h3>
+      res.json({ shipment: ins.rows[0] });
+    } catch (e) {
+      console.error("CREATE SHIPMENT ERROR", e);
+      res.status(500).json({ error: "Error interno" });
+    }
+  }
+);
 
-            {events.length === 0 ? (
-              <div className="muted">Sin eventos todavía.</div>
-            ) : (
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>FECHA</th>
-                    <th>DE</th>
-                    <th>A</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {events.map((e, idx) => (
-                    <tr key={e.id || idx}>
-                      <td>{new Date(e.created_at).toLocaleString()}</td>
-                      <td>{e.old_status || "-"}</td>
-                      <td>
-                        <b>{e.new_status}</b>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        )}
+app.get(
+  "/operator/shipments",
+  authRequired,
+  requireRole(["operator", "admin"]),
+  async (req, res) => {
+    try {
+      const search = (req.query.search || "").trim();
+      const clientNumber = (req.query.client_number || "").trim();
 
-        {msg ? <div className="banner">{msg}</div> : null}
-      </div>
-    </div>
-  );
-}
+      const params = [];
+      let where = "WHERE 1=1";
+
+      if (clientNumber !== "") {
+        const n = Number(clientNumber);
+        if (!Number.isNaN(n)) {
+          params.push(n);
+          where += ` AND u.client_number = $${params.length}`;
+        }
+      }
+
+      if (search) {
+        params.push(`%${search}%`);
+        const p1 = params.length;
+        params.push(`%${search}%`);
+        const p2 = params.length;
+        where += ` AND (sh.code ILIKE $${p1} OR sh.description ILIKE $${p2})`;
+      }
+
+      const q = await db.query(
+        `SELECT sh.*, u.client_number, u.name, u.email
+         FROM shipments sh
+         JOIN users u ON u.id = sh.user_id
+         ${where}
+         ORDER BY sh.id DESC
+         LIMIT 500`,
+        params
+      );
+
+      res.json({ rows: q.rows });
+    } catch (e) {
+      console.error("OP SHIPMENTS ERROR", e);
+      res.status(500).json({ error: "Error interno" });
+    }
+  }
+);
+
+app.patch(
+  "/operator/shipments/:id",
+  authRequired,
+  requireRole(["operator", "admin"]),
+  async (req, res) => {
+    try {
+      const schema = z.object({
+        package_code: z.string().min(1),
+        description: z.string().min(1),
+        box_code: z.string().nullable().optional(),
+        tracking: z.string().nullable().optional(),
+        weight_kg: z.number().min(0),
+
+        origin: z.string().nullable().optional(),
+        service: z.string().nullable().optional(),
+        rate_usd_per_kg: z.number().nullable().optional(),
+        estimated_usd: z.number().nullable().optional(),
+      });
+      const p = schema.safeParse(req.body);
+      if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
+
+      const id = Number(req.params.id);
+      if (Number.isNaN(id)) return res.status(400).json({ error: "ID inválido" });
+
+      const upd = await db.query(
+        `UPDATE shipments
+         SET code=$1, description=$2, box_code=$3, tracking=$4, weight_kg=$5,
+             origin=$6, service=$7, rate_usd_per_kg=$8, estimated_usd=$9,
+             updated_at=NOW()
+         WHERE id=$10
+         RETURNING *`,
+        [
+          p.data.package_code,
+          p.data.description,
+          p.data.box_code ?? null,
+          p.data.tracking ?? null,
+          p.data.weight_kg,
+
+          p.data.origin ?? null,
+          p.data.service ?? null,
+          p.data.rate_usd_per_kg ?? null,
+          p.data.estimated_usd ?? null,
+
+          id,
+        ]
+      );
+
+      if (!upd.rows[0]) return res.status(404).json({ error: "Envío no existe" });
+      res.json({ shipment: upd.rows[0] });
+    } catch (e) {
+      console.error("PATCH SHIPMENT ERROR", e);
+      res.status(500).json({ error: "Error interno" });
+    }
+  }
+);
+
+app.patch(
+  "/operator/shipments/:id/status",
+  authRequired,
+  requireRole(["operator", "admin"]),
+  async (req, res) => {
+    try {
+      const schema = z.object({ status: z.string().min(1) });
+      const p = schema.safeParse(req.body);
+      if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
+
+      const shipmentId = Number(req.params.id);
+      if (Number.isNaN(shipmentId)) return res.status(400).json({ error: "ID inválido" });
+
+      const s = await db.query(
+        `SELECT sh.*, u.email, u.name, u.client_number
+         FROM shipments sh
+         JOIN users u ON u.id = sh.user_id
+         WHERE sh.id=$1`,
+        [shipmentId]
+      );
+
+      const current = s.rows[0];
+      if (!current) return res.status(404).json({ error: "Envío no existe" });
+
+      const oldStatus = current.status;
+      const newStatus = p.data.status;
+
+      const upd = await db.query(
+        `UPDATE shipments
+         SET status=$1, updated_at=NOW(),
+             delivered_at = CASE WHEN $1='Entregado' THEN NOW() ELSE delivered_at END
+         WHERE id=$2
+         RETURNING *`,
+        [newStatus, shipmentId]
+      );
+
+      await db.query(
+        `INSERT INTO shipment_events (shipment_id, old_status, new_status)
+         VALUES ($1,$2,$3)`,
+        [shipmentId, oldStatus, newStatus]
+      );
+
+      res.json({ shipment: upd.rows[0] });
+    } catch (e) {
+      console.error("PATCH STATUS ERROR", e);
+      res.status(500).json({ error: "Error interno" });
+    }
+  }
+);
+
+// ==================== CLIENT ====================
+
+app.get("/client/shipments", authRequired, async (req, res) => {
+  try {
+    const q = await db.query(
+      `SELECT id, code, description, box_code, tracking, weight_kg, status, date_in,
+              origin, service, rate_usd_per_kg, estimated_usd
+       FROM shipments
+       WHERE user_id=$1
+       ORDER BY id DESC`,
+      [req.user.id]
+    );
+
+    res.json({ rows: q.rows });
+  } catch (e) {
+    console.error("CLIENT SHIPMENTS ERROR", e);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+app.get("/shipments/:id/events", authRequired, async (req, res) => {
+  try {
+    const shipmentId = Number(req.params.id);
+    if (Number.isNaN(shipmentId)) return res.status(400).json({ error: "ID inválido" });
+
+    const sh = await db.query("SELECT id, user_id FROM shipments WHERE id=$1", [shipmentId]);
+    const shipment = sh.rows[0];
+    if (!shipment) return res.status(404).json({ error: "Envío no existe" });
+
+    const role = req.user.role;
+    const isOwner = req.user.id === shipment.user_id;
+    const isStaff = role === "operator" || role === "admin";
+    if (!isOwner && !isStaff) return res.status(403).json({ error: "No autorizado" });
+
+    const ev = await db.query(
+      `SELECT shipment_id, old_status, new_status, created_at
+       FROM shipment_events
+       WHERE shipment_id=$1
+       ORDER BY created_at ASC`,
+      [shipmentId]
+    );
+
+    res.json({ rows: ev.rows });
+  } catch (e) {
+    console.error("EVENTS ERROR", e);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+app.get(
+  "/operator/dashboard",
+  authRequired,
+  requireRole(["operator", "admin"]),
+  async (req, res) => {
+    try {
+      const stats = await db.query(`
+        SELECT
+          COUNT(*) AS total,
+          COUNT(*) FILTER (WHERE status='Recibido en depósito') AS received,
+          COUNT(*) FILTER (WHERE status='En preparación') AS prep,
+          COUNT(*) FILTER (WHERE status='Despachado') AS sent,
+          COUNT(*) FILTER (WHERE status='En tránsito') AS transit,
+          COUNT(*) FILTER (WHERE status='Listo para entrega') AS ready,
+          COUNT(*) FILTER (WHERE status='Entregado') AS delivered,
+          COALESCE(SUM(weight_kg),0) AS total_weight
+        FROM shipments
+      `);
+
+      res.json({ stats: stats.rows[0] });
+    } catch (err) {
+      console.error("DASHBOARD ERROR:", err);
+      res.status(500).json({ error: "Error dashboard" });
+    }
+  }
+);
+
+app.listen(PORT, () => {
+  console.log(`API corriendo en http://localhost:${PORT}`);
+});
