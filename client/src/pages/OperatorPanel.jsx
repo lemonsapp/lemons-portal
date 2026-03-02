@@ -379,50 +379,6 @@ export default function OperatorPanel() {
     setStatusDraft(nextDraft);
   }
 
-  async function loadEvents(shipmentId) {
-    setLoadingEvents(true);
-    const res = await fetch(`${API}/shipments/${shipmentId}/events`, {
-      headers: { Authorization: `Bearer ${getToken()}` },
-    });
-    const data = await res.json();
-    setLoadingEvents(false);
-
-    if (!res.ok) {
-      setMsg(data?.error || "Error cargando historial");
-      setEvents([]);
-      return;
-    }
-    setEvents(data.rows || []);
-  }
-
-  async function saveStatus(shipmentId) {
-    setMsg("");
-    const newStatus = statusDraft[shipmentId];
-    if (!newStatus) return;
-
-    setSavingId(shipmentId);
-
-    const res = await fetch(`${API}/operator/shipments/${shipmentId}/status`, {
-      method: "PATCH",
-      headers: {
-        Authorization: `Bearer ${getToken()}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ status: newStatus }),
-    });
-
-    const data = await res.json();
-    setSavingId(null);
-
-    if (!res.ok) return setMsg(data?.error || "Error actualizando estado");
-
-    setMsg(`Estado actualizado: ${newStatus}`);
-    await loadOperatorShipments();
-    await loadDashboard();
-
-    if (openId === shipmentId) await loadEvents(shipmentId);
-  }
-
   async function getRatesCtxForClientNumber(clientNum) {
     const key = String(clientNum);
     const cached = editRateCacheRef.current.get(key);
@@ -505,7 +461,6 @@ export default function OperatorPanel() {
         ? editRateCtx
         : { client_number: row.client_number, defaults: DEFAULT_RATES_FALLBACK, rates: null };
 
-    // si prendo override, seteo rate actual como punto de partida (lo que ya estaba calculado)
     const base = { ...editDraft, override_edit: enabled };
     const next = recalcEdit(base, row, ctx);
     setEditDraft(next);
@@ -523,10 +478,7 @@ export default function OperatorPanel() {
       weight_kg: String(r.weight_kg ?? ""),
       origin: r.origin ?? "USA",
       service: r.service ?? "NORMAL",
-
-      // ✅ override en edición (por defecto apagado)
       override_edit: false,
-
       rate_usd_per_kg: r.rate_usd_per_kg != null ? String(r.rate_usd_per_kg) : "",
       estimated_usd: r.estimated_usd != null ? String(r.estimated_usd) : "",
     };
@@ -736,7 +688,7 @@ export default function OperatorPanel() {
                           className="input"
                           value={editDraft.origin || "USA"}
                           onChange={(e) => updateEditField("origin", e.target.value)}
-                          disabled={override} // si override manual, no te bloqueo, pero evita cambios accidentales
+                          disabled={override}
                         >
                           {ORIGINS.map((x) => (
                             <option key={x} value={x}>{x}</option>
@@ -771,7 +723,7 @@ export default function OperatorPanel() {
                           value={editDraft.rate_usd_per_kg || ""}
                           onChange={(e) => updateEditField("rate_usd_per_kg", e.target.value)}
                           readOnly={!override}
-                          title={!override ? "Activá Override para editar" : "Tarifa manual"}
+                          title={!override ? "Poné Manual para editar" : "Tarifa manual"}
                         />
                       ) : (
                         r.rate_usd_per_kg != null ? `$${Number(r.rate_usd_per_kg).toFixed(2)}/kg` : "-"
@@ -786,16 +738,19 @@ export default function OperatorPanel() {
                       )}
                     </td>
 
+                    {/* ✅ CAMBIO CLAVE: select Auto/Manual (siempre visible) */}
                     <td>
                       {isEditing ? (
-                        <label className="muted" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                          <input
-                            type="checkbox"
-                            checked={override}
-                            onChange={(e) => toggleEditOverride(e.target.checked)}
-                          />
-                          Manual
-                        </label>
+                        <select
+                          className="input"
+                          value={override ? "MANUAL" : "AUTO"}
+                          onChange={(e) => toggleEditOverride(e.target.value === "MANUAL")}
+                          style={{ minWidth: 110 }}
+                          title="Modo tarifa"
+                        >
+                          <option value="AUTO">Auto</option>
+                          <option value="MANUAL">Manual</option>
+                        </select>
                       ) : (
                         "-"
                       )}
