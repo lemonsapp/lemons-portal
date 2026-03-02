@@ -22,6 +22,30 @@ const SERVICES_BY_ORIGIN = {
   EUROPA: ["NORMAL"], // Europa solo una tarifa
 };
 
+// Defaults hard (fallback si backend no manda defaults)
+const DEFAULT_RATES_FALLBACK = {
+  usa_normal: 45,
+  usa_express: 55,
+  china_normal: 58,
+  china_express: 68,
+  europa_normal: 58,
+};
+
+function numOrNull(v) {
+  if (v === "" || v == null) return null;
+  const n = Number(String(v).replace(",", "."));
+  return Number.isFinite(n) ? n : null;
+}
+
+function fmtDate(v) {
+  if (!v) return "-";
+  try {
+    return new Date(v).toLocaleString();
+  } catch {
+    return String(v);
+  }
+}
+
 export default function OperatorPanel() {
   const [msg, setMsg] = useState("");
 
@@ -39,15 +63,20 @@ export default function OperatorPanel() {
   const [clientNumber, setClientNumber] = useState("");
   const [client, setClient] = useState(null);
 
-  // ====== TARIFAS (local UI) ======
+  // ====== TARIFAS (por cliente en DB) ======
   // defaults: USA N 45 / USA E 55 / CHINA N 58 / CHINA E 68 / EUROPA 58
+  // Ahora: se cargan desde backend al buscar cliente, y se guardan con PUT /operator/clients/:id/rates
+  const [defaults, setDefaults] = useState(DEFAULT_RATES_FALLBACK);
+
   const [rates, setRates] = useState({
-    usa_normal: 45,
-    usa_express: 55,
-    china_normal: 58,
-    china_express: 68,
-    europa: 58,
+    usa_normal: "",
+    usa_express: "",
+    china_normal: "",
+    china_express: "",
+    europa_normal: "",
   });
+
+  const [savingRates, setSavingRates] = useState(false);
 
   // Crear envío
   const [packageCode, setPackageCode] = useState("");
@@ -80,18 +109,29 @@ export default function OperatorPanel() {
 
   // ===== helpers tarifa =====
   const rateForSelection = useMemo(() => {
-    if (origin === "USA" && service === "NORMAL") return Number(rates.usa_normal || 0);
-    if (origin === "USA" && service === "EXPRESS") return Number(rates.usa_express || 0);
-    if (origin === "CHINA" && service === "NORMAL") return Number(rates.china_normal || 0);
-    if (origin === "CHINA" && service === "EXPRESS") return Number(rates.china_express || 0);
-    if (origin === "EUROPA") return Number(rates.europa || 0);
+    // tomamos rate del state "rates" si está cargado; si no, fallback a defaults
+    const usaN = numOrNull(rates.usa_normal);
+    const usaE = numOrNull(rates.usa_express);
+    const chN = numOrNull(rates.china_normal);
+    const chE = numOrNull(rates.china_express);
+    const euN = numOrNull(rates.europa_normal);
+
+    if (origin === "USA" && service === "NORMAL")
+      return usaN ?? Number(defaults.usa_normal || 0);
+    if (origin === "USA" && service === "EXPRESS")
+      return usaE ?? Number(defaults.usa_express || 0);
+    if (origin === "CHINA" && service === "NORMAL")
+      return chN ?? Number(defaults.china_normal || 0);
+    if (origin === "CHINA" && service === "EXPRESS")
+      return chE ?? Number(defaults.china_express || 0);
+    if (origin === "EUROPA") return euN ?? Number(defaults.europa_normal || 0);
     return 0;
-  }, [origin, service, rates]);
+  }, [origin, service, rates, defaults]);
 
   const estimated = useMemo(() => {
     const w = Number(String(weightKg).replace(",", "."));
     if (Number.isNaN(w) || w <= 0) return 0;
-    return w * rateForSelection;
+    return w * Number(rateForSelection || 0);
   }, [weightKg, rateForSelection]);
 
   useEffect(() => {
@@ -162,8 +202,73 @@ export default function OperatorPanel() {
     });
 
     const data = await res.json();
+
+    if (!res.ok) {
+      return setMsg(data?.error || "Error buscando cliente");
+    }
+
     if (!data.user) return setMsg("Cliente no encontrado");
     setClient(data.user);
+
+    // ✅ NUEVO: cargar defaults + rates desde backend
+    const nextDefaults = data.defaults || DEFAULT_RATES_FALLBACK;
+    setDefaults(nextDefaults);
+
+    const r = data.rates || null;
+
+    // Si rates es null (no existe fila en client_rates), dejamos inputs vacíos para que use defaults.
+    // Si existe, precargamos.
+    setRates({
+      usa_normal: r?.usa_normal ?? "",
+      usa_express: r?.usa_express ?? "",
+      china_normal: r?.china_normal ?? "",
+      china_express: r?.china_express ?? "",
+      europa_normal: r?.europa_normal ?? "",
+    });
+  }
+
+  async function saveClientRates() {
+    setMsg("");
+    if (!client?.id) return setMsg("Primero buscá un cliente");
+
+    setSavingRates(true);
+    try {
+      const payload = {
+        usa_normal: numOrNull(rates.usa_normal),
+        usa_express: numOrNull(rates.usa_express),
+        china_normal: numOrNull(rates.china_normal),
+        china_express: numOrNull(rates.china_express),
+        europa_normal: numOrNull(rates.europa_normal),
+      };
+
+      const res = await fetch(`${API}/operator/clients/${client.id}/rates`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok) return setMsg(data?.error || "Error guardando tarifas");
+
+      // refrescamos rates desde lo que guardó backend
+      setDefaults(data.defaults || DEFAULT_RATES_FALLBACK);
+      setRates({
+        usa_normal: data?.rates?.usa_normal ?? "",
+        usa_express: data?.rates?.usa_express ?? "",
+        china_normal: data?.rates?.china_normal ?? "",
+        china_express: data?.rates?.china_express ?? "",
+        europa_normal: data?.rates?.europa_normal ?? "",
+      });
+
+      setMsg("Tarifas guardadas ✅");
+    } catch (e) {
+      setMsg("Error guardando tarifas");
+    } finally {
+      setSavingRates(false);
+    }
   }
 
   async function createShipment() {
@@ -175,6 +280,10 @@ export default function OperatorPanel() {
     const weightParsed = Number(String(weightKg).replace(",", "."));
     if (Number.isNaN(weightParsed) || weightParsed <= 0) return setMsg("Peso inválido");
 
+    // ✅ IMPORTANTE:
+    // - NO enviamos rate_usd_per_kg / estimated_usd por default
+    //   para que el backend use la tarifa del cliente (DB) y calcule ahí.
+    // - Lo que ves en UI es una PREVIEW del estimado según lo cargado.
     const res = await fetch(`${API}/operator/shipments`, {
       method: "POST",
       headers: {
@@ -190,11 +299,8 @@ export default function OperatorPanel() {
         weight_kg: weightParsed,
         status,
 
-        // NUEVO
         origin,
         service: origin === "EUROPA" ? "NORMAL" : service,
-        rate_usd_per_kg: rateForSelection,
-        estimated_usd: Number((weightParsed * rateForSelection).toFixed(2)),
       }),
     });
 
@@ -491,11 +597,11 @@ export default function OperatorPanel() {
               </div>
               <div className="muted">{client.email}</div>
 
-              {/* Tarifa editable (por ahora global UI; si querés por-cliente en DB lo hacemos en el próximo paso) */}
+              {/* ✅ Tarifas por cliente en DB */}
               <div style={{ marginTop: 10 }}>
                 <b>Tarifas (USD/kg)</b>
                 <div className="muted" style={{ marginBottom: 8 }}>
-                  Editalas acá y se usan para calcular el estimado del envío.
+                  Se guardan por cliente. Si dejás vacío, se usa el default.
                 </div>
 
                 <div className="grid2" style={{ gap: 10 }}>
@@ -504,6 +610,7 @@ export default function OperatorPanel() {
                     <input
                       className="input"
                       value={rates.usa_normal}
+                      placeholder={`default ${defaults.usa_normal}`}
                       onChange={(e) =>
                         setRates((r) => ({ ...r, usa_normal: e.target.value }))
                       }
@@ -515,6 +622,7 @@ export default function OperatorPanel() {
                     <input
                       className="input"
                       value={rates.usa_express}
+                      placeholder={`default ${defaults.usa_express}`}
                       onChange={(e) =>
                         setRates((r) => ({ ...r, usa_express: e.target.value }))
                       }
@@ -526,6 +634,7 @@ export default function OperatorPanel() {
                     <input
                       className="input"
                       value={rates.china_normal}
+                      placeholder={`default ${defaults.china_normal}`}
                       onChange={(e) =>
                         setRates((r) => ({ ...r, china_normal: e.target.value }))
                       }
@@ -537,6 +646,7 @@ export default function OperatorPanel() {
                     <input
                       className="input"
                       value={rates.china_express}
+                      placeholder={`default ${defaults.china_express}`}
                       onChange={(e) =>
                         setRates((r) => ({ ...r, china_express: e.target.value }))
                       }
@@ -547,11 +657,21 @@ export default function OperatorPanel() {
                     <label className="muted">Europa</label>
                     <input
                       className="input"
-                      value={rates.europa}
+                      value={rates.europa_normal}
+                      placeholder={`default ${defaults.europa_normal}`}
                       onChange={(e) =>
-                        setRates((r) => ({ ...r, europa: e.target.value }))
+                        setRates((r) => ({ ...r, europa_normal: e.target.value }))
                       }
                     />
+                  </div>
+                </div>
+
+                <div className="row" style={{ marginTop: 10, gap: 10 }}>
+                  <button className="btn" onClick={saveClientRates} disabled={savingRates}>
+                    {savingRates ? "Guardando..." : "Guardar tarifas"}
+                  </button>
+                  <div className="muted" style={{ display: "flex", alignItems: "center" }}>
+                    Tip: guardá tarifas antes de crear envíos para que el backend aplique lo mismo.
                   </div>
                 </div>
               </div>
@@ -649,7 +769,7 @@ export default function OperatorPanel() {
             </div>
 
             <div className="note" style={{ marginLeft: "auto", minWidth: 280 }}>
-              <div className="muted">Tarifa aplicada</div>
+              <div className="muted">Tarifa aplicada (preview)</div>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <b>
                   {origin} {origin === "EUROPA" ? "" : service}
@@ -659,6 +779,9 @@ export default function OperatorPanel() {
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <span className="muted">Estimado (USD)</span>
                 <b>${Number(estimated || 0).toFixed(2)}</b>
+              </div>
+              <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>
+                Se calcula automáticamente en backend con la tarifa guardada del cliente.
               </div>
             </div>
           </div>
@@ -739,7 +862,7 @@ export default function OperatorPanel() {
                     )}
                   </td>
 
-                  <td>{r.date_in}</td>
+                  <td>{fmtDate(r.date_in)}</td>
 
                   <td>
                     {editId === r.id ? (
@@ -809,7 +932,7 @@ export default function OperatorPanel() {
                     )}
                   </td>
 
-                  {/* NUEVO: ORIGEN/SERVICIO/TARIFA/ESTIMADO */}
+                  {/* ORIGEN/SERVICIO/TARIFA/ESTIMADO */}
                   <td>
                     {editId === r.id ? (
                       <select
