@@ -287,9 +287,7 @@ export default function OperatorPanel() {
         europa_normal: data?.rates?.europa_normal ?? "",
       });
 
-      // invalida cache edición
       editRateCacheRef.current.delete(String(client.client_number));
-
       setMsg("Tarifas guardadas ✅");
     } catch {
       setMsg("Error guardando tarifas");
@@ -445,37 +443,46 @@ export default function OperatorPanel() {
     return ctx;
   }
 
-  // ✅ cálculo único para edición (SIEMPRE sincroniza rate + estimated)
+  // ✅ Recalcula rate/estimated en edición.
+  // Si override_edit=true -> usa rate_usd_per_kg manual.
   function recalcEdit(nextDraft, row, ctx) {
     const o = normalizeOrigin(nextDraft.origin ?? row.origin ?? "USA");
     const s = normalizeService(o, nextDraft.service ?? row.service ?? "NORMAL");
-
     const w = num(nextDraft.weight_kg, NaN);
-    const rate = getLaneRate({
+
+    const override = Boolean(nextDraft.override_edit);
+
+    let rate;
+    if (override) {
+      rate = num(nextDraft.rate_usd_per_kg, 0);
+    } else {
+      rate = getLaneRate({
+        origin: o,
+        service: s,
+        rates: {
+          usa_normal: ctx?.rates?.usa_normal ?? "",
+          usa_express: ctx?.rates?.usa_express ?? "",
+          china_normal: ctx?.rates?.china_normal ?? "",
+          china_express: ctx?.rates?.china_express ?? "",
+          europa_normal: ctx?.rates?.europa_normal ?? "",
+        },
+        defaults: ctx?.defaults || DEFAULT_RATES_FALLBACK,
+      });
+    }
+
+    const out = {
+      ...nextDraft,
       origin: o,
       service: s,
-      rates: {
-        usa_normal: ctx?.rates?.usa_normal ?? "",
-        usa_express: ctx?.rates?.usa_express ?? "",
-        china_normal: ctx?.rates?.china_normal ?? "",
-        china_express: ctx?.rates?.china_express ?? "",
-        europa_normal: ctx?.rates?.europa_normal ?? "",
-      },
-      defaults: ctx?.defaults || DEFAULT_RATES_FALLBACK,
-    });
+      rate_usd_per_kg: String(Number(rate || 0).toFixed(2)),
+    };
 
-    const out = { ...nextDraft, origin: o, service: s, rate_usd_per_kg: String(Number(rate || 0).toFixed(2)) };
-
-    if (!Number.isFinite(w) || w <= 0) {
-      out.estimated_usd = "";
-    } else {
-      out.estimated_usd = String(Number((w * Number(rate || 0)).toFixed(2)).toFixed(2));
-    }
+    if (!Number.isFinite(w) || w <= 0) out.estimated_usd = "";
+    else out.estimated_usd = String(Number((w * Number(rate || 0)).toFixed(2)).toFixed(2));
 
     return out;
   }
 
-  // ✅ setter de edición que recalcula instantáneo
   function updateEditField(field, value) {
     const row = rows.find((x) => x.id === editId);
     if (!row) return;
@@ -486,6 +493,21 @@ export default function OperatorPanel() {
         : { client_number: row.client_number, defaults: DEFAULT_RATES_FALLBACK, rates: null };
 
     const next = recalcEdit({ ...editDraft, [field]: value }, row, ctx);
+    setEditDraft(next);
+  }
+
+  function toggleEditOverride(enabled) {
+    const row = rows.find((x) => x.id === editId);
+    if (!row) return;
+
+    const ctx =
+      editRateCtx && editRateCtx.client_number === row.client_number
+        ? editRateCtx
+        : { client_number: row.client_number, defaults: DEFAULT_RATES_FALLBACK, rates: null };
+
+    // si prendo override, seteo rate actual como punto de partida (lo que ya estaba calculado)
+    const base = { ...editDraft, override_edit: enabled };
+    const next = recalcEdit(base, row, ctx);
     setEditDraft(next);
   }
 
@@ -501,6 +523,10 @@ export default function OperatorPanel() {
       weight_kg: String(r.weight_kg ?? ""),
       origin: r.origin ?? "USA",
       service: r.service ?? "NORMAL",
+
+      // ✅ override en edición (por defecto apagado)
+      override_edit: false,
+
       rate_usd_per_kg: r.rate_usd_per_kg != null ? String(r.rate_usd_per_kg) : "",
       estimated_usd: r.estimated_usd != null ? String(r.estimated_usd) : "",
     };
@@ -512,14 +538,13 @@ export default function OperatorPanel() {
       const ctx = await getRatesCtxForClientNumber(r.client_number);
       setEditRateCtx(ctx);
 
-      // ✅ recalculo al entrar
       const fixed = recalcEdit(initialDraft, r, ctx);
       setEditDraft(fixed);
     } catch (e) {
       console.error("LOAD EDIT RATES ERROR", e);
       setMsg(String(e?.message || "No se pudieron leer tarifas"));
       setEditRateCtx(null);
-      // recalculo fallback (defaults)
+
       const fixed = recalcEdit(initialDraft, r, { defaults: DEFAULT_RATES_FALLBACK, rates: null });
       setEditDraft(fixed);
     } finally {
@@ -556,15 +581,6 @@ export default function OperatorPanel() {
       return setMsg("Revisá código, descripción y peso (kg)");
     }
 
-    if (payload.rate_usd_per_kg != null && !Number.isFinite(payload.rate_usd_per_kg)) {
-      setSavingEditId(null);
-      return setMsg("Tarifa inválida");
-    }
-    if (payload.estimated_usd != null && !Number.isFinite(payload.estimated_usd)) {
-      setSavingEditId(null);
-      return setMsg("Estimado inválido");
-    }
-
     const res = await fetch(`${API}/operator/shipments/${shipmentId}`, {
       method: "PATCH",
       headers: {
@@ -598,66 +614,6 @@ export default function OperatorPanel() {
   return (
     <div className="screen">
       <Topbar title="Panel Operador" />
-
-      <div className="topbar">
-        <h1>Panel Operador</h1>
-        <div className="muted">LEMON&apos;s — carga y control de paquetes</div>
-      </div>
-
-      {/* DASHBOARD */}
-      <div className="cards">
-        <div className="cardStat">
-          <div className="k">Total envíos</div>
-          <div className="v">{loadingStats ? "…" : stats?.total ?? 0}</div>
-          <div className="s">Todos los estados</div>
-        </div>
-
-        <div className="cardStat">
-          <div className="k">Recibidos</div>
-          <div className="v">{loadingStats ? "…" : stats?.received ?? 0}</div>
-          <div className="s">En depósito</div>
-        </div>
-
-        <div className="cardStat">
-          <div className="k">Preparación</div>
-          <div className="v">{loadingStats ? "…" : stats?.prep ?? 0}</div>
-          <div className="s">Armado / control</div>
-        </div>
-
-        <div className="cardStat">
-          <div className="k">Despachados</div>
-          <div className="v">{loadingStats ? "…" : stats?.sent ?? 0}</div>
-          <div className="s">Salieron del depósito</div>
-        </div>
-
-        <div className="cardStat">
-          <div className="k">En tránsito</div>
-          <div className="v">{loadingStats ? "…" : stats?.transit ?? 0}</div>
-          <div className="s">Viajando</div>
-        </div>
-
-        <div className="cardStat">
-          <div className="k">Listo entrega</div>
-          <div className="v">{loadingStats ? "…" : stats?.ready ?? 0}</div>
-          <div className="s">Última milla</div>
-        </div>
-
-        <div className="cardStat">
-          <div className="k">Entregados</div>
-          <div className="v">{loadingStats ? "…" : stats?.delivered ?? 0}</div>
-          <div className="s">Cerrados</div>
-        </div>
-
-        <div className="cardStat">
-          <div className="k">Peso total</div>
-          <div className="v">
-            {loadingStats ? "…" : Number(stats?.total_weight ?? 0).toFixed(2)}
-          </div>
-          <div className="s">kg acumulados</div>
-        </div>
-      </div>
-
-      {/* ... (todo el resto de tu UI queda igual, solo cambiamos handlers en edición) ... */}
 
       <div className="box" style={{ marginTop: 12 }}>
         <h2>Gestión de envíos (Operador)</h2>
@@ -693,9 +649,7 @@ export default function OperatorPanel() {
                 <th>SERVICIO</th>
                 <th>TARIFA</th>
                 <th>ESTIMADO</th>
-                <th>ESTADO</th>
-                <th>GUARDAR</th>
-                <th>HISTORIAL</th>
+                <th>OVERRIDE</th>
                 <th>EDITAR</th>
               </tr>
             </thead>
@@ -705,6 +659,7 @@ export default function OperatorPanel() {
                 const isEditing = editId === r.id;
                 const o = normalizeOrigin(isEditing ? editDraft.origin : r.origin);
                 const serviceOptions = SERVICES_BY_ORIGIN[o] || ["NORMAL"];
+                const override = Boolean(editDraft.override_edit);
 
                 return (
                   <tr key={r.id}>
@@ -781,6 +736,7 @@ export default function OperatorPanel() {
                           className="input"
                           value={editDraft.origin || "USA"}
                           onChange={(e) => updateEditField("origin", e.target.value)}
+                          disabled={override} // si override manual, no te bloqueo, pero evita cambios accidentales
                         >
                           {ORIGINS.map((x) => (
                             <option key={x} value={x}>{x}</option>
@@ -797,7 +753,7 @@ export default function OperatorPanel() {
                           className="input"
                           value={o === "EUROPA" ? "NORMAL" : (editDraft.service || "NORMAL")}
                           onChange={(e) => updateEditField("service", e.target.value)}
-                          disabled={o === "EUROPA"}
+                          disabled={override || o === "EUROPA"}
                         >
                           {serviceOptions.map((s) => (
                             <option key={s} value={s}>{s}</option>
@@ -810,7 +766,13 @@ export default function OperatorPanel() {
 
                     <td>
                       {isEditing ? (
-                        <input className="input" value={editDraft.rate_usd_per_kg || ""} readOnly />
+                        <input
+                          className="input"
+                          value={editDraft.rate_usd_per_kg || ""}
+                          onChange={(e) => updateEditField("rate_usd_per_kg", e.target.value)}
+                          readOnly={!override}
+                          title={!override ? "Activá Override para editar" : "Tarifa manual"}
+                        />
                       ) : (
                         r.rate_usd_per_kg != null ? `$${Number(r.rate_usd_per_kg).toFixed(2)}/kg` : "-"
                       )}
@@ -825,48 +787,29 @@ export default function OperatorPanel() {
                     </td>
 
                     <td>
-                      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                        <select
-                          className="input"
-                          value={statusDraft[r.id] || r.status}
-                          onChange={(e) => setStatusDraft((s) => ({ ...s, [r.id]: e.target.value }))}
-                        >
-                          {STATUSES.map((s) => (
-                            <option key={s} value={s}>{s}</option>
-                          ))}
-                        </select>
-                        <StatusBadge status={statusDraft[r.id] || r.status} />
-                      </div>
-                    </td>
-
-                    <td>
-                      <button className="btn" onClick={() => saveStatus(r.id)} disabled={savingId === r.id}>
-                        {savingId === r.id ? "..." : "Guardar"}
-                      </button>
-                    </td>
-
-                    <td>
-                      <button
-                        className="btn"
-                        onClick={() => {
-                          const next = openId === r.id ? null : r.id;
-                          setOpenId(next);
-                          if (next) loadEvents(r.id);
-                        }}
-                      >
-                        {openId === r.id ? "Cerrar" : "Ver"}
-                      </button>
+                      {isEditing ? (
+                        <label className="muted" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                          <input
+                            type="checkbox"
+                            checked={override}
+                            onChange={(e) => toggleEditOverride(e.target.checked)}
+                          />
+                          Manual
+                        </label>
+                      ) : (
+                        "-"
+                      )}
                     </td>
 
                     <td>
                       {isEditing ? (
-                        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <div style={{ display: "flex", gap: 8 }}>
                           <button
                             className="btn"
                             onClick={() => saveEdit(r.id)}
                             disabled={savingEditId === r.id || editRateLoading}
                           >
-                            {savingEditId === r.id ? "..." : editRateLoading ? "..." : "Guardar"}
+                            {savingEditId === r.id ? "..." : "Guardar"}
                           </button>
                           <button className="btn" onClick={cancelEdit}>Cancelar</button>
                         </div>
@@ -880,7 +823,7 @@ export default function OperatorPanel() {
 
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={15} className="muted" style={{ padding: 14 }}>
+                  <td colSpan={13} className="muted" style={{ padding: 14 }}>
                     No hay resultados. Probá con el botón ↻ o ajustá el filtro.
                   </td>
                 </tr>
@@ -889,43 +832,8 @@ export default function OperatorPanel() {
           </table>
         </div>
 
-        {openId && (
-          <div style={{ marginTop: 14 }}>
-            <h3 style={{ margin: "8px 0" }}>Historial del envío #{openId}</h3>
-
-            {loadingEvents ? (
-              <div className="muted">Cargando...</div>
-            ) : events.length === 0 ? (
-              <div className="muted">Sin eventos todavía.</div>
-            ) : (
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>FECHA</th>
-                    <th>DE</th>
-                    <th>A</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {events.map((e) => (
-                    <tr key={e.id || e.created_at}>
-                      <td>{new Date(e.created_at).toLocaleString()}</td>
-                      <td>{e.old_status || "-"}</td>
-                      <td><b>{e.new_status}</b></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        )}
-
-        <div className="muted" style={{ marginTop: 10 }}>
-          Tip: en edición, tarifa y estimado quedan siempre sincronizados.
-        </div>
+        {msg && <div className="banner">{msg}</div>}
       </div>
-
-      {msg && <div className="banner">{msg}</div>}
     </div>
   );
 }
