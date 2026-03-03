@@ -7,6 +7,7 @@ const { z } = require("zod");
 
 const db = require("./db");
 const { authRequired, requireRole } = require("./auth");
+const { sendEmail } = require("./mailer"); // ✅ NUEVO: mails
 
 const app = express();
 app.use(express.json());
@@ -605,6 +606,11 @@ app.patch(
       const oldStatus = current.status;
       const newStatus = p.data.status;
 
+      // ✅ si no cambió el estado, no hacemos nada (ni mail, ni evento)
+      if (oldStatus === newStatus) {
+        return res.json({ shipment: current });
+      }
+
       const upd = await db.query(
         `UPDATE shipments
          SET status=$1, updated_at=NOW(),
@@ -619,6 +625,32 @@ app.patch(
          VALUES ($1,$2,$3)`,
         [shipmentId, oldStatus, newStatus]
       );
+
+      // ==================== ✅ MAIL (NO ROMPE FLUJO) ====================
+      try {
+        const code = upd.rows[0]?.code || current.code || shipmentId;
+        await sendEmail({
+          to: current.email,
+          subject: `Actualización de envío #${code}`,
+          html: `
+            <div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5;">
+              <h2 style="margin:0 0 10px 0;">Hola ${current.name || ""}</h2>
+              <p style="margin:0 0 10px 0;">
+                Tu envío <b>#${code}</b> cambió de estado:
+              </p>
+              <p style="margin:0 0 10px 0;">
+                <b>${oldStatus}</b> → <b>${newStatus}</b>
+              </p>
+              <p style="margin:0 0 10px 0;">Podés ver el detalle ingresando al portal.</p>
+              <hr/>
+              <small style="color:#666;">LEMON'S PORTAL</small>
+            </div>
+          `,
+        });
+      } catch (e) {
+        console.log("[MAIL] Falló envío (no rompemos flujo):", e?.message || e);
+      }
+      // ================================================================
 
       res.json({ shipment: upd.rows[0] });
     } catch (e) {
@@ -706,4 +738,4 @@ app.get(
 
 app.listen(PORT, () => {
   console.log(`API corriendo en http://localhost:${PORT}`);
-});git
+});
