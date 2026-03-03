@@ -13,9 +13,24 @@ const app = express();
 app.use(express.json());
 
 // CORS abierto mientras probás
+const allowedOrigins = [
+  "https://lemonsarg.com",
+  "https://www.lemonsarg.com",
+];
+
 app.use(
   cors({
-    origin: true,
+    origin: function (origin, callback) {
+      // Permitir requests sin origin (ej: Postman, server-to-server)
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      } else {
+        return callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
   })
 );
 
