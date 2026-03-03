@@ -132,7 +132,6 @@ async function computeRateAndEstimatedServer({
   try {
     ratesRow = await getClientRatesByUserId(userId);
   } catch (e) {
-    // si falla leer tabla, igual seguimos con defaults
     console.error("READ CLIENT RATES ERROR", e);
     ratesRow = null;
   }
@@ -204,10 +203,8 @@ function shipmentUpdateEmailHtml({
 }) {
   const pill = statusPillColor(newStatus);
   const preview = `Tu envío #${code} pasó a "${newStatus}".`;
-
   const showCta = Boolean(ctaUrl && String(ctaUrl).trim().length > 0);
 
-  // Responsive + “card” + estética premium
   return `
 <!doctype html>
 <html lang="es">
@@ -235,7 +232,6 @@ function shipmentUpdateEmailHtml({
       <td align="center" class="px" style="padding: 0 24px;">
         <table role="presentation" width="600" class="container" cellspacing="0" cellpadding="0" style="width:600px; max-width:600px;">
           
-          <!-- Header -->
           <tr>
             <td style="padding: 8px 0 16px 0;">
               <div style="font-family: Arial, sans-serif; color:#c7d2fe; font-size:12px; letter-spacing:0.12em; text-transform:uppercase;">
@@ -247,12 +243,10 @@ function shipmentUpdateEmailHtml({
             </td>
           </tr>
 
-          <!-- Card -->
           <tr>
             <td style="background: rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.10); border-radius:16px; overflow:hidden;">
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                 
-                <!-- Top strip -->
                 <tr>
                   <td style="padding:16px; background: linear-gradient(135deg, rgba(99,102,241,0.35), rgba(168,85,247,0.20)); border-bottom:1px solid rgba(255,255,255,0.10);">
                     <table role="presentation" width="100%">
@@ -268,6 +262,7 @@ function shipmentUpdateEmailHtml({
                         </td>
                       </tr>
                     </table>
+
                     <div style="font-family: Arial, sans-serif; color:#e5e7eb; font-size:13px; margin-top:10px;">
                       Tu envío <b style="color:#fff;">#${safeStr(code)}</b> cambió de estado:
                       <div style="margin-top:8px; font-size:14px;">
@@ -283,7 +278,6 @@ function shipmentUpdateEmailHtml({
                   </td>
                 </tr>
 
-                <!-- Details grid -->
                 <tr>
                   <td style="padding:16px;">
                     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="grid" style="font-family: Arial, sans-serif; font-size:13px; color:#e5e7eb;">
@@ -367,7 +361,6 @@ function shipmentUpdateEmailHtml({
             </td>
           </tr>
 
-          <!-- Footer -->
           <tr>
             <td style="padding: 14px 0 0 0; font-family: Arial, sans-serif; color:#64748b; font-size:12px;">
               © ${new Date().getFullYear()} ${brand}. Todos los derechos reservados.
@@ -408,7 +401,6 @@ app.post("/auth/login", async (req, res) => {
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) return res.status(401).json({ error: "Credenciales inválidas" });
 
-    // mantenemos tu expiración 7d
     const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, {
       expiresIn: "7d",
     });
@@ -485,7 +477,6 @@ app.post(
   }
 );
 
-// ✅ devuelve también rates + defaults
 app.get(
   "/operator/clients",
   authRequired,
@@ -533,7 +524,6 @@ app.get(
   }
 );
 
-// ✅ guardar tarifas por cliente (UPSERT)
 app.put(
   "/operator/clients/:id/rates",
   authRequired,
@@ -608,8 +598,9 @@ app.put(
 );
 
 /**
- * CREATE SHIPMENT
- * Paso 4: server calcula SIEMPRE estimated, y calcula rate si no viene override.
+ * ✅ CREATE SHIPMENT
+ * - calcula SIEMPRE estimated
+ * - manda mail PRO al crear (NO rompe flujo)
  */
 app.post(
   "/operator/shipments",
@@ -629,7 +620,6 @@ app.post(
         origin: z.enum(["USA", "CHINA", "EUROPA"]).optional(),
         service: z.enum(["NORMAL", "EXPRESS"]).optional(),
 
-        // override opcional
         rate_usd_per_kg: z.number().min(0).nullable().optional(),
         estimated_usd: z.number().min(0).nullable().optional(), // (ignorado: server recalcula)
       });
@@ -639,7 +629,11 @@ app.post(
 
       const d = p.data;
 
-      const u = await db.query("SELECT id FROM users WHERE client_number=$1", [d.client_number]);
+      // ✅ traigo también email/nombre porque lo necesito para el mail
+      const u = await db.query(
+        "SELECT id, email, name, client_number FROM users WHERE client_number=$1",
+        [d.client_number]
+      );
       const user = u.rows[0];
       if (!user) return res.status(404).json({ error: "Cliente no existe" });
 
@@ -677,6 +671,43 @@ app.post(
         [ins.rows[0].id, null, d.status]
       );
 
+      // ==================== ✅ MAIL PRO (CREACIÓN) ====================
+      try {
+        const created = ins.rows[0];
+        const code = created?.code || d.package_code || created?.id;
+
+        const ctaUrl =
+          process.env.APP_URL && String(process.env.APP_URL).trim()
+            ? `${String(process.env.APP_URL).replace(/\/$/, "")}/client/shipments`
+            : "";
+
+        const html = shipmentUpdateEmailHtml({
+          brand: "LEMON'S PORTAL",
+          clientName: user.name || "",
+          clientNumber: user.client_number || "",
+          code,
+          oldStatus: "Creado",
+          newStatus: created.status || d.status || "Recibido en depósito",
+          origin: created.origin || calc.origin || "",
+          service: created.service || calc.service || "",
+          weightKg: created.weight_kg,
+          rateUsdKg: created.rate_usd_per_kg,
+          estimatedUsd: created.estimated_usd,
+          tracking: created.tracking || "",
+          boxCode: created.box_code || "",
+          ctaUrl,
+        });
+
+        await sendEmail({
+          to: user.email,
+          subject: `Envío creado #${code}`,
+          html,
+        });
+      } catch (e) {
+        console.log("[MAIL] Falló envío creación (no rompemos flujo):", e?.message || e);
+      }
+      // ===============================================================
+
       res.json({ shipment: ins.rows[0] });
     } catch (e) {
       console.error("CREATE SHIPMENT ERROR", e);
@@ -684,6 +715,8 @@ app.post(
     }
   }
 );
+
+// ----------- (el resto sigue igual: operator/shipments GET, PATCH, status PATCH, etc) -----------
 
 app.get(
   "/operator/shipments",
@@ -731,10 +764,6 @@ app.get(
   }
 );
 
-/**
- * PATCH SHIPMENT
- * Paso 4: server asegura consistencia (rate/estimated)
- */
 app.patch(
   "/operator/shipments/:id",
   authRequired,
@@ -751,9 +780,8 @@ app.patch(
         origin: z.string().nullable().optional(),
         service: z.string().nullable().optional(),
 
-        // override opcional (si viene null/undefined => AUTO)
         rate_usd_per_kg: z.number().nullable().optional(),
-        estimated_usd: z.number().nullable().optional(), // ignorado: server recalcula
+        estimated_usd: z.number().nullable().optional(), // ignorado
       });
 
       const p = schema.safeParse(req.body);
@@ -762,7 +790,6 @@ app.patch(
       const id = Number(req.params.id);
       if (Number.isNaN(id)) return res.status(400).json({ error: "ID inválido" });
 
-      // necesitamos user_id actual para sacar tarifas del cliente
       const cur = await db.query(`SELECT id, user_id FROM shipments WHERE id=$1`, [id]);
       const current = cur.rows[0];
       if (!current) return res.status(404).json({ error: "Envío no existe" });
@@ -838,7 +865,6 @@ app.patch(
       const oldStatus = current.status;
       const newStatus = p.data.status;
 
-      // ✅ si no cambió el estado, no hacemos nada (ni mail, ni evento)
       if (oldStatus === newStatus) {
         return res.json({ shipment: current });
       }
@@ -858,7 +884,7 @@ app.patch(
         [shipmentId, oldStatus, newStatus]
       );
 
-      // ==================== ✅ MAIL PRO (NO ROMPE FLUJO) ====================
+      // ✅ mail pro update
       try {
         const updated = upd.rows[0] || current;
         const code = updated?.code || current.code || shipmentId;
@@ -893,7 +919,6 @@ app.patch(
       } catch (e) {
         console.log("[MAIL] Falló envío (no rompemos flujo):", e?.message || e);
       }
-      // ====================================================================
 
       res.json({ shipment: upd.rows[0] });
     } catch (e) {
