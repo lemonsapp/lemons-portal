@@ -31,7 +31,7 @@ const DEFAULT_RATES_FALLBACK = {
 };
 
 const num = (v, fallback = 0) => {
-  const n = Number(String(v).replace(",", "."));
+  const n = Number(String(v ?? "").replace(",", "."));
   return Number.isFinite(n) ? n : fallback;
 };
 
@@ -98,7 +98,7 @@ export default function OperatorPanel() {
   const [clientNumber, setClientNumber] = useState("");
   const [client, setClient] = useState(null);
 
-  // Tarifas por cliente (panel buscar cliente)
+  // Tarifas por cliente
   const [defaults, setDefaults] = useState(DEFAULT_RATES_FALLBACK);
   const [rates, setRates] = useState({
     usa_normal: "",
@@ -119,7 +119,7 @@ export default function OperatorPanel() {
   const [origin, setOrigin] = useState("USA");
   const [service, setService] = useState("NORMAL");
 
-  // Override (crear)
+  // Override (crear envío)
   const [overrideEnabled, setOverrideEnabled] = useState(false);
   const [overrideRate, setOverrideRate] = useState("");
 
@@ -140,10 +140,10 @@ export default function OperatorPanel() {
   const [editDraft, setEditDraft] = useState({});
   const [savingEditId, setSavingEditId] = useState(null);
 
-  // ✅ ctx de tarifas para edición
-  const [editRateCtx, setEditRateCtx] = useState(null); // { client_number, defaults, rates }
+  // ctx tarifas para edición (cache)
+  const [editRateCtx, setEditRateCtx] = useState(null);
   const [editRateLoading, setEditRateLoading] = useState(false);
-  const editRateCacheRef = useRef(new Map()); // client_number -> ctx
+  const editRateCacheRef = useRef(new Map());
 
   // ===== helpers crear envío =====
   const laneRate = useMemo(() => {
@@ -443,42 +443,31 @@ export default function OperatorPanel() {
     return ctx;
   }
 
+  // AUTO: pisa rate con lane; MANUAL: respeta rate escrito y recalcula estimado
   function recalcEdit(nextDraft, row, ctx) {
     const o = normalizeOrigin(nextDraft.origin ?? row.origin ?? "USA");
     const s = normalizeService(o, nextDraft.service ?? row.service ?? "NORMAL");
     const w = num(nextDraft.weight_kg, NaN);
-
     const override = Boolean(nextDraft.override_edit);
 
-    let rate;
-    if (override) {
-      rate = num(nextDraft.rate_usd_per_kg, 0);
-    } else {
-      rate = getLaneRate({
-        origin: o,
-        service: s,
-        rates: {
-          usa_normal: ctx?.rates?.usa_normal ?? "",
-          usa_express: ctx?.rates?.usa_express ?? "",
-          china_normal: ctx?.rates?.china_normal ?? "",
-          china_express: ctx?.rates?.china_express ?? "",
-          europa_normal: ctx?.rates?.europa_normal ?? "",
-        },
-        defaults: ctx?.defaults || DEFAULT_RATES_FALLBACK,
-      });
-    }
-
-    const out = {
-      ...nextDraft,
+    const autoRate = getLaneRate({
       origin: o,
       service: s,
-    };
+      rates: {
+        usa_normal: ctx?.rates?.usa_normal ?? "",
+        usa_express: ctx?.rates?.usa_express ?? "",
+        china_normal: ctx?.rates?.china_normal ?? "",
+        china_express: ctx?.rates?.china_express ?? "",
+        europa_normal: ctx?.rates?.europa_normal ?? "",
+      },
+      defaults: ctx?.defaults || DEFAULT_RATES_FALLBACK,
+    });
 
-    // 👇 importante: si está en AUTO, pisamos rate con el calculado
-    // si está en MANUAL, respetamos lo que escriba el operador
-    if (!override) out.rate_usd_per_kg = String(Number(rate || 0).toFixed(2));
+    const out = { ...nextDraft, origin: o, service: s };
 
-    const usedRate = override ? num(out.rate_usd_per_kg, 0) : Number(rate || 0);
+    if (!override) out.rate_usd_per_kg = String(Number(autoRate || 0).toFixed(2));
+
+    const usedRate = override ? num(out.rate_usd_per_kg, 0) : Number(autoRate || 0);
 
     if (!Number.isFinite(w) || w <= 0) out.estimated_usd = "";
     else out.estimated_usd = String(Number((w * usedRate).toFixed(2)).toFixed(2));
@@ -495,11 +484,10 @@ export default function OperatorPanel() {
         ? editRateCtx
         : { client_number: row.client_number, defaults: DEFAULT_RATES_FALLBACK, rates: null };
 
-    const next = recalcEdit({ ...editDraft, [field]: value }, row, ctx);
-    setEditDraft(next);
+    setEditDraft(recalcEdit({ ...editDraft, [field]: value }, row, ctx));
   }
 
-  function toggleEditOverride(enabled) {
+  function setEditOverrideMode(mode) {
     const row = rows.find((x) => x.id === editId);
     if (!row) return;
 
@@ -508,14 +496,16 @@ export default function OperatorPanel() {
         ? editRateCtx
         : { client_number: row.client_number, defaults: DEFAULT_RATES_FALLBACK, rates: null };
 
+    const enabled = mode === "MANUAL";
     let base = { ...editDraft, override_edit: enabled };
 
-    // al pasar a AUTO, recalcula y pisa rate con el de la lane
-    // al pasar a MANUAL, deja rate editable (si estaba vacío, pone el auto como punto de partida)
     if (enabled) {
+      // si paso a MANUAL y estaba vacío, arranco con el auto como base
+      const o = normalizeOrigin(base.origin ?? row.origin ?? "USA");
+      const s = normalizeService(o, base.service ?? row.service ?? "NORMAL");
       const autoRate = getLaneRate({
-        origin: normalizeOrigin(base.origin),
-        service: normalizeService(base.origin, base.service),
+        origin: o,
+        service: s,
         rates: {
           usa_normal: ctx?.rates?.usa_normal ?? "",
           usa_express: ctx?.rates?.usa_express ?? "",
@@ -526,13 +516,12 @@ export default function OperatorPanel() {
         defaults: ctx?.defaults || DEFAULT_RATES_FALLBACK,
       });
 
-      if (base.rate_usd_per_kg == null || String(base.rate_usd_per_kg).trim() === "") {
+      if (String(base.rate_usd_per_kg ?? "").trim() === "") {
         base.rate_usd_per_kg = String(Number(autoRate || 0).toFixed(2));
       }
     }
 
-    const next = recalcEdit(base, row, ctx);
-    setEditDraft(next);
+    setEditDraft(recalcEdit(base, row, ctx));
   }
 
   async function startEdit(r) {
@@ -632,10 +621,338 @@ export default function OperatorPanel() {
     <div className="screen">
       <Topbar title="Panel Operador" />
 
-      {/* Solo dejo esta parte visible porque tu layout completo ya lo tenías funcionando;
-          la sección de arriba (dashboard/crear/buscar/crear envío) no la toco acá para no romperte nada.
-          Si querés que te lo entregue TODO con esas secciones también, decime y lo pego entero. */}
+      <div className="topbar">
+        <h1>Panel Operador</h1>
+        <div className="muted">LEMON&apos;s — carga y control de paquetes</div>
+      </div>
 
+      {/* DASHBOARD */}
+      <div className="cards">
+        <div className="cardStat">
+          <div className="k">Total envíos</div>
+          <div className="v">{loadingStats ? "…" : stats?.total ?? 0}</div>
+          <div className="s">Todos los estados</div>
+        </div>
+        <div className="cardStat">
+          <div className="k">Recibidos</div>
+          <div className="v">{loadingStats ? "…" : stats?.received ?? 0}</div>
+          <div className="s">En depósito</div>
+        </div>
+        <div className="cardStat">
+          <div className="k">Preparación</div>
+          <div className="v">{loadingStats ? "…" : stats?.prep ?? 0}</div>
+          <div className="s">Armado / control</div>
+        </div>
+        <div className="cardStat">
+          <div className="k">Despachados</div>
+          <div className="v">{loadingStats ? "…" : stats?.sent ?? 0}</div>
+          <div className="s">Salieron del depósito</div>
+        </div>
+        <div className="cardStat">
+          <div className="k">En tránsito</div>
+          <div className="v">{loadingStats ? "…" : stats?.transit ?? 0}</div>
+          <div className="s">Viajando</div>
+        </div>
+        <div className="cardStat">
+          <div className="k">Listo entrega</div>
+          <div className="v">{loadingStats ? "…" : stats?.ready ?? 0}</div>
+          <div className="s">Última milla</div>
+        </div>
+        <div className="cardStat">
+          <div className="k">Entregados</div>
+          <div className="v">{loadingStats ? "…" : stats?.delivered ?? 0}</div>
+          <div className="s">Cerrados</div>
+        </div>
+        <div className="cardStat">
+          <div className="k">Peso total</div>
+          <div className="v">
+            {loadingStats ? "…" : Number(stats?.total_weight ?? 0).toFixed(2)}
+          </div>
+          <div className="s">kg acumulados</div>
+        </div>
+      </div>
+
+      {/* CREAR + BUSCAR CLIENTE */}
+      <div className="grid2" style={{ marginTop: 12 }}>
+        <div className="box">
+          <h2>Crear cliente</h2>
+          <div className="col">
+            <input
+              className="input"
+              placeholder="Cliente # (0, 1, 2...)"
+              value={newClientNumber}
+              onChange={(e) => setNewClientNumber(e.target.value)}
+            />
+            <input
+              className="input"
+              placeholder="Nombre"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+            />
+            <input
+              className="input"
+              placeholder="Email"
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+            />
+            <input
+              className="input"
+              placeholder="Contraseña (mín 6)"
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+            />
+            <button className="btn" onClick={createClient}>
+              Crear cliente
+            </button>
+          </div>
+        </div>
+
+        <div className="box">
+          <h2>Buscar cliente</h2>
+          <div className="row">
+            <input
+              className="input"
+              placeholder="Cliente # (ej: 0)"
+              value={clientNumber}
+              onChange={(e) => setClientNumber(e.target.value)}
+            />
+            <button className="btn" onClick={findClient}>
+              Buscar
+            </button>
+          </div>
+
+          {client && (
+            <div className="note">
+              <div>
+                <b>Cliente #{client.client_number}</b> — {client.name}
+              </div>
+              <div className="muted">{client.email}</div>
+
+              <div style={{ marginTop: 10 }}>
+                <b>Tarifas (USD/kg)</b>
+                <div className="muted" style={{ marginBottom: 8 }}>
+                  Guardá para que el modo AUTO use estas tarifas.
+                </div>
+
+                <div className="grid2" style={{ gap: 10 }}>
+                  <div className="col">
+                    <label className="muted">USA Normal</label>
+                    <input
+                      className="input"
+                      value={rates.usa_normal}
+                      onChange={(e) =>
+                        setRates((r) => ({ ...r, usa_normal: e.target.value }))
+                      }
+                      placeholder={String(defaults.usa_normal)}
+                    />
+                  </div>
+
+                  <div className="col">
+                    <label className="muted">USA Express</label>
+                    <input
+                      className="input"
+                      value={rates.usa_express}
+                      onChange={(e) =>
+                        setRates((r) => ({ ...r, usa_express: e.target.value }))
+                      }
+                      placeholder={String(defaults.usa_express)}
+                    />
+                  </div>
+
+                  <div className="col">
+                    <label className="muted">China Normal</label>
+                    <input
+                      className="input"
+                      value={rates.china_normal}
+                      onChange={(e) =>
+                        setRates((r) => ({ ...r, china_normal: e.target.value }))
+                      }
+                      placeholder={String(defaults.china_normal)}
+                    />
+                  </div>
+
+                  <div className="col">
+                    <label className="muted">China Express</label>
+                    <input
+                      className="input"
+                      value={rates.china_express}
+                      onChange={(e) =>
+                        setRates((r) => ({ ...r, china_express: e.target.value }))
+                      }
+                      placeholder={String(defaults.china_express)}
+                    />
+                  </div>
+
+                  <div className="col" style={{ gridColumn: "1 / span 2" }}>
+                    <label className="muted">Europa</label>
+                    <input
+                      className="input"
+                      value={rates.europa_normal}
+                      onChange={(e) =>
+                        setRates((r) => ({ ...r, europa_normal: e.target.value }))
+                      }
+                      placeholder={String(defaults.europa_normal)}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+                  <button
+                    className="btn"
+                    onClick={saveClientRates}
+                    disabled={savingRates}
+                  >
+                    {savingRates ? "Guardando..." : "Guardar tarifas"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* CREAR ENVÍO */}
+      <div className="box" style={{ marginTop: 12 }}>
+        <h2>Crear nuevo envío</h2>
+
+        <div className="col">
+          <div className="muted">
+            Primero buscá un cliente arriba, y después cargá el envío.
+          </div>
+
+          <input
+            className="input"
+            placeholder="Código de paquete"
+            value={packageCode}
+            onChange={(e) => setPackageCode(e.target.value)}
+          />
+          <input
+            className="input"
+            placeholder="Descripción item"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+
+          <div className="row">
+            <input
+              className="input"
+              placeholder="Caja (opcional)"
+              value={boxCode}
+              onChange={(e) => setBoxCode(e.target.value)}
+            />
+            <input
+              className="input"
+              placeholder="Tracking (opcional)"
+              value={tracking}
+              onChange={(e) => setTracking(e.target.value)}
+            />
+          </div>
+
+          <div className="row">
+            <input
+              className="input"
+              placeholder="Peso (kg) ej: 0.5"
+              value={weightKg}
+              onChange={(e) => setWeightKg(e.target.value)}
+            />
+
+            <select
+              className="input"
+              value={origin}
+              onChange={(e) => setOrigin(e.target.value)}
+              title="Origen"
+            >
+              {ORIGINS.map((o) => (
+                <option key={o} value={o}>
+                  Origen: {o}
+                </option>
+              ))}
+            </select>
+
+            <select
+              className="input"
+              value={origin === "EUROPA" ? "NORMAL" : service}
+              onChange={(e) => setService(e.target.value)}
+              disabled={origin === "EUROPA"}
+              title="Servicio"
+            >
+              {(SERVICES_BY_ORIGIN[origin] || ["NORMAL"]).map((s) => (
+                <option key={s} value={s}>
+                  Servicio: {s}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="row">
+            <select
+              className="input"
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+            >
+              {STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+
+            <div style={{ display: "flex", alignItems: "center" }}>
+              <StatusBadge status={status} />
+            </div>
+
+            <select
+              className="input"
+              style={{ minWidth: 170, marginLeft: "auto" }}
+              value={overrideEnabled ? "MANUAL" : "AUTO"}
+              onChange={(e) => {
+                const manual = e.target.value === "MANUAL";
+                setOverrideEnabled(manual);
+                if (!manual) setOverrideRate("");
+              }}
+              title="Modo tarifa"
+            >
+              <option value="AUTO">Tarifa: AUTO</option>
+              <option value="MANUAL">Tarifa: MANUAL</option>
+            </select>
+          </div>
+
+          {overrideEnabled && (
+            <div className="row">
+              <input
+                className="input"
+                placeholder="Tarifa manual USD/kg"
+                value={overrideRate}
+                onChange={(e) => setOverrideRate(e.target.value)}
+              />
+              <div className="muted" style={{ display: "flex", alignItems: "center" }}>
+                Se usa solo en este envío
+              </div>
+            </div>
+          )}
+
+          <div className="note" style={{ marginTop: 10 }}>
+            <div className="muted">Tarifa aplicada</div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <b>
+                {origin} {origin === "EUROPA" ? "" : service}
+              </b>
+              <b>${Number(appliedRate || 0).toFixed(2)} / kg</b>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span className="muted">Estimado (USD)</span>
+              <b>${Number(estimated || 0).toFixed(2)}</b>
+            </div>
+          </div>
+
+          <button className="btn" onClick={createShipment}>
+            Guardar envío
+          </button>
+        </div>
+      </div>
+
+      {/* GESTIÓN ENVÍOS */}
       <div className="box" style={{ marginTop: 12 }}>
         <h2>Gestión de envíos (Operador)</h2>
 
@@ -652,7 +969,9 @@ export default function OperatorPanel() {
             value={opClientNumber}
             onChange={(e) => setOpClientNumber(e.target.value)}
           />
-          <button className="btn" onClick={refreshAll}>↻</button>
+          <button className="btn" onClick={refreshAll}>
+            ↻
+          </button>
         </div>
 
         <div className="tableWrap">
@@ -671,6 +990,9 @@ export default function OperatorPanel() {
                 <th>TARIFA</th>
                 <th>ESTIMADO</th>
                 <th>OVERRIDE</th>
+                <th>ESTADO</th>
+                <th>GUARDAR</th>
+                <th>HISTORIAL</th>
                 <th>EDITAR</th>
               </tr>
             </thead>
@@ -759,7 +1081,9 @@ export default function OperatorPanel() {
                           onChange={(e) => updateEditField("origin", e.target.value)}
                         >
                           {ORIGINS.map((x) => (
-                            <option key={x} value={x}>{x}</option>
+                            <option key={x} value={x}>
+                              {x}
+                            </option>
                           ))}
                         </select>
                       ) : (
@@ -771,12 +1095,14 @@ export default function OperatorPanel() {
                       {isEditing ? (
                         <select
                           className="input"
-                          value={o === "EUROPA" ? "NORMAL" : (editDraft.service || "NORMAL")}
+                          value={o === "EUROPA" ? "NORMAL" : editDraft.service || "NORMAL"}
                           onChange={(e) => updateEditField("service", e.target.value)}
                           disabled={o === "EUROPA"}
                         >
                           {serviceOptions.map((s) => (
-                            <option key={s} value={s}>{s}</option>
+                            <option key={s} value={s}>
+                              {s}
+                            </option>
                           ))}
                         </select>
                       ) : (
@@ -791,38 +1117,85 @@ export default function OperatorPanel() {
                           value={editDraft.rate_usd_per_kg || ""}
                           onChange={(e) => updateEditField("rate_usd_per_kg", e.target.value)}
                           readOnly={!override}
-                          title={!override ? "Poné Manual para editar" : "Tarifa manual"}
+                          title={!override ? "Poné MANUAL para editar tarifa" : "Tarifa manual"}
                         />
+                      ) : r.rate_usd_per_kg != null ? (
+                        `$${Number(r.rate_usd_per_kg).toFixed(2)}/kg`
                       ) : (
-                        r.rate_usd_per_kg != null ? `$${Number(r.rate_usd_per_kg).toFixed(2)}/kg` : "-"
+                        "-"
                       )}
                     </td>
 
                     <td>
                       {isEditing ? (
                         <input className="input" value={editDraft.estimated_usd || ""} readOnly />
+                      ) : r.estimated_usd != null ? (
+                        `$${Number(r.estimated_usd).toFixed(2)}`
                       ) : (
-                        r.estimated_usd != null ? `$${Number(r.estimated_usd).toFixed(2)}` : "-"
+                        "-"
                       )}
                     </td>
 
-                    {/* ✅ ACA ESTÁ LA OPCIÓN VISIBLE SIEMPRE EN EDICIÓN */}
                     <td>
                       {isEditing ? (
                         <select
                           className="input"
-                          style={{ minWidth: 120 }}
                           value={override ? "MANUAL" : "AUTO"}
-                          onChange={(e) => toggleEditOverride(e.target.value === "MANUAL")}
+                          onChange={(e) => setEditOverrideMode(e.target.value)}
                           disabled={editRateLoading}
                           title="Modo tarifa"
                         >
-                          <option value="AUTO">Auto</option>
-                          <option value="MANUAL">Manual</option>
+                          <option value="AUTO">AUTO</option>
+                          <option value="MANUAL">MANUAL</option>
                         </select>
                       ) : (
                         "-"
                       )}
+                    </td>
+
+                    <td>
+                      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                        <select
+                          className="input"
+                          value={statusDraft[r.id] || r.status}
+                          onChange={(e) =>
+                            setStatusDraft((s) => ({ ...s, [r.id]: e.target.value }))
+                          }
+                          disabled={isEditing}
+                          title={isEditing ? "Guardá/Cancelá la edición primero" : "Estado"}
+                        >
+                          {STATUSES.map((s) => (
+                            <option key={s} value={s}>
+                              {s}
+                            </option>
+                          ))}
+                        </select>
+                        <StatusBadge status={statusDraft[r.id] || r.status} />
+                      </div>
+                    </td>
+
+                    <td>
+                      <button
+                        className="btn"
+                        onClick={() => saveStatus(r.id)}
+                        disabled={savingId === r.id || isEditing}
+                        title={isEditing ? "Guardá/Cancelá la edición primero" : "Guardar estado"}
+                      >
+                        {savingId === r.id ? "..." : "Guardar"}
+                      </button>
+                    </td>
+
+                    <td>
+                      <button
+                        className="btn"
+                        onClick={() => {
+                          const next = openId === r.id ? null : r.id;
+                          setOpenId(next);
+                          if (next) loadEvents(r.id);
+                        }}
+                      >
+                        {openId === r.id ? "Cerrar" : "Ver"}
+                      </button>
                     </td>
 
                     <td>
@@ -835,10 +1208,14 @@ export default function OperatorPanel() {
                           >
                             {savingEditId === r.id ? "..." : "Guardar"}
                           </button>
-                          <button className="btn" onClick={cancelEdit}>Cancelar</button>
+                          <button className="btn" onClick={cancelEdit}>
+                            Cancelar
+                          </button>
                         </div>
                       ) : (
-                        <button className="btn" onClick={() => startEdit(r)}>Editar</button>
+                        <button className="btn" onClick={() => startEdit(r)}>
+                          Editar
+                        </button>
                       )}
                     </td>
                   </tr>
@@ -847,7 +1224,7 @@ export default function OperatorPanel() {
 
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={13} className="muted" style={{ padding: 14 }}>
+                  <td colSpan={16} className="muted" style={{ padding: 14 }}>
                     No hay resultados. Probá con el botón ↻ o ajustá el filtro.
                   </td>
                 </tr>
@@ -856,8 +1233,45 @@ export default function OperatorPanel() {
           </table>
         </div>
 
-        {msg && <div className="banner">{msg}</div>}
+        {openId && (
+          <div style={{ marginTop: 14 }}>
+            <h3 style={{ margin: "8px 0" }}>Historial del envío #{openId}</h3>
+
+            {loadingEvents ? (
+              <div className="muted">Cargando...</div>
+            ) : events.length === 0 ? (
+              <div className="muted">Sin eventos todavía.</div>
+            ) : (
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>FECHA</th>
+                    <th>DE</th>
+                    <th>A</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {events.map((e) => (
+                    <tr key={e.id || e.created_at}>
+                      <td>{fmtDate(e.created_at)}</td>
+                      <td>{e.old_status || "-"}</td>
+                      <td>
+                        <b>{e.new_status}</b>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+
+        <div className="muted" style={{ marginTop: 10 }}>
+          Tip: cambiás el estado → Guardar → el cliente lo ve al instante en su tabla.
+        </div>
       </div>
+
+      {msg && <div className="banner">{msg}</div>}
     </div>
   );
 }
