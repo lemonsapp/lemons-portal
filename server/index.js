@@ -501,6 +501,162 @@ app.get("/auth/me", authRequired, async (req, res) => {
   }
 });
 
+// ==================== PASSWORD RESET (RESTABLECER CONTRASEÑA) ====================
+
+// Helpers
+function isEmail(x) {
+  return typeof x === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x);
+}
+
+function makeResetToken() {
+  // token simple (no requiere libs). Suficiente si lo guardás hasheado.
+  return (
+    Date.now().toString(36) +
+    Math.random().toString(36).slice(2) +
+    Math.random().toString(36).slice(2)
+  );
+}
+
+async function hashToken(token) {
+  // usamos bcrypt para hashear el token (así si te roban DB no pueden usarlo)
+  return bcrypt.hash(token, 10);
+}
+
+async function compareToken(token, hash) {
+  return bcrypt.compare(token, hash);
+}
+
+// 1) Solicitar reset: genera token + guarda hash + manda mail con link
+app.post("/auth/forgot-password", async (req, res) => {
+  try {
+    const schema = z.object({ email: z.string().email() });
+    const p = schema.safeParse(req.body);
+    if (!p.success) return res.status(400).json({ error: "Email inválido" });
+
+    const email = p.data.email.toLowerCase();
+
+    // respondemos SIEMPRE OK para no filtrar si existe o no
+    const okResponse = { ok: true, message: "Si el email existe, te enviamos un link." };
+
+    const u = await db.query(
+      "SELECT id, email, name FROM users WHERE email=$1",
+      [email]
+    );
+    const user = u.rows[0];
+    if (!user) return res.json(okResponse);
+
+    const rawToken = makeResetToken();
+    const tokenHash = await hashToken(rawToken);
+
+    // 30 min de validez (cambiable)
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+
+    // Necesitás esta tabla: password_resets (ver SQL más abajo)
+    await db.query(
+      `INSERT INTO password_resets (user_id, token_hash, expires_at, used_at, created_at)
+       VALUES ($1,$2,$3,NULL,NOW())`,
+      [user.id, tokenHash, expiresAt]
+    );
+
+    const base =
+      process.env.APP_URL && String(process.env.APP_URL).trim()
+        ? String(process.env.APP_URL).replace(/\/$/, "")
+        : "http://localhost:5173";
+
+    const resetUrl = `${base}/reset-password?token=${encodeURIComponent(rawToken)}&email=${encodeURIComponent(email)}`;
+
+    // Mail pro (simple pero lindo)
+    try {
+      await sendEmail({
+        to: user.email,
+        subject: "Restablecer contraseña — LEMON'S PORTAL",
+        html: `
+          <div style="font-family: Arial, sans-serif; font-size:14px; line-height:1.6; color:#111;">
+            <h2 style="margin:0 0 12px 0;">Restablecer contraseña</h2>
+            <p style="margin:0 0 12px 0;">Hola ${user.name || ""},</p>
+            <p style="margin:0 0 12px 0;">
+              Recibimos un pedido para restablecer tu contraseña. Hacé click en el botón:
+            </p>
+            <p style="margin:16px 0;">
+              <a href="${resetUrl}"
+                 style="display:inline-block; padding:12px 16px; border-radius:10px; background:#4f46e5; color:#fff; text-decoration:none; font-weight:700;">
+                Restablecer contraseña
+              </a>
+            </p>
+            <p style="margin:0 0 12px 0; color:#555;">
+              Este link vence en <b>30 minutos</b>. Si no fuiste vos, ignorá este mensaje.
+            </p>
+            <hr style="border:none; border-top:1px solid #eee; margin:16px 0;" />
+            <p style="margin:0; color:#777; font-size:12px;">LEMON'S PORTAL</p>
+          </div>
+        `,
+      });
+    } catch (e) {
+      console.log("[MAIL] forgot-password falló (no rompe flujo):", e?.message || e);
+    }
+
+    return res.json(okResponse);
+  } catch (e) {
+    console.error("FORGOT PASSWORD ERROR", e);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// 2) Confirmar reset: valida token + actualiza contraseña + marca usado
+app.post("/auth/reset-password", async (req, res) => {
+  try {
+    const schema = z.object({
+      email: z.string().email(),
+      token: z.string().min(10),
+      new_password: z.string().min(6),
+    });
+    const p = schema.safeParse(req.body);
+    if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
+
+    const email = p.data.email.toLowerCase();
+    const { token, new_password } = p.data;
+
+    const u = await db.query("SELECT id FROM users WHERE email=$1", [email]);
+    const user = u.rows[0];
+    if (!user) return res.status(400).json({ error: "Token inválido o vencido" });
+
+    // Traemos resets vigentes no usados (último primero)
+    const r = await db.query(
+      `SELECT id, token_hash, expires_at, used_at
+       FROM password_resets
+       WHERE user_id=$1
+         AND used_at IS NULL
+         AND expires_at > NOW()
+       ORDER BY id DESC
+       LIMIT 10`,
+      [user.id]
+    );
+
+    const rows = r.rows || [];
+    let match = null;
+
+    for (const row of rows) {
+      const ok = await compareToken(token, row.token_hash);
+      if (ok) {
+        match = row;
+        break;
+      }
+    }
+
+    if (!match) return res.status(400).json({ error: "Token inválido o vencido" });
+
+    const password_hash = await bcrypt.hash(new_password, 10);
+
+    await db.query("UPDATE users SET password_hash=$1 WHERE id=$2", [password_hash, user.id]);
+    await db.query("UPDATE password_resets SET used_at=NOW() WHERE id=$1", [match.id]);
+
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("RESET PASSWORD ERROR", e);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
 // ==================== OPERATOR / ADMIN ====================
 
 app.post(

@@ -123,6 +123,13 @@ export default function Login() {
             <button className="btn btnPrimary btnSmall" type="submit">
               INICIAR SESIÓN
             </button>
+            <button
+              className="link"
+              type="button"
+              onClick={() => navigate("/forgot-password")}
+            >
+              ¿Olvidaste tu contraseña?
+            </button>            
           </div>
         </form>
       </div>

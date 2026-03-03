@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Login from "./pages/Login.jsx";
 import OperatorPanel from "./pages/OperatorPanel.jsx";
 import ClientShipments from "./pages/ClientShipments.jsx";
+import ForgotPassword from "./pages/ForgotPassword.jsx";
+import ResetPassword from "./pages/ResetPassword.jsx";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
@@ -55,6 +57,10 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
+
         {/* Login */}
         <Route path="/" element={<Login />} />
 
@@ -85,5 +91,7 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
+
+
   );
 }
