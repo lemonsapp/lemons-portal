@@ -1,8 +1,11 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
 export default function Login() {
+  const navigate = useNavigate();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
@@ -116,20 +119,17 @@ export default function Login() {
           </div>
 
           <div className="loginFooter">
-            <a className="loginLink" href="#">
-              Olvidaste tu contraseña?
-            </a>
-
-            <button className="btn btnPrimary btnSmall" type="submit">
-              INICIAR SESIÓN
-            </button>
             <button
               className="link"
               type="button"
               onClick={() => navigate("/forgot-password")}
             >
               ¿Olvidaste tu contraseña?
-            </button>            
+            </button>
+
+            <button className="btn btnPrimary btnSmall" type="submit">
+              INICIAR SESIÓN
+            </button>
           </div>
         </form>
       </div>
