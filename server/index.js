@@ -185,6 +185,54 @@ function statusPillColor(status) {
   return "#6366f1";
 }
 
+// ==================== ✅ TRACKING CLICKABLE ====================
+
+function guessTrackingUrl(trackingRaw) {
+  const t = safeStr(trackingRaw).trim();
+  if (!t) return "";
+
+  // Si ya es link, lo devolvemos tal cual (con o sin http)
+  if (/^https?:\/\//i.test(t)) return t;
+  if (/^www\./i.test(t)) return `https://${t}`;
+
+  // Patrones comunes
+  // DHL: suele empezar con 3S... / JVGL... etc (varía). Igual mandamos a búsqueda.
+  // UPS: 1Z...
+  if (/^1Z[A-Z0-9]{16}$/i.test(t)) return `https://www.ups.com/track?loc=en_US&tracknum=${encodeURIComponent(t)}`;
+
+  // FedEx: 12-15 dígitos (aprox)
+  if (/^\d{12,15}$/.test(t)) return `https://www.fedex.com/fedextrack/?trknbr=${encodeURIComponent(t)}`;
+
+  // USPS: 20-22 dígitos o prefijos (aprox)
+  if (/^\d{20,22}$/.test(t)) return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${encodeURIComponent(t)}`;
+
+  // China Post / Ali / genérico -> mejor ir a 17track
+  // También sirve como fallback universal
+  return `https://www.17track.net/en/track?nums=${encodeURIComponent(t)}`;
+}
+
+function escapeHtml(str) {
+  return safeStr(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function trackingHtml(trackingRaw) {
+  const t = safeStr(trackingRaw).trim();
+  if (!t) return "-";
+
+  const url = guessTrackingUrl(t);
+  const label = escapeHtml(t);
+
+  if (!url) return label;
+
+  return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer"
+    style="color:#c7d2fe; font-weight:800; text-decoration:underline;">${label}</a>`;
+}
+
 function shipmentUpdateEmailHtml({
   brand = "LEMON'S PORTAL",
   clientName = "",
@@ -204,6 +252,8 @@ function shipmentUpdateEmailHtml({
   const pill = statusPillColor(newStatus);
   const preview = `Tu envío #${code} pasó a "${newStatus}".`;
   const showCta = Boolean(ctaUrl && String(ctaUrl).trim().length > 0);
+
+  const trackingBlock = trackingHtml(tracking);
 
   return `
 <!doctype html>
@@ -322,7 +372,7 @@ function shipmentUpdateEmailHtml({
                           <div style="background:rgba(255,255,255,0.04); border-radius:12px; padding:10px;">
                             <div style="color:#94a3b8; font-size:12px;">Tracking</div>
                             <div style="margin-top:4px; font-weight:800; color:#fff;">
-                              ${safeStr(tracking) || "-"}
+                              ${trackingBlock}
                             </div>
                           </div>
                         </td>
