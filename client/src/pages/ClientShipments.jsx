@@ -38,6 +38,55 @@ const fmtUsd = (v) => {
   return `$${n.toFixed(2)}`;
 };
 
+// ===================== TRACKING CLICKABLE (FRONT) =====================
+function guessTrackingUrl(trackingRaw) {
+  const t = String(trackingRaw || "").trim();
+  if (!t) return "";
+
+  if (/^https?:\/\//i.test(t)) return t;
+  if (/^www\./i.test(t)) return `https://${t}`;
+
+  // UPS: 1Z...
+  if (/^1Z[A-Z0-9]{16}$/i.test(t))
+    return `https://www.ups.com/track?loc=en_US&tracknum=${encodeURIComponent(t)}`;
+
+  // FedEx: 12-15 dígitos (aprox)
+  if (/^\d{12,15}$/.test(t))
+    return `https://www.fedex.com/fedextrack/?trknbr=${encodeURIComponent(t)}`;
+
+  // USPS: 20-22 dígitos (aprox)
+  if (/^\d{20,22}$/.test(t))
+    return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${encodeURIComponent(t)}`;
+
+  // Fallback universal
+  return `https://www.17track.net/en/track?nums=${encodeURIComponent(t)}`;
+}
+
+function TrackingCell({ value }) {
+  const t = String(value || "").trim();
+  if (!t) return <span className="muted">-</span>;
+
+  const url = guessTrackingUrl(t);
+
+  return (
+    <a
+      href={url || "#"}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="trackingLink"
+      title="Abrir tracking"
+      onClick={(e) => {
+        if (!url) e.preventDefault();
+      }}
+    >
+      {t}
+      <span className="trackingIcon" aria-hidden="true">
+        ↗
+      </span>
+    </a>
+  );
+}
+
 export default function ClientShipments() {
   const [msg, setMsg] = useState("");
 
@@ -45,19 +94,41 @@ export default function ClientShipments() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  // Filtros
+  const [q, setQ] = useState("");
+
   // Historial
   const [openId, setOpenId] = useState(null);
   const [events, setEvents] = useState([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
 
   const totalEstimated = useMemo(() => {
-    // suma de estimados válidos
     return rows.reduce((acc, r) => {
       const n = num(r.estimated_usd, NaN);
       if (!Number.isFinite(n)) return acc;
       return acc + n;
     }, 0);
   }, [rows]);
+
+  const filteredRows = useMemo(() => {
+    const s = String(q || "").trim().toLowerCase();
+    if (!s) return rows;
+
+    return rows.filter((r) => {
+      const code = String(r.code || "").toLowerCase();
+      const desc = String(r.description || "").toLowerCase();
+      const tracking = String(r.tracking || "").toLowerCase();
+      const box = String(r.box_code || "").toLowerCase();
+      const status = String(r.status || "").toLowerCase();
+      return (
+        code.includes(s) ||
+        desc.includes(s) ||
+        tracking.includes(s) ||
+        box.includes(s) ||
+        status.includes(s)
+      );
+    });
+  }, [rows, q]);
 
   async function fetchMe() {
     const res = await fetch(`${API}/auth/me`, {
@@ -130,7 +201,7 @@ export default function ClientShipments() {
         <div className="muted">
           {me ? (
             <>
-              Cliente <b>#{me.client_number}</b> — {me.name} ({me.email})
+              Cuenta <b>#{me.client_number}</b> — {me.name} ({me.email})
             </>
           ) : (
             "Cargando..."
@@ -138,22 +209,43 @@ export default function ClientShipments() {
         </div>
       </div>
 
-      <div className="box">
-        <div className="filters" style={{ alignItems: "center" }}>
-          <button className="btn" onClick={refreshAll} disabled={loading}>
-            {loading ? "..." : "↻ Actualizar"}
-          </button>
-
-          <div className="note" style={{ marginLeft: "auto", minWidth: 260 }}>
-            <div className="muted">Estimado total (USD)</div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <b>{rows.length} envíos</b>
-              <b>{fmtUsd(totalEstimated)}</b>
+      {/* Resumen + Filtros */}
+      <div className="box box--ig">
+        <div className="igHeaderRow">
+          <div className="igStats">
+            <div className="igStatCard">
+              <div className="muted">Envíos</div>
+              <div className="igStatValue">{rows.length}</div>
+              <div className="igStatHint">Total registrados</div>
             </div>
+
+            <div className="igStatCard">
+              <div className="muted">Estimado total</div>
+              <div className="igStatValue">{fmtUsd(totalEstimated)}</div>
+              <div className="igStatHint">Suma de estimados</div>
+            </div>
+          </div>
+
+          <div className="igActions">
+            <button className="btn btnPrimary igBtn" onClick={refreshAll} disabled={loading}>
+              {loading ? "..." : "↻ Actualizar"}
+            </button>
           </div>
         </div>
 
-        <div className="tableWrap">
+        <div className="filters" style={{ marginTop: 12 }}>
+          <input
+            className="input igInput"
+            placeholder="Buscar: código, descripción, tracking, caja, estado..."
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+          <div className="muted" style={{ minWidth: 140, textAlign: "right" }}>
+            Mostrando <b>{filteredRows.length}</b>
+          </div>
+        </div>
+
+        <div className="tableWrap" style={{ marginTop: 12 }}>
           <table className="table">
             <thead>
               <tr>
@@ -173,19 +265,21 @@ export default function ClientShipments() {
             </thead>
 
             <tbody>
-              {rows.map((r) => (
+              {filteredRows.map((r) => (
                 <tr key={r.id}>
                   <td>
-                    <span className="pill">{r.code || "-"}</span>
+                    <span className="pill pill--ig">{r.code || "-"}</span>
                   </td>
 
                   <td>{fmtDate(r.date_in)}</td>
 
                   <td>{r.description || "-"}</td>
 
-                  <td>{r.box_code || "-"}</td>
+                  <td>{r.box_code ? <span className="pill">{r.box_code}</span> : "-"}</td>
 
-                  <td>{r.tracking || "-"}</td>
+                  <td>
+                    <TrackingCell value={r.tracking} />
+                  </td>
 
                   <td>{fmtKg(r.weight_kg)}</td>
 
@@ -195,18 +289,20 @@ export default function ClientShipments() {
 
                   <td>{fmtUsdKg(r.rate_usd_per_kg)}</td>
 
-                  <td>{fmtUsd(r.estimated_usd)}</td>
+                  <td>
+                    <b>{fmtUsd(r.estimated_usd)}</b>
+                  </td>
 
                   <td>
                     <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                       <StatusBadge status={r.status} />
-                      <span>{r.status}</span>
+                      <span style={{ opacity: 0.9 }}>{r.status}</span>
                     </div>
                   </td>
 
                   <td>
                     <button
-                      className="btn"
+                      className="btn igBtn"
                       onClick={() => {
                         const next = openId === r.id ? null : r.id;
                         setOpenId(next);
@@ -219,10 +315,10 @@ export default function ClientShipments() {
                 </tr>
               ))}
 
-              {rows.length === 0 && (
+              {filteredRows.length === 0 && (
                 <tr>
                   <td colSpan={12} className="muted" style={{ padding: 14 }}>
-                    {loading ? "Cargando..." : "No tenés envíos todavía."}
+                    {loading ? "Cargando..." : "No hay resultados con ese filtro."}
                   </td>
                 </tr>
               )}

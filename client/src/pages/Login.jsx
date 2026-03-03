@@ -120,19 +120,9 @@ export default function Login() {
 
           <div className="loginFooter">
           <button
+            className="link"
             type="button"
             onClick={() => navigate("/forgot-password")}
-            style={{
-              background: "transparent",
-              border: "none",
-              color: "#818cf8",
-              fontWeight: 700,
-              cursor: "pointer",
-              padding: 0,
-              transition: "all 0.2s ease",
-            }}
-            onMouseEnter={(e) => (e.target.style.color = "#a5b4fc")}
-            onMouseLeave={(e) => (e.target.style.color = "#818cf8")}
           >
             ¿Olvidaste tu contraseña?
           </button>

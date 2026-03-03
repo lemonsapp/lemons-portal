@@ -30,31 +30,43 @@ export default function Topbar({ title = "LEMON's" }) {
     window.location.href = "/";
   }
 
-  const label =
-    me?.role === "operator" || me?.role === "admin" ? "Staff" : "Cliente";
+  const isStaff = me?.role === "operator" || me?.role === "admin";
+  const roleLabel = isStaff ? "Staff" : "Cuenta";
+
+  const avatarLetter = (me?.name || "L").trim().slice(0, 1).toUpperCase();
 
   return (
     <div className="topbarShell">
-      <div className="topbarCard">
-        <div className="topbarLeft">
-          <div className="topbarLogo">L</div>
+      <div className="topbarCard--ig">
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div className="topbarLogo--ig">L</div>
+
           <div>
-            <div className="topbarTitle">{title}</div>
-            <div className="topbarSubtitle">Portal de envíos</div>
+            <div className="topbarTitle--ig">{title}</div>
+            <div className="muted">Portal de envíos</div>
           </div>
         </div>
 
         <div className="topbarRight">
           {me ? (
-            <div className="topbarUser">
-              <div>
-                <b>{label} #{me.client_number}</b> — {me.name}
+            <div className="topbarUser--ig">
+              <div className="topbarAvatar">{avatarLetter}</div>
+
+              <div className="topbarUserText">
+                <div className="topbarUserLine">
+                  <span className="topbarRolePill">
+                    {roleLabel} #{me.client_number}
+                  </span>{" "}
+                  — <b>{me.name}</b>
+                </div>
+                <div className="muted" style={{ fontSize: 12 }}>
+                  {me.email}
+                </div>
               </div>
-              <div className="topbarSubtitle">{me.email}</div>
             </div>
           ) : null}
 
-          <button className="btn btnPrimary btnSmall" onClick={logout}>
+          <button className="btn btnPrimary btnSmall topbarLogoutBtn" onClick={logout}>
             Salir
           </button>
         </div>
