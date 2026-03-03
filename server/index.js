@@ -7,7 +7,7 @@ const { z } = require("zod");
 
 const db = require("./db");
 const { authRequired, requireRole } = require("./auth");
-const { sendEmail } = require("./mailer"); // ✅ NUEVO: mails
+const { sendEmail } = require("./mailer"); // ✅ mails
 
 const app = express();
 app.use(express.json());
@@ -149,6 +149,238 @@ async function computeRateAndEstimatedServer({
     rate_usd_per_kg: resolved,
     estimated_usd: computeEstimated(weight_kg, resolved),
   };
+}
+
+// ==================== ✅ MAIL TEMPLATE (PRO) ====================
+
+function safeStr(v) {
+  if (v === null || v === undefined) return "";
+  return String(v);
+}
+
+function formatUsd(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "-";
+  return `$${n.toFixed(2)}`;
+}
+
+function formatUsdKg(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "-";
+  return `$${n.toFixed(2)}/kg`;
+}
+
+function formatKg(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "-";
+  return `${n.toFixed(2)} kg`;
+}
+
+function statusPillColor(status) {
+  const s = safeStr(status).toLowerCase();
+  if (s.includes("entregado")) return "#16a34a";
+  if (s.includes("listo")) return "#0ea5e9";
+  if (s.includes("tránsito") || s.includes("transito")) return "#f59e0b";
+  if (s.includes("despachado")) return "#8b5cf6";
+  if (s.includes("preparación") || s.includes("preparacion")) return "#06b6d4";
+  return "#6366f1";
+}
+
+function shipmentUpdateEmailHtml({
+  brand = "LEMON'S PORTAL",
+  clientName = "",
+  clientNumber = "",
+  code = "",
+  oldStatus = "",
+  newStatus = "",
+  origin = "",
+  service = "",
+  weightKg = null,
+  rateUsdKg = null,
+  estimatedUsd = null,
+  tracking = "",
+  boxCode = "",
+  ctaUrl = "",
+}) {
+  const pill = statusPillColor(newStatus);
+  const preview = `Tu envío #${code} pasó a "${newStatus}".`;
+
+  const showCta = Boolean(ctaUrl && String(ctaUrl).trim().length > 0);
+
+  // Responsive + “card” + estética premium
+  return `
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta name="x-apple-disable-message-reformatting"/>
+  <title>${brand}</title>
+  <style>
+    @media (max-width: 600px) {
+      .container { width: 100% !important; }
+      .px { padding-left: 16px !important; padding-right: 16px !important; }
+      .grid td { display:block !important; width:100% !important; }
+      .btn { width: 100% !important; text-align:center !important; }
+    }
+  </style>
+</head>
+<body style="margin:0; padding:0; background:#0b1020;">
+  <div style="display:none; max-height:0; overflow:hidden; opacity:0; color:transparent;">
+    ${preview}
+  </div>
+
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0b1020; padding:24px 0;">
+    <tr>
+      <td align="center" class="px" style="padding: 0 24px;">
+        <table role="presentation" width="600" class="container" cellspacing="0" cellpadding="0" style="width:600px; max-width:600px;">
+          
+          <!-- Header -->
+          <tr>
+            <td style="padding: 8px 0 16px 0;">
+              <div style="font-family: Arial, sans-serif; color:#c7d2fe; font-size:12px; letter-spacing:0.12em; text-transform:uppercase;">
+                ${brand}
+              </div>
+              <div style="font-family: Arial, sans-serif; color:#ffffff; font-size:22px; font-weight:800; margin-top:6px;">
+                Actualización de tu envío
+              </div>
+            </td>
+          </tr>
+
+          <!-- Card -->
+          <tr>
+            <td style="background: rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.10); border-radius:16px; overflow:hidden;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                
+                <!-- Top strip -->
+                <tr>
+                  <td style="padding:16px; background: linear-gradient(135deg, rgba(99,102,241,0.35), rgba(168,85,247,0.20)); border-bottom:1px solid rgba(255,255,255,0.10);">
+                    <table role="presentation" width="100%">
+                      <tr>
+                        <td style="font-family: Arial, sans-serif; color:#ffffff; font-size:14px;">
+                          Hola <b>${safeStr(clientName) || "👋"}</b>
+                          ${clientNumber ? `<span style="color:#cbd5e1;">(Cliente #${safeStr(clientNumber)})</span>` : ""}
+                        </td>
+                        <td align="right" style="font-family: Arial, sans-serif;">
+                          <span style="display:inline-block; padding:8px 10px; border-radius:999px; background:${pill}; color:#0b1020; font-weight:800; font-size:12px;">
+                            ${safeStr(newStatus)}
+                          </span>
+                        </td>
+                      </tr>
+                    </table>
+                    <div style="font-family: Arial, sans-serif; color:#e5e7eb; font-size:13px; margin-top:10px;">
+                      Tu envío <b style="color:#fff;">#${safeStr(code)}</b> cambió de estado:
+                      <div style="margin-top:8px; font-size:14px;">
+                        <span style="display:inline-block; padding:6px 10px; border-radius:10px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.10); color:#e5e7eb;">
+                          ${safeStr(oldStatus)}
+                        </span>
+                        <span style="color:#c7d2fe; font-weight:800; margin:0 8px;">→</span>
+                        <span style="display:inline-block; padding:6px 10px; border-radius:10px; background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.14); color:#ffffff; font-weight:800;">
+                          ${safeStr(newStatus)}
+                        </span>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+
+                <!-- Details grid -->
+                <tr>
+                  <td style="padding:16px;">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="grid" style="font-family: Arial, sans-serif; font-size:13px; color:#e5e7eb;">
+                      <tr>
+                        <td style="padding:10px; width:50%; vertical-align:top; background:rgba(255,255,255,0.04); border-radius:12px;">
+                          <div style="color:#94a3b8; font-size:12px;">Origen / Servicio</div>
+                          <div style="margin-top:4px; font-weight:800; color:#fff;">
+                            ${safeStr(origin) || "-"} · ${safeStr(service) || "-"}
+                          </div>
+                        </td>
+                        <td style="padding:10px; width:50%; vertical-align:top;">
+                          <div style="background:rgba(255,255,255,0.04); border-radius:12px; padding:10px;">
+                            <div style="color:#94a3b8; font-size:12px;">Peso</div>
+                            <div style="margin-top:4px; font-weight:800; color:#fff;">
+                              ${formatKg(weightKg)}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+
+                      <tr>
+                        <td style="padding:10px; width:50%; vertical-align:top;">
+                          <div style="background:rgba(255,255,255,0.04); border-radius:12px; padding:10px;">
+                            <div style="color:#94a3b8; font-size:12px;">Tarifa</div>
+                            <div style="margin-top:4px; font-weight:800; color:#fff;">
+                              ${formatUsdKg(rateUsdKg)}
+                            </div>
+                          </div>
+                        </td>
+                        <td style="padding:10px; width:50%; vertical-align:top;">
+                          <div style="background:rgba(255,255,255,0.04); border-radius:12px; padding:10px;">
+                            <div style="color:#94a3b8; font-size:12px;">Estimado</div>
+                            <div style="margin-top:4px; font-weight:900; color:#fff; font-size:16px;">
+                              ${formatUsd(estimatedUsd)}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+
+                      <tr>
+                        <td style="padding:10px; width:50%; vertical-align:top;">
+                          <div style="background:rgba(255,255,255,0.04); border-radius:12px; padding:10px;">
+                            <div style="color:#94a3b8; font-size:12px;">Tracking</div>
+                            <div style="margin-top:4px; font-weight:800; color:#fff;">
+                              ${safeStr(tracking) || "-"}
+                            </div>
+                          </div>
+                        </td>
+                        <td style="padding:10px; width:50%; vertical-align:top;">
+                          <div style="background:rgba(255,255,255,0.04); border-radius:12px; padding:10px;">
+                            <div style="color:#94a3b8; font-size:12px;">Caja</div>
+                            <div style="margin-top:4px; font-weight:800; color:#fff;">
+                              ${safeStr(boxCode) || "-"}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    </table>
+
+                    ${
+                      showCta
+                        ? `
+                      <div style="margin-top:16px;">
+                        <a class="btn" href="${ctaUrl}"
+                           style="display:inline-block; text-decoration:none; font-family: Arial, sans-serif;
+                           background: linear-gradient(135deg, #6366f1, #a855f7);
+                           color:#ffffff; padding:12px 16px; border-radius:12px; font-weight:900;">
+                          Ver mis envíos
+                        </a>
+                      </div>
+                    `
+                        : ""
+                    }
+
+                    <div style="margin-top:14px; font-family: Arial, sans-serif; color:#94a3b8; font-size:12px;">
+                      Si vos no solicitaste este aviso, podés ignorarlo.
+                    </div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 14px 0 0 0; font-family: Arial, sans-serif; color:#64748b; font-size:12px;">
+              © ${new Date().getFullYear()} ${brand}. Todos los derechos reservados.
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `.trim();
 }
 
 // ==================== AUTH ====================
@@ -626,31 +858,42 @@ app.patch(
         [shipmentId, oldStatus, newStatus]
       );
 
-      // ==================== ✅ MAIL (NO ROMPE FLUJO) ====================
+      // ==================== ✅ MAIL PRO (NO ROMPE FLUJO) ====================
       try {
-        const code = upd.rows[0]?.code || current.code || shipmentId;
+        const updated = upd.rows[0] || current;
+        const code = updated?.code || current.code || shipmentId;
+
+        const ctaUrl =
+          process.env.APP_URL && String(process.env.APP_URL).trim()
+            ? `${String(process.env.APP_URL).replace(/\/$/, "")}/client/shipments`
+            : "";
+
+        const html = shipmentUpdateEmailHtml({
+          brand: "LEMON'S PORTAL",
+          clientName: current.name || "",
+          clientNumber: current.client_number || "",
+          code,
+          oldStatus,
+          newStatus,
+          origin: updated.origin || current.origin || "",
+          service: updated.service || current.service || "",
+          weightKg: updated.weight_kg ?? current.weight_kg ?? null,
+          rateUsdKg: updated.rate_usd_per_kg ?? current.rate_usd_per_kg ?? null,
+          estimatedUsd: updated.estimated_usd ?? current.estimated_usd ?? null,
+          tracking: updated.tracking || current.tracking || "",
+          boxCode: updated.box_code || current.box_code || "",
+          ctaUrl,
+        });
+
         await sendEmail({
           to: current.email,
           subject: `Actualización de envío #${code}`,
-          html: `
-            <div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5;">
-              <h2 style="margin:0 0 10px 0;">Hola ${current.name || ""}</h2>
-              <p style="margin:0 0 10px 0;">
-                Tu envío <b>#${code}</b> cambió de estado:
-              </p>
-              <p style="margin:0 0 10px 0;">
-                <b>${oldStatus}</b> → <b>${newStatus}</b>
-              </p>
-              <p style="margin:0 0 10px 0;">Podés ver el detalle ingresando al portal.</p>
-              <hr/>
-              <small style="color:#666;">LEMON'S PORTAL</small>
-            </div>
-          `,
+          html,
         });
       } catch (e) {
         console.log("[MAIL] Falló envío (no rompemos flujo):", e?.message || e);
       }
-      // ================================================================
+      // ====================================================================
 
       res.json({ shipment: upd.rows[0] });
     } catch (e) {

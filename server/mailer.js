@@ -1,8 +1,9 @@
 const { Resend } = require("resend");
+const { render } = require("@react-email/render");
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-async function sendEmail({ to, subject, html }) {
+async function sendEmail({ to, subject, html, react }) {
   console.log("[MAIL] Intentando enviar a:", to, "subject:", subject);
 
   if (!process.env.RESEND_API_KEY) {
@@ -13,12 +14,15 @@ async function sendEmail({ to, subject, html }) {
   const testTo = process.env.MAIL_TEST_TO;
   const finalTo = testTo ? testTo : to;
 
+  // Podés mandar html directo o un componente React
+  const finalHtml = react ? render(react) : html;
+
   try {
     const { data, error } = await resend.emails.send({
-      from: process.env.MAIL_FROM,
+      from: process.env.MAIL_FROM, // IMPORTANTE: formato válido "Nombre <email@dominio>"
       to: finalTo,
       subject,
-      html,
+      html: finalHtml,
     });
 
     if (error) {
