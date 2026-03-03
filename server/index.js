@@ -35,13 +35,13 @@ const DEFAULT_RATES = {
 };
 
 function normalizeOrigin(origin) {
-  const o = (origin || "").toUpperCase();
+  const o = (origin || "").toUpperCase().trim();
   if (o === "USA" || o === "CHINA" || o === "EUROPA") return o;
   return null;
 }
 
 function normalizeService(service) {
-  const s = (service || "").toUpperCase();
+  const s = (service || "").toUpperCase().trim();
   if (s === "NORMAL" || s === "EXPRESS") return s;
   return null;
 }
@@ -78,6 +78,78 @@ function resolveRateUsdPerKg({ origin, service, clientRatesRow }) {
   return DEFAULT_RATES[key];
 }
 
+function toNumOrNull(v) {
+  if (v === null || v === undefined) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function computeEstimated(weightKg, rateUsdPerKg) {
+  const w = Number(weightKg);
+  const r = Number(rateUsdPerKg);
+  if (!Number.isFinite(w) || w <= 0) return null;
+  if (!Number.isFinite(r) || r < 0) return null;
+  return Number((w * r).toFixed(2));
+}
+
+/**
+ * Regla server-side (fuente de verdad):
+ * - Si rateOverride != null => override manual; estimated = weight * rateOverride
+ * - Si rateOverride == null => rate = tarifa cliente/default; estimated = weight * rate
+ */
+async function computeRateAndEstimatedServer({
+  userId,
+  originRaw,
+  serviceRaw,
+  weight_kg,
+  rateOverride,
+}) {
+  const origin = normalizeOrigin(originRaw);
+  if (!origin) {
+    return {
+      origin: null,
+      service: null,
+      rate_usd_per_kg: null,
+      estimated_usd: null,
+    };
+  }
+
+  let service = normalizeService(serviceRaw) || "NORMAL";
+  if (origin === "EUROPA") service = "NORMAL";
+
+  const override = toNumOrNull(rateOverride);
+  if (override !== null) {
+    return {
+      origin,
+      service,
+      rate_usd_per_kg: override,
+      estimated_usd: computeEstimated(weight_kg, override),
+    };
+  }
+
+  let ratesRow = null;
+  try {
+    ratesRow = await getClientRatesByUserId(userId);
+  } catch (e) {
+    // si falla leer tabla, igual seguimos con defaults
+    console.error("READ CLIENT RATES ERROR", e);
+    ratesRow = null;
+  }
+
+  const resolved = resolveRateUsdPerKg({
+    origin,
+    service,
+    clientRatesRow: ratesRow,
+  });
+
+  return {
+    origin,
+    service,
+    rate_usd_per_kg: resolved,
+    estimated_usd: computeEstimated(weight_kg, resolved),
+  };
+}
+
 // ==================== AUTH ====================
 
 app.post("/auth/login", async (req, res) => {
@@ -103,7 +175,7 @@ app.post("/auth/login", async (req, res) => {
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) return res.status(401).json({ error: "Credenciales inválidas" });
 
-    // mantenemos tu expiración 7d para no cambiar comportamiento
+    // mantenemos tu expiración 7d
     const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, {
       expiresIn: "7d",
     });
@@ -180,7 +252,7 @@ app.post(
   }
 );
 
-// ✅ MOD: ahora devuelve también rates + defaults
+// ✅ devuelve también rates + defaults
 app.get(
   "/operator/clients",
   authRequired,
@@ -198,7 +270,6 @@ app.get(
       const user = q.rows[0] || null;
       if (!user) return res.json({ user: null, rates: null, defaults: DEFAULT_RATES });
 
-      // Si no existe la tabla aún, esto fallaría. Mejor mostrar error claro.
       let ratesRow = null;
       try {
         ratesRow = await getClientRatesByUserId(user.id);
@@ -229,7 +300,7 @@ app.get(
   }
 );
 
-// ✅ NUEVO: guardar tarifas por cliente (UPSERT)
+// ✅ guardar tarifas por cliente (UPSERT)
 app.put(
   "/operator/clients/:id/rates",
   authRequired,
@@ -250,7 +321,6 @@ app.put(
       const p = schema.safeParse(req.body);
       if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
 
-      // verificamos que el user exista (y opcionalmente que sea client)
       const u = await db.query("SELECT id, role FROM users WHERE id=$1", [userId]);
       const user = u.rows[0];
       if (!user) return res.status(404).json({ error: "Cliente no existe" });
@@ -306,10 +376,7 @@ app.put(
 
 /**
  * CREATE SHIPMENT
- * IMPORTANTE:
- *  - tu DB pide shipments.code NOT NULL -> acá lo llenamos con package_code
- *  - guardamos origin, service, rate_usd_per_kg, estimated_usd
- *  - NUEVO: si no viene override de rate/estimated, se resuelve desde client_rates (fallback defaults)
+ * Paso 4: server calcula SIEMPRE estimated, y calcula rate si no viene override.
  */
 app.post(
   "/operator/shipments",
@@ -326,11 +393,12 @@ app.post(
         weight_kg: z.number().min(0),
         status: z.string().min(1),
 
-        // NUEVO
         origin: z.enum(["USA", "CHINA", "EUROPA"]).optional(),
         service: z.enum(["NORMAL", "EXPRESS"]).optional(),
-        rate_usd_per_kg: z.number().min(0).nullable().optional(), // override opcional
-        estimated_usd: z.number().min(0).nullable().optional(), // override opcional
+
+        // override opcional
+        rate_usd_per_kg: z.number().min(0).nullable().optional(),
+        estimated_usd: z.number().min(0).nullable().optional(), // (ignorado: server recalcula)
       });
 
       const p = schema.safeParse(req.body);
@@ -342,43 +410,13 @@ app.post(
       const user = u.rows[0];
       if (!user) return res.status(404).json({ error: "Cliente no existe" });
 
-      const origin = normalizeOrigin(d.origin) ?? null;
-      let service = normalizeService(d.service) ?? null;
-
-      // EUROPA siempre NORMAL
-      if (origin === "EUROPA") service = "NORMAL";
-
-      // ✅ Resolver tarifa desde DB si no viene override
-      let finalRate = d.rate_usd_per_kg ?? null;
-      let finalEstimated = d.estimated_usd ?? null;
-
-      if (finalRate === null || finalRate === undefined) {
-        let ratesRow = null;
-        try {
-          ratesRow = await getClientRatesByUserId(user.id);
-        } catch (e) {
-          console.error("READ RATES ON CREATE SHIPMENT ERROR", e);
-          // No cortamos: si no se puede leer tabla, igual seguimos sin rate (o podrías defaultear)
-          ratesRow = null;
-        }
-
-        const resolved = resolveRateUsdPerKg({
-          origin,
-          service,
-          clientRatesRow: ratesRow,
-        });
-
-        if (resolved !== null && resolved !== undefined) {
-          finalRate = resolved;
-        }
-      }
-
-      if (finalEstimated === null || finalEstimated === undefined) {
-        if (finalRate !== null && finalRate !== undefined) {
-          const w = Number(d.weight_kg);
-          if (Number.isFinite(w)) finalEstimated = w * Number(finalRate);
-        }
-      }
+      const calc = await computeRateAndEstimatedServer({
+        userId: user.id,
+        originRaw: d.origin ?? null,
+        serviceRaw: d.service ?? null,
+        weight_kg: d.weight_kg,
+        rateOverride: d.rate_usd_per_kg ?? null,
+      });
 
       const ins = await db.query(
         `INSERT INTO shipments
@@ -387,16 +425,16 @@ app.post(
          RETURNING *`,
         [
           user.id,
-          d.package_code, // <--- DB: code
+          d.package_code,
           d.description,
           d.box_code ?? null,
           d.tracking ?? null,
           d.weight_kg,
           d.status,
-          origin,
-          service,
-          finalRate ?? null,
-          finalEstimated ?? null,
+          calc.origin,
+          calc.service,
+          calc.rate_usd_per_kg,
+          calc.estimated_usd,
         ]
       );
 
@@ -460,6 +498,10 @@ app.get(
   }
 );
 
+/**
+ * PATCH SHIPMENT
+ * Paso 4: server asegura consistencia (rate/estimated)
+ */
 app.patch(
   "/operator/shipments/:id",
   authRequired,
@@ -473,22 +515,44 @@ app.patch(
         tracking: z.string().nullable().optional(),
         weight_kg: z.number().min(0),
 
-        // NUEVO: editar lane/tarifa también si querés
         origin: z.string().nullable().optional(),
         service: z.string().nullable().optional(),
+
+        // override opcional (si viene null/undefined => AUTO)
         rate_usd_per_kg: z.number().nullable().optional(),
-        estimated_usd: z.number().nullable().optional(),
+        estimated_usd: z.number().nullable().optional(), // ignorado: server recalcula
       });
+
       const p = schema.safeParse(req.body);
       if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
 
       const id = Number(req.params.id);
       if (Number.isNaN(id)) return res.status(400).json({ error: "ID inválido" });
 
+      // necesitamos user_id actual para sacar tarifas del cliente
+      const cur = await db.query(`SELECT id, user_id FROM shipments WHERE id=$1`, [id]);
+      const current = cur.rows[0];
+      if (!current) return res.status(404).json({ error: "Envío no existe" });
+
+      const calc = await computeRateAndEstimatedServer({
+        userId: current.user_id,
+        originRaw: p.data.origin ?? null,
+        serviceRaw: p.data.service ?? null,
+        weight_kg: p.data.weight_kg,
+        rateOverride: p.data.rate_usd_per_kg ?? null,
+      });
+
       const upd = await db.query(
         `UPDATE shipments
-         SET code=$1, description=$2, box_code=$3, tracking=$4, weight_kg=$5,
-             origin=$6, service=$7, rate_usd_per_kg=$8, estimated_usd=$9,
+         SET code=$1,
+             description=$2,
+             box_code=$3,
+             tracking=$4,
+             weight_kg=$5,
+             origin=$6,
+             service=$7,
+             rate_usd_per_kg=$8,
+             estimated_usd=$9,
              updated_at=NOW()
          WHERE id=$10
          RETURNING *`,
@@ -498,17 +562,14 @@ app.patch(
           p.data.box_code ?? null,
           p.data.tracking ?? null,
           p.data.weight_kg,
-
-          p.data.origin ?? null,
-          p.data.service ?? null,
-          p.data.rate_usd_per_kg ?? null,
-          p.data.estimated_usd ?? null,
-
+          calc.origin,
+          calc.service,
+          calc.rate_usd_per_kg,
+          calc.estimated_usd,
           id,
         ]
       );
 
-      if (!upd.rows[0]) return res.status(404).json({ error: "Envío no existe" });
       res.json({ shipment: upd.rows[0] });
     } catch (e) {
       console.error("PATCH SHIPMENT ERROR", e);
@@ -645,4 +706,4 @@ app.get(
 
 app.listen(PORT, () => {
   console.log(`API corriendo en http://localhost:${PORT}`);
-});
+});git
