@@ -81,6 +81,33 @@ function getLaneRate({ origin, service, rates, defaults }) {
   return 0;
 }
 
+function RateField({ label, value, placeholder, onChange }) {
+  return (
+    <div className="col" style={{ gap: 6 }}>
+      <div
+        className="muted"
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "baseline",
+          gap: 10,
+        }}
+      >
+        <b style={{ color: "inherit" }}>{label}</b>
+        <span>USD/kg</span>
+      </div>
+
+      <input
+        className="input"
+        inputMode="decimal"
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+  );
+}
+
 export default function OperatorPanel() {
   const [msg, setMsg] = useState("");
 
@@ -250,6 +277,28 @@ export default function OperatorPanel() {
       china_express: r?.china_express ?? "",
       europa_normal: r?.europa_normal ?? "",
     });
+  }
+
+  function applyDefaultsToInputs() {
+    setRates({
+      usa_normal: String(defaults.usa_normal ?? DEFAULT_RATES_FALLBACK.usa_normal),
+      usa_express: String(defaults.usa_express ?? DEFAULT_RATES_FALLBACK.usa_express),
+      china_normal: String(defaults.china_normal ?? DEFAULT_RATES_FALLBACK.china_normal),
+      china_express: String(defaults.china_express ?? DEFAULT_RATES_FALLBACK.china_express),
+      europa_normal: String(defaults.europa_normal ?? DEFAULT_RATES_FALLBACK.europa_normal),
+    });
+    setMsg("Defaults cargados en los inputs (ahora podés guardarlos) ✅");
+  }
+
+  function clearRatesToAuto() {
+    setRates({
+      usa_normal: "",
+      usa_express: "",
+      china_normal: "",
+      china_express: "",
+      europa_normal: "",
+    });
+    setMsg("Listo: quedó en modo AUTO (si guardás, vuelve a defaults) ✅");
   }
 
   async function saveClientRates() {
@@ -500,7 +549,6 @@ export default function OperatorPanel() {
     let base = { ...editDraft, override_edit: enabled };
 
     if (enabled) {
-      // si paso a MANUAL y estaba vacío, arranco con el auto como base
       const o = normalizeOrigin(base.origin ?? row.origin ?? "USA");
       const s = normalizeService(o, base.service ?? row.service ?? "NORMAL");
       const autoRate = getLaneRate({
@@ -633,36 +681,43 @@ export default function OperatorPanel() {
           <div className="v">{loadingStats ? "…" : stats?.total ?? 0}</div>
           <div className="s">Todos los estados</div>
         </div>
+
         <div className="cardStat">
           <div className="k">Recibidos</div>
           <div className="v">{loadingStats ? "…" : stats?.received ?? 0}</div>
           <div className="s">En depósito</div>
         </div>
+
         <div className="cardStat">
           <div className="k">Preparación</div>
           <div className="v">{loadingStats ? "…" : stats?.prep ?? 0}</div>
           <div className="s">Armado / control</div>
         </div>
+
         <div className="cardStat">
           <div className="k">Despachados</div>
           <div className="v">{loadingStats ? "…" : stats?.sent ?? 0}</div>
           <div className="s">Salieron del depósito</div>
         </div>
+
         <div className="cardStat">
           <div className="k">En tránsito</div>
           <div className="v">{loadingStats ? "…" : stats?.transit ?? 0}</div>
           <div className="s">Viajando</div>
         </div>
+
         <div className="cardStat">
           <div className="k">Listo entrega</div>
           <div className="v">{loadingStats ? "…" : stats?.ready ?? 0}</div>
           <div className="s">Última milla</div>
         </div>
+
         <div className="cardStat">
           <div className="k">Entregados</div>
           <div className="v">{loadingStats ? "…" : stats?.delivered ?? 0}</div>
           <div className="s">Cerrados</div>
         </div>
+
         <div className="cardStat">
           <div className="k">Peso total</div>
           <div className="v">
@@ -672,7 +727,7 @@ export default function OperatorPanel() {
         </div>
       </div>
 
-      {/* CREAR + BUSCAR CLIENTE */}
+      {/* CREAR CLIENTE + BUSCAR CLIENTE */}
       <div className="grid2" style={{ marginTop: 12 }}>
         <div className="box">
           <h2>Crear cliente</h2>
@@ -729,80 +784,71 @@ export default function OperatorPanel() {
               </div>
               <div className="muted">{client.email}</div>
 
+              {/* ✅ UX TARIFAS MEJORADA */}
               <div style={{ marginTop: 10 }}>
-                <b>Tarifas (USD/kg)</b>
-                <div className="muted" style={{ marginBottom: 8 }}>
-                  Guardá para que el modo AUTO use estas tarifas.
-                </div>
-
-                <div className="grid2" style={{ gap: 10 }}>
-                  <div className="col">
-                    <label className="muted">USA Normal</label>
-                    <input
-                      className="input"
-                      value={rates.usa_normal}
-                      onChange={(e) =>
-                        setRates((r) => ({ ...r, usa_normal: e.target.value }))
-                      }
-                      placeholder={String(defaults.usa_normal)}
-                    />
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                  <div>
+                    <b>Tarifas (USD/kg)</b>
+                    <div className="muted" style={{ marginTop: 4 }}>
+                      Si un campo queda vacío, se usa el default del sistema.
+                    </div>
                   </div>
 
-                  <div className="col">
-                    <label className="muted">USA Express</label>
-                    <input
-                      className="input"
-                      value={rates.usa_express}
-                      onChange={(e) =>
-                        setRates((r) => ({ ...r, usa_express: e.target.value }))
-                      }
-                      placeholder={String(defaults.usa_express)}
-                    />
-                  </div>
-
-                  <div className="col">
-                    <label className="muted">China Normal</label>
-                    <input
-                      className="input"
-                      value={rates.china_normal}
-                      onChange={(e) =>
-                        setRates((r) => ({ ...r, china_normal: e.target.value }))
-                      }
-                      placeholder={String(defaults.china_normal)}
-                    />
-                  </div>
-
-                  <div className="col">
-                    <label className="muted">China Express</label>
-                    <input
-                      className="input"
-                      value={rates.china_express}
-                      onChange={(e) =>
-                        setRates((r) => ({ ...r, china_express: e.target.value }))
-                      }
-                      placeholder={String(defaults.china_express)}
-                    />
-                  </div>
-
-                  <div className="col" style={{ gridColumn: "1 / span 2" }}>
-                    <label className="muted">Europa</label>
-                    <input
-                      className="input"
-                      value={rates.europa_normal}
-                      onChange={(e) =>
-                        setRates((r) => ({ ...r, europa_normal: e.target.value }))
-                      }
-                      placeholder={String(defaults.europa_normal)}
-                    />
-                  </div>
-                </div>
-
-                <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
-                  <button
-                    className="btn"
-                    onClick={saveClientRates}
-                    disabled={savingRates}
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 8,
+                      flexWrap: "wrap",
+                      alignItems: "flex-start",
+                    }}
                   >
+                    <button className="btn" onClick={applyDefaultsToInputs} disabled={savingRates}>
+                      Restaurar defaults
+                    </button>
+                    <button className="btn" onClick={clearRatesToAuto} disabled={savingRates}>
+                      Limpiar (AUTO)
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid2" style={{ gap: 12, marginTop: 12 }}>
+                  <RateField
+                    label="USA • Normal"
+                    value={rates.usa_normal}
+                    placeholder={String(defaults.usa_normal)}
+                    onChange={(v) => setRates((r) => ({ ...r, usa_normal: v }))}
+                  />
+                  <RateField
+                    label="USA • Express"
+                    value={rates.usa_express}
+                    placeholder={String(defaults.usa_express)}
+                    onChange={(v) => setRates((r) => ({ ...r, usa_express: v }))}
+                  />
+                  <RateField
+                    label="China • Normal"
+                    value={rates.china_normal}
+                    placeholder={String(defaults.china_normal)}
+                    onChange={(v) => setRates((r) => ({ ...r, china_normal: v }))}
+                  />
+                  <RateField
+                    label="China • Express"
+                    value={rates.china_express}
+                    placeholder={String(defaults.china_express)}
+                    onChange={(v) => setRates((r) => ({ ...r, china_express: v }))}
+                  />
+
+                  <div style={{ gridColumn: "1 / span 2" }}>
+                    <RateField
+                      label="Europa • Normal"
+                      value={rates.europa_normal}
+                      placeholder={String(defaults.europa_normal)}
+                      onChange={(v) => setRates((r) => ({ ...r, europa_normal: v }))}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+                  <button className="btn" onClick={saveClientRates} disabled={savingRates}>
                     {savingRates ? "Guardando..." : "Guardar tarifas"}
                   </button>
                 </div>
@@ -855,6 +901,7 @@ export default function OperatorPanel() {
               placeholder="Peso (kg) ej: 0.5"
               value={weightKg}
               onChange={(e) => setWeightKg(e.target.value)}
+              inputMode="decimal"
             />
 
             <select
@@ -904,7 +951,7 @@ export default function OperatorPanel() {
 
             <select
               className="input"
-              style={{ minWidth: 170, marginLeft: "auto" }}
+              style={{ minWidth: 180, marginLeft: "auto" }}
               value={overrideEnabled ? "MANUAL" : "AUTO"}
               onChange={(e) => {
                 const manual = e.target.value === "MANUAL";
@@ -925,6 +972,7 @@ export default function OperatorPanel() {
                 placeholder="Tarifa manual USD/kg"
                 value={overrideRate}
                 onChange={(e) => setOverrideRate(e.target.value)}
+                inputMode="decimal"
               />
               <div className="muted" style={{ display: "flex", alignItems: "center" }}>
                 Se usa solo en este envío
@@ -1067,6 +1115,7 @@ export default function OperatorPanel() {
                           className="input"
                           value={editDraft.weight_kg || ""}
                           onChange={(e) => updateEditField("weight_kg", e.target.value)}
+                          inputMode="decimal"
                         />
                       ) : (
                         Number(r.weight_kg).toFixed(2)
@@ -1118,6 +1167,7 @@ export default function OperatorPanel() {
                           onChange={(e) => updateEditField("rate_usd_per_kg", e.target.value)}
                           readOnly={!override}
                           title={!override ? "Poné MANUAL para editar tarifa" : "Tarifa manual"}
+                          inputMode="decimal"
                         />
                       ) : r.rate_usd_per_kg != null ? (
                         `$${Number(r.rate_usd_per_kg).toFixed(2)}/kg`
