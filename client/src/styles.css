@@ -1,162 +1,163 @@
 /* =========================================================
-   LEMONS THEME — "Verano" (Yellow/Orange + Deep Blue)
-   Clean, prolijo, no gigante.
+   LEMONS — PRO THEME (Verano)
+   Yellow + Orange + Deep Blue
+   Clean, premium, not oversized
    ========================================================= */
 
 :root {
   /* Brand */
-  --lemon: #ffd400;      /* amarillo limón */
-  --orange: #ff8a00;     /* naranja cálido */
-  --blue: #0b2a6b;       /* azul profundo */
-  --blue2: #143a86;      /* variante */
-  --sky: #e9f2ff;        /* celestito suave */
-  --ink: #0b1220;        /* texto principal */
-  --muted: rgba(11, 18, 32, 0.62);
+  --lemon: #ffd200;   /* amarillo */
+  --orange: #ff8a00;  /* naranja */
+  --blue: #0b2a6b;    /* azul lemons */
+  --navy: #071530;
 
-  /* UI */
-  --bg: #f6f9ff;
-  --panel: #ffffff;
-  --panel2: rgba(255, 255, 255, 0.75);
-  --border: rgba(11, 42, 107, 0.12);
+  /* Background / surfaces */
+  --bg0: #070b14;
+  --bg1: #0a1224;
 
-  /* Radii + shadow */
+  --card: rgba(255, 255, 255, 0.06);
+  --card2: rgba(255, 255, 255, 0.08);
+  --stroke: rgba(255, 255, 255, 0.12);
+
+  /* Text */
+  --text: rgba(255, 255, 255, 0.92);
+  --muted: rgba(255, 255, 255, 0.62);
+
+  /* Radius / shadow */
   --r-xl: 18px;
-  --r-lg: 16px;
+  --r-lg: 14px;
   --r-md: 12px;
-  --r-sm: 10px;
 
-  --shadow: 0 18px 55px rgba(11, 42, 107, 0.10);
-  --shadow2: 0 12px 28px rgba(11, 42, 107, 0.10);
+  --shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
+  --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.35);
 
-  /* Accent gradients */
-  --grad-lemon: linear-gradient(135deg, var(--lemon), var(--orange));
-  --grad-blue: linear-gradient(135deg, var(--blue), var(--blue2));
-  --ring: 0 0 0 4px rgba(255, 212, 0, 0.25);
+  /* Controls */
+  --ring: 0 0 0 4px rgba(255, 210, 0, 0.18);
 
-  /* Sizes (control “no gigante”) */
-  --fs: 14px;
-  --fs-sm: 12px;
-  --fs-lg: 18px;
-  --pad: 14px;
+  /* Gradients */
+  --grad: linear-gradient(135deg, var(--lemon), var(--orange));
+  --grad-soft: linear-gradient(135deg, rgba(255, 210, 0, 0.18), rgba(255, 138, 0, 0.12));
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
-html,
-body {
+html, body {
   margin: 0;
   padding: 0;
-  font-size: var(--fs);
-  color: var(--ink);
+  background: var(--bg0);
+  color: var(--text);
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-  background: radial-gradient(900px 500px at 20% 5%, rgba(255, 212, 0, 0.16), transparent 55%),
-              radial-gradient(900px 500px at 85% 10%, rgba(11, 42, 107, 0.10), transparent 55%),
-              radial-gradient(900px 650px at 55% 95%, rgba(255, 138, 0, 0.10), transparent 58%),
-              var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 a { color: inherit; text-decoration: none; }
+
 .muted { color: var(--muted); }
 
-/* =========================================================
-   Layout
-   ========================================================= */
+/* Background aura (pro, no IG violeta) */
+body::before {
+  content: "";
+  position: fixed;
+  inset: -220px;
+  pointer-events: none;
+  background:
+    radial-gradient(900px 600px at 20% 10%, rgba(255, 210, 0, 0.16), transparent 60%),
+    radial-gradient(900px 600px at 80% 25%, rgba(255, 138, 0, 0.12), transparent 60%),
+    radial-gradient(900px 600px at 50% 85%, rgba(11, 42, 107, 0.14), transparent 62%);
+  filter: blur(2px);
+  z-index: 0;
+}
 
+/* Generic wrapper */
 .screen {
+  position: relative;
+  z-index: 1;
   min-height: 100vh;
-  padding: 18px;
-  max-width: 1320px;
-  margin: 0 auto;
-}
-
-/* Page header block (h1 + subtitle) */
-.topbar {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 10px 0 14px 0;
-}
-
-.topbar h1 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 950;
-  letter-spacing: 0.2px;
-}
-
-.row {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.col {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.grid2 {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-@media (max-width: 980px) {
-  .grid2 { grid-template-columns: 1fr; }
+  padding: 16px;
 }
 
 /* =========================================================
-   Topbar component (Topbar.jsx)
+   TOPBAR — PRO
    ========================================================= */
-
 .topbarShell {
-  margin-top: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  background: linear-gradient(180deg, rgba(7, 11, 20, 0.85), rgba(7, 11, 20, 0));
+  backdrop-filter: blur(8px);
 }
 
 .topbarCard {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-
   padding: 12px 14px;
   border-radius: var(--r-xl);
-  background: var(--panel2);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow);
-  backdrop-filter: blur(10px);
+  background: rgba(12, 18, 34, 0.68);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
 }
+
+/* Pro stripe */
+.topbarCard::before {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 10px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--grad);
+  opacity: 0.95;
+}
+
+/* subtle highlight */
+.topbarCard::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(500px 180px at 20% 0%, rgba(255, 210, 0, 0.10), transparent 62%);
+  pointer-events: none;
+  opacity: 0.8;
+}
+
+.topbarLeft, .topbarRight { position: relative; z-index: 1; }
 
 .topbarLeft {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 200px;
 }
 
 .topbarLogo {
-  width: 40px;
-  height: 40px;
+  width: 38px;
+  height: 38px;
   border-radius: 14px;
   display: grid;
   place-items: center;
   font-weight: 1000;
   color: #0b1020;
-  background: var(--grad-lemon);
-  box-shadow: 0 10px 22px rgba(255, 138, 0, 0.20);
+  background: var(--grad);
+  box-shadow: 0 12px 24px rgba(255, 138, 0, 0.18);
 }
 
 .topbarTitle {
-  font-weight: 1000;
+  font-size: 14px;
+  font-weight: 950;
   letter-spacing: 0.2px;
   line-height: 1.1;
 }
 
 .topbarSubtitle {
-  color: var(--muted);
-  font-size: var(--fs-sm);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.62);
   margin-top: 2px;
 }
 
@@ -169,691 +170,170 @@ a { color: inherit; text-decoration: none; }
 }
 
 .topbarUser {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   padding: 8px 10px;
   border-radius: 14px;
-  background: rgba(11, 42, 107, 0.04);
-  border: 1px solid rgba(11, 42, 107, 0.10);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10);
 }
 
-@media (max-width: 820px) {
+@media (max-width: 800px) {
   .topbarCard { flex-direction: column; align-items: stretch; }
   .topbarRight { justify-content: space-between; }
 }
 
 /* =========================================================
-   Panels / Boxes
+   HEADERS (page title blocks)
    ========================================================= */
-
-.box {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--r-xl);
-  box-shadow: var(--shadow2);
-  padding: var(--pad);
-}
-
-.box h2 {
-  margin: 0 0 12px 0;
-  font-weight: 950;
-  font-size: 16px;
-}
-
-/* “destacado” con borde azul */
-.note {
-  background: rgba(233, 242, 255, 0.55);
-  border: 1px solid rgba(11, 42, 107, 0.12);
-  border-radius: var(--r-lg);
-  padding: 10px 12px;
-}
-
-/* =========================================================
-   Dashboard cards (OperatorPanel)
-   ========================================================= */
-
-.cards {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 12px;
-}
-
-@media (max-width: 1180px) {
-  .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@media (max-width: 600px) {
-  .cards { grid-template-columns: 1fr; }
-}
-
-.cardStat {
-  background: linear-gradient(180deg, #ffffff, rgba(255, 255, 255, 0.92));
-  border: 1px solid rgba(11, 42, 107, 0.10);
-  border-radius: var(--r-xl);
-  padding: 12px;
-  box-shadow: 0 10px 24px rgba(11, 42, 107, 0.10);
-  position: relative;
-  overflow: hidden;
-}
-
-.cardStat::after {
-  content: "";
-  position: absolute;
-  inset: -2px;
-  background: radial-gradient(260px 120px at 10% 0%, rgba(255, 212, 0, 0.22), transparent 60%),
-              radial-gradient(260px 120px at 90% 0%, rgba(11, 42, 107, 0.14), transparent 62%);
-  pointer-events: none;
-  opacity: 0.75;
-}
-
-.cardStat .k {
-  position: relative;
-  z-index: 1;
-  color: rgba(11, 42, 107, 0.70);
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.cardStat .v {
-  position: relative;
-  z-index: 1;
-  margin-top: 6px;
-  font-size: 26px;
-  font-weight: 1000;
-  line-height: 1.1;
-  color: var(--blue);
-}
-
-.cardStat .s {
-  position: relative;
-  z-index: 1;
-  margin-top: 4px;
-  color: rgba(11, 42, 107, 0.55);
-  font-size: 12px;
-}
-
-/* =========================================================
-   Inputs / Selects
-   ========================================================= */
-
-.input {
-  width: 100%;
-  background: #ffffff;
-  border: 1px solid rgba(11, 42, 107, 0.14);
-  color: var(--ink);
-  padding: 10px 12px;
-  border-radius: 14px;
-  outline: none;
-  transition: box-shadow 0.15s ease, border-color 0.15s ease;
-}
-
-.input::placeholder {
-  color: rgba(11, 18, 32, 0.45);
-}
-
-.input:focus {
-  border-color: rgba(255, 138, 0, 0.65);
-  box-shadow: var(--ring);
-}
-
-/* =========================================================
-   Buttons
-   ========================================================= */
-
-.btn {
-  appearance: none;
-  border: 1px solid rgba(11, 42, 107, 0.14);
-  background: #ffffff;
-  color: var(--blue);
-  padding: 10px 12px;
-  border-radius: 14px;
-  font-weight: 950;
-  cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
-  box-shadow: 0 10px 20px rgba(11, 42, 107, 0.10);
-}
-
-.btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 14px 26px rgba(11, 42, 107, 0.14);
-}
-
-.btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-  transform: none;
-}
-
-/* Primary (LEMON button) */
-.btnPrimary {
-  border: none;
-  background: var(--grad-lemon);
-  color: #0b1020;
-  box-shadow: 0 14px 26px rgba(255, 138, 0, 0.18);
-}
-
-.btnPrimary:hover {
-  filter: brightness(1.02);
-}
-
-/* Optional small */
-.btnSmall {
-  padding: 9px 12px;
-  font-size: 12px;
-}
-
-/* Link-ish button (for "Olvidé mi contraseña") */
-.link {
-  border: none;
-  background: transparent;
-  color: var(--blue);
-  font-weight: 950;
-  cursor: pointer;
-  padding: 6px 0;
-}
-.link:hover { text-decoration: underline; }
-
-/* =========================================================
-   Filters + Table
-   ========================================================= */
-
-.filters {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 12px;
-  align-items: center;
-}
-
-/* Table wrapper */
-.tableWrap {
-  overflow: auto;
-  border-radius: var(--r-xl);
-  border: 1px solid rgba(11, 42, 107, 0.12);
-  background: #ffffff;
-  box-shadow: 0 10px 22px rgba(11, 42, 107, 0.08);
-}
-
-.table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 980px;
-}
-
-/* Sticky header */
-.table thead th {
-  text-align: left;
-  font-size: 11px;
-  letter-spacing: 0.10em;
-  text-transform: uppercase;
-  color: rgba(11, 42, 107, 0.78);
-  padding: 12px 12px;
-  border-bottom: 1px solid rgba(11, 42, 107, 0.10);
-  background: linear-gradient(180deg, rgba(233, 242, 255, 0.90), rgba(233, 242, 255, 0.70));
-  position: sticky;
-  top: 0;
-  z-index: 2;
-}
-
-.table td {
-  padding: 12px 12px;
-  border-bottom: 1px solid rgba(11, 42, 107, 0.08);
-  color: rgba(11, 18, 32, 0.92);
-  font-size: 13px;
-  vertical-align: top;
-}
-
-.table tbody tr:hover td {
-  background: rgba(255, 212, 0, 0.08);
-}
-
-/* =========================================================
-   Pills / Banner
-   ========================================================= */
-
-.pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 6px 10px;
-  border-radius: 999px;
-  font-weight: 950;
-  font-size: 12px;
-  color: #0b1020;
-  background: var(--grad-lemon);
-  box-shadow: 0 10px 18px rgba(255, 138, 0, 0.14);
-}
-
-.banner {
-  margin-top: 12px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 138, 0, 0.35);
-  background: rgba(255, 212, 0, 0.18);
-  color: rgba(11, 42, 107, 0.90);
-  font-weight: 950;
-}
-
-/* =========================================================
-   Status badges (StatusBadge.jsx)
-   ========================================================= */
-
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 12px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 950;
-  border: 1px solid rgba(11, 42, 107, 0.14);
-  background: rgba(233, 242, 255, 0.70);
-  color: rgba(11, 42, 107, 0.90);
-}
-
-.dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-}
-
-/* Received (azul) */
-.badge--received {
-  background: rgba(11, 42, 107, 0.08);
-  border-color: rgba(11, 42, 107, 0.16);
-}
-.badge--received .dot { background: var(--blue); }
-
-/* Prep (amarillo) */
-.badge--prep {
-  background: rgba(255, 212, 0, 0.18);
-  border-color: rgba(255, 138, 0, 0.22);
-}
-.badge--prep .dot { background: var(--lemon); }
-
-/* Sent (naranja) */
-.badge--sent {
-  background: rgba(255, 138, 0, 0.14);
-  border-color: rgba(255, 138, 0, 0.22);
-}
-.badge--sent .dot { background: var(--orange); }
-
-/* Transit (celeste) */
-.badge--transit {
-  background: rgba(233, 242, 255, 0.95);
-  border-color: rgba(11, 42, 107, 0.12);
-}
-.badge--transit .dot { background: #3b82f6; }
-
-/* Ready (verde ok) */
-.badge--ready {
-  background: rgba(34, 197, 94, 0.12);
-  border-color: rgba(34, 197, 94, 0.22);
-}
-.badge--ready .dot { background: #22c55e; }
-
-/* Delivered (lemon gradient) */
-.badge--delivered {
-  background: var(--grad-lemon);
-  border: none;
-  color: #0b1020;
-}
-.badge--delivered .dot { background: #0b1020; }
-
-/* =========================================================
-   Login (si lo usás)
-   ========================================================= */
-
-.loginPage {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 22px;
-}
-
-.loginCard {
-  width: 420px;
-  max-width: 94vw;
-  background: rgba(255, 255, 255, 0.88);
-  border: 1px solid rgba(11, 42, 107, 0.12);
-  border-radius: 22px;
-  box-shadow: var(--shadow);
-  padding: 18px;
-  backdrop-filter: blur(10px);
-}
-
-/* “Olvidé mi contraseña” premium */
-.loginFooter .link {
-  background: rgba(233, 242, 255, 0.80);
-  border: 1px solid rgba(11, 42, 107, 0.12);
-  padding: 9px 12px;
-  border-radius: 14px;
-  text-decoration: none;
-  color: var(--blue);
-  font-weight: 950;
-  box-shadow: 0 10px 18px rgba(11, 42, 107, 0.08);
-}
-.loginFooter .link:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 14px 24px rgba(11, 42, 107, 0.10);
-}
-/* =========================================================
-   LEMONS THEME — "Verano" (Yellow/Orange + Deep Blue)
-   Clean, prolijo, no gigante.
-   ========================================================= */
-
-:root {
-  /* Brand */
-  --lemon: #ffd400;      /* amarillo limón */
-  --orange: #ff8a00;     /* naranja cálido */
-  --blue: #0b2a6b;       /* azul profundo */
-  --blue2: #143a86;      /* variante */
-  --sky: #e9f2ff;        /* celestito suave */
-  --ink: #0b1220;        /* texto principal */
-  --muted: rgba(11, 18, 32, 0.62);
-
-  /* UI */
-  --bg: #f6f9ff;
-  --panel: #ffffff;
-  --panel2: rgba(255, 255, 255, 0.75);
-  --border: rgba(11, 42, 107, 0.12);
-
-  /* Radii + shadow */
-  --r-xl: 18px;
-  --r-lg: 16px;
-  --r-md: 12px;
-  --r-sm: 10px;
-
-  --shadow: 0 18px 55px rgba(11, 42, 107, 0.10);
-  --shadow2: 0 12px 28px rgba(11, 42, 107, 0.10);
-
-  /* Accent gradients */
-  --grad-lemon: linear-gradient(135deg, var(--lemon), var(--orange));
-  --grad-blue: linear-gradient(135deg, var(--blue), var(--blue2));
-  --ring: 0 0 0 4px rgba(255, 212, 0, 0.25);
-
-  /* Sizes (control “no gigante”) */
-  --fs: 14px;
-  --fs-sm: 12px;
-  --fs-lg: 18px;
-  --pad: 14px;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-html,
-body {
-  margin: 0;
-  padding: 0;
-  font-size: var(--fs);
-  color: var(--ink);
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-  background: radial-gradient(900px 500px at 20% 5%, rgba(255, 212, 0, 0.16), transparent 55%),
-              radial-gradient(900px 500px at 85% 10%, rgba(11, 42, 107, 0.10), transparent 55%),
-              radial-gradient(900px 650px at 55% 95%, rgba(255, 138, 0, 0.10), transparent 58%),
-              var(--bg);
-}
-
-a { color: inherit; text-decoration: none; }
-.muted { color: var(--muted); }
-
-/* =========================================================
-   Layout
-   ========================================================= */
-
-.screen {
-  min-height: 100vh;
-  padding: 18px;
-  max-width: 1320px;
-  margin: 0 auto;
-}
-
-/* Page header block (h1 + subtitle) */
 .topbar {
   display: flex;
   flex-direction: column;
   gap: 6px;
   margin: 10px 0 14px 0;
+  padding: 12px 12px;
+  border-radius: var(--r-xl);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: var(--shadow-soft);
 }
 
 .topbar h1 {
   margin: 0;
-  font-size: 22px;
-  font-weight: 950;
+  font-size: 20px;
   letter-spacing: 0.2px;
+}
+
+/* =========================================================
+   BOXES / CARDS
+   ========================================================= */
+.box {
+  position: relative;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(10px);
+  padding: 14px;
+}
+
+.note {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: var(--r-lg);
+  padding: 10px 12px;
+  box-shadow: var(--shadow-soft);
+}
+
+/* Grid helpers used by OperatorPanel */
+.grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 900px) {
+  .grid2 { grid-template-columns: 1fr; }
 }
 
 .row {
   display: flex;
   gap: 10px;
   align-items: center;
+  flex-wrap: wrap;
 }
-
 .col {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.grid2 {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-@media (max-width: 980px) {
-  .grid2 { grid-template-columns: 1fr; }
-}
-
-/* =========================================================
-   Topbar component (Topbar.jsx)
-   ========================================================= */
-
-.topbarShell {
-  margin-top: 12px;
-}
-
-.topbarCard {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-
-  padding: 12px 14px;
-  border-radius: var(--r-xl);
-  background: var(--panel2);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow);
-  backdrop-filter: blur(10px);
-}
-
-.topbarLeft {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.topbarLogo {
-  width: 40px;
-  height: 40px;
-  border-radius: 14px;
-  display: grid;
-  place-items: center;
-  font-weight: 1000;
-  color: #0b1020;
-  background: var(--grad-lemon);
-  box-shadow: 0 10px 22px rgba(255, 138, 0, 0.20);
-}
-
-.topbarTitle {
-  font-weight: 1000;
-  letter-spacing: 0.2px;
-  line-height: 1.1;
-}
-
-.topbarSubtitle {
-  color: var(--muted);
-  font-size: var(--fs-sm);
-  margin-top: 2px;
-}
-
-.topbarRight {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.topbarUser {
-  padding: 8px 10px;
-  border-radius: 14px;
-  background: rgba(11, 42, 107, 0.04);
-  border: 1px solid rgba(11, 42, 107, 0.10);
-}
-
-@media (max-width: 820px) {
-  .topbarCard { flex-direction: column; align-items: stretch; }
-  .topbarRight { justify-content: space-between; }
-}
-
-/* =========================================================
-   Panels / Boxes
-   ========================================================= */
-
-.box {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--r-xl);
-  box-shadow: var(--shadow2);
-  padding: var(--pad);
-}
-
-.box h2 {
-  margin: 0 0 12px 0;
-  font-weight: 950;
-  font-size: 16px;
-}
-
-/* “destacado” con borde azul */
-.note {
-  background: rgba(233, 242, 255, 0.55);
-  border: 1px solid rgba(11, 42, 107, 0.12);
-  border-radius: var(--r-lg);
-  padding: 10px 12px;
-}
-
-/* =========================================================
-   Dashboard cards (OperatorPanel)
-   ========================================================= */
-
+/* Stats cards (Operator dashboard) */
 .cards {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   margin-top: 12px;
 }
-
-@media (max-width: 1180px) {
+@media (max-width: 1100px) {
   .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-@media (max-width: 600px) {
+@media (max-width: 560px) {
   .cards { grid-template-columns: 1fr; }
 }
 
 .cardStat {
-  background: linear-gradient(180deg, #ffffff, rgba(255, 255, 255, 0.92));
-  border: 1px solid rgba(11, 42, 107, 0.10);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10);
   border-radius: var(--r-xl);
   padding: 12px;
-  box-shadow: 0 10px 24px rgba(11, 42, 107, 0.10);
-  position: relative;
-  overflow: hidden;
-}
-
-.cardStat::after {
-  content: "";
-  position: absolute;
-  inset: -2px;
-  background: radial-gradient(260px 120px at 10% 0%, rgba(255, 212, 0, 0.22), transparent 60%),
-              radial-gradient(260px 120px at 90% 0%, rgba(11, 42, 107, 0.14), transparent 62%);
-  pointer-events: none;
-  opacity: 0.75;
+  box-shadow: var(--shadow-soft);
 }
 
 .cardStat .k {
-  position: relative;
-  z-index: 1;
-  color: rgba(11, 42, 107, 0.70);
   font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.10em;
   text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.62);
+  font-weight: 900;
 }
 
 .cardStat .v {
-  position: relative;
-  z-index: 1;
-  margin-top: 6px;
   font-size: 26px;
   font-weight: 1000;
   line-height: 1.1;
-  color: var(--blue);
+  margin-top: 8px;
 }
 
 .cardStat .s {
-  position: relative;
-  z-index: 1;
-  margin-top: 4px;
-  color: rgba(11, 42, 107, 0.55);
+  margin-top: 6px;
   font-size: 12px;
+  color: rgba(255, 255, 255, 0.56);
 }
 
 /* =========================================================
-   Inputs / Selects
+   INPUTS / SELECTS
    ========================================================= */
-
 .input {
   width: 100%;
-  background: #ffffff;
-  border: 1px solid rgba(11, 42, 107, 0.14);
-  color: var(--ink);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text);
   padding: 10px 12px;
-  border-radius: 14px;
+  border-radius: 12px;
   outline: none;
-  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  font-size: 13px;
 }
 
-.input::placeholder {
-  color: rgba(11, 18, 32, 0.45);
-}
+.input::placeholder { color: rgba(255, 255, 255, 0.42); }
 
 .input:focus {
-  border-color: rgba(255, 138, 0, 0.65);
+  border-color: rgba(255, 210, 0, 0.50);
   box-shadow: var(--ring);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 /* =========================================================
-   Buttons
+   BUTTONS — PRO
    ========================================================= */
-
 .btn {
   appearance: none;
-  border: 1px solid rgba(11, 42, 107, 0.14);
-  background: #ffffff;
-  color: var(--blue);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
   padding: 10px 12px;
-  border-radius: 14px;
-  font-weight: 950;
+  border-radius: 12px;
+  font-weight: 900;
   cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
-  box-shadow: 0 10px 20px rgba(11, 42, 107, 0.10);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease, background 0.15s ease;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+  font-size: 13px;
 }
 
 .btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 14px 26px rgba(11, 42, 107, 0.14);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .btn:disabled {
@@ -862,186 +342,108 @@ a { color: inherit; text-decoration: none; }
   transform: none;
 }
 
-/* Primary (LEMON button) */
+/* Primary LEMONS */
 .btnPrimary {
   border: none;
-  background: var(--grad-lemon);
+  background: var(--grad);
   color: #0b1020;
-  box-shadow: 0 14px 26px rgba(255, 138, 0, 0.18);
+  box-shadow: 0 14px 30px rgba(255, 138, 0, 0.18);
 }
 
 .btnPrimary:hover {
   filter: brightness(1.02);
+  box-shadow: 0 18px 44px rgba(255, 138, 0, 0.24);
 }
 
-/* Optional small */
 .btnSmall {
   padding: 9px 12px;
   font-size: 12px;
 }
 
-/* Link-ish button (for "Olvidé mi contraseña") */
+/* Link button */
 .link {
   border: none;
   background: transparent;
-  color: var(--blue);
-  font-weight: 950;
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 900;
   cursor: pointer;
   padding: 6px 0;
+  text-decoration: none;
 }
-.link:hover { text-decoration: underline; }
+.link:hover { text-decoration: underline; opacity: 0.9; }
 
 /* =========================================================
-   Filters + Table
+   TABLES — PRO, compact
    ========================================================= */
-
-.filters {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 12px;
-  align-items: center;
-}
-
-/* Table wrapper */
 .tableWrap {
   overflow: auto;
-  border-radius: var(--r-xl);
-  border: 1px solid rgba(11, 42, 107, 0.12);
-  background: #ffffff;
-  box-shadow: 0 10px 22px rgba(11, 42, 107, 0.08);
+  border-radius: var(--r-lg);
+  border: 1px solid rgba(255, 255, 255, 0.10);
 }
 
 .table {
   width: 100%;
   border-collapse: collapse;
   min-width: 980px;
+  background: rgba(255, 255, 255, 0.03);
 }
 
-/* Sticky header */
 .table thead th {
   text-align: left;
   font-size: 11px;
   letter-spacing: 0.10em;
   text-transform: uppercase;
-  color: rgba(11, 42, 107, 0.78);
-  padding: 12px 12px;
-  border-bottom: 1px solid rgba(11, 42, 107, 0.10);
-  background: linear-gradient(180deg, rgba(233, 242, 255, 0.90), rgba(233, 242, 255, 0.70));
+  color: rgba(255, 255, 255, 0.72);
+  padding: 11px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.04);
   position: sticky;
   top: 0;
   z-index: 2;
 }
 
 .table td {
-  padding: 12px 12px;
-  border-bottom: 1px solid rgba(11, 42, 107, 0.08);
-  color: rgba(11, 18, 32, 0.92);
+  padding: 11px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.90);
   font-size: 13px;
   vertical-align: top;
 }
 
 .table tbody tr:hover td {
-  background: rgba(255, 212, 0, 0.08);
+  background: rgba(255, 210, 0, 0.04);
 }
 
-/* =========================================================
-   Pills / Banner
-   ========================================================= */
-
+/* Pills */
 .pill {
   display: inline-flex;
   align-items: center;
   padding: 6px 10px;
   border-radius: 999px;
-  font-weight: 950;
+  font-weight: 900;
   font-size: 12px;
   color: #0b1020;
-  background: var(--grad-lemon);
-  box-shadow: 0 10px 18px rgba(255, 138, 0, 0.14);
+  background: var(--grad);
+  box-shadow: 0 10px 22px rgba(255, 138, 0, 0.12);
 }
 
+/* Banner message */
 .banner {
   margin-top: 12px;
   padding: 10px 12px;
-  border-radius: 14px;
+  border-radius: 12px;
   border: 1px solid rgba(255, 138, 0, 0.35);
-  background: rgba(255, 212, 0, 0.18);
-  color: rgba(11, 42, 107, 0.90);
-  font-weight: 950;
+  background: rgba(255, 138, 0, 0.10);
+  color: rgba(255, 255, 255, 0.92);
+  font-weight: 900;
 }
 
 /* =========================================================
-   Status badges (StatusBadge.jsx)
+   LOGIN — PRO
    ========================================================= */
-
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 12px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 950;
-  border: 1px solid rgba(11, 42, 107, 0.14);
-  background: rgba(233, 242, 255, 0.70);
-  color: rgba(11, 42, 107, 0.90);
-}
-
-.dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-}
-
-/* Received (azul) */
-.badge--received {
-  background: rgba(11, 42, 107, 0.08);
-  border-color: rgba(11, 42, 107, 0.16);
-}
-.badge--received .dot { background: var(--blue); }
-
-/* Prep (amarillo) */
-.badge--prep {
-  background: rgba(255, 212, 0, 0.18);
-  border-color: rgba(255, 138, 0, 0.22);
-}
-.badge--prep .dot { background: var(--lemon); }
-
-/* Sent (naranja) */
-.badge--sent {
-  background: rgba(255, 138, 0, 0.14);
-  border-color: rgba(255, 138, 0, 0.22);
-}
-.badge--sent .dot { background: var(--orange); }
-
-/* Transit (celeste) */
-.badge--transit {
-  background: rgba(233, 242, 255, 0.95);
-  border-color: rgba(11, 42, 107, 0.12);
-}
-.badge--transit .dot { background: #3b82f6; }
-
-/* Ready (verde ok) */
-.badge--ready {
-  background: rgba(34, 197, 94, 0.12);
-  border-color: rgba(34, 197, 94, 0.22);
-}
-.badge--ready .dot { background: #22c55e; }
-
-/* Delivered (lemon gradient) */
-.badge--delivered {
-  background: var(--grad-lemon);
-  border: none;
-  color: #0b1020;
-}
-.badge--delivered .dot { background: #0b1020; }
-
-/* =========================================================
-   Login (si lo usás)
-   ========================================================= */
-
 .loginPage {
+  position: relative;
+  z-index: 1;
   min-height: 100vh;
   display: grid;
   place-items: center;
@@ -1051,26 +453,156 @@ a { color: inherit; text-decoration: none; }
 .loginCard {
   width: 420px;
   max-width: 94vw;
-  background: rgba(255, 255, 255, 0.88);
-  border: 1px solid rgba(11, 42, 107, 0.12);
+  background: rgba(12, 18, 34, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.10);
   border-radius: 22px;
   box-shadow: var(--shadow);
-  padding: 18px;
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(12px);
+  padding: 16px;
+  position: relative;
+  overflow: hidden;
 }
 
-/* “Olvidé mi contraseña” premium */
+/* Accent edge */
+.loginCard::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(500px 240px at 15% 0%, rgba(255, 210, 0, 0.16), transparent 55%),
+              radial-gradient(500px 240px at 85% 0%, rgba(255, 138, 0, 0.12), transparent 58%);
+  opacity: 0.9;
+}
+
+.loginHeader {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 6px 12px 6px;
+}
+
+.logoCircle {
+  width: 42px;
+  height: 42px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  font-weight: 1000;
+  color: #0b1020;
+  background: var(--grad);
+  box-shadow: 0 14px 30px rgba(255, 138, 0, 0.18);
+}
+
+.brandText {
+  font-size: 15px;
+  font-weight: 1000;
+  letter-spacing: 0.5px;
+}
+
+.loginGrid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 10px;
+  padding: 6px;
+}
+
+.loginRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.loginFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+/* Forgot password pro pill */
 .loginFooter .link {
-  background: rgba(233, 242, 255, 0.80);
-  border: 1px solid rgba(11, 42, 107, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10);
   padding: 9px 12px;
-  border-radius: 14px;
+  border-radius: 999px;
   text-decoration: none;
-  color: var(--blue);
-  font-weight: 950;
-  box-shadow: 0 10px 18px rgba(11, 42, 107, 0.08);
+  color: rgba(255, 255, 255, 0.90);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
 }
 .loginFooter .link:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 14px 24px rgba(11, 42, 107, 0.10);
+  border-color: rgba(255, 210, 0, 0.35);
+  background: rgba(255, 255, 255, 0.07);
+  text-decoration: none;
 }
+
+/* =========================================================
+   STATUS BADGES (works with your StatusBadge.jsx)
+   ========================================================= */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.2px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.05);
+  backdrop-filter: blur(8px);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.badge--received {
+  background: rgba(255, 210, 0, 0.12);
+  color: rgba(255, 255, 255, 0.92);
+  border-color: rgba(255, 210, 0, 0.30);
+}
+.badge--received .dot { background: var(--lemon); box-shadow: 0 0 10px rgba(255,210,0,0.55); }
+
+.badge--prep {
+  background: rgba(255, 138, 0, 0.12);
+  color: rgba(255, 255, 255, 0.92);
+  border-color: rgba(255, 138, 0, 0.30);
+}
+.badge--prep .dot { background: var(--orange); box-shadow: 0 0 10px rgba(255,138,0,0.55); }
+
+.badge--sent {
+  background: rgba(11, 42, 107, 0.18);
+  color: rgba(255, 255, 255, 0.92);
+  border-color: rgba(11, 42, 107, 0.35);
+}
+.badge--sent .dot { background: #3b82f6; box-shadow: 0 0 10px rgba(59,130,246,0.5); }
+
+.badge--transit {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.92);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+.badge--transit .dot { background: #a78bfa; box-shadow: 0 0 10px rgba(167,139,250,0.45); }
+
+.badge--ready {
+  background: rgba(34, 197, 94, 0.12);
+  color: rgba(255, 255, 255, 0.92);
+  border-color: rgba(34, 197, 94, 0.30);
+}
+.badge--ready .dot { background: #22c55e; box-shadow: 0 0 10px rgba(34,197,94,0.5); }
+
+.badge--delivered {
+  background: var(--grad);
+  color: #0b1020;
+  border: none;
+  box-shadow: 0 12px 26px rgba(255, 138, 0, 0.22);
+}
+.badge--delivered .dot { background: #0b1020; }
