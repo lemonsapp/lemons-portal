@@ -602,9 +602,33 @@ body::before {
 }
 .badge--delivered .dot { background: #0b1020; }
 
-.loginLogo {
-  width: 30px;
-  height: 30px;
-  object-fit: contain;
+.loginLogoWrap{
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: linear-gradient(135deg,#ff8a00,#ffd600);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  box-shadow:0 10px 25px rgba(0,0,0,0.15);
 }
 
+.loginLogoImg{
+  width:34px;
+  height:34px;
+  object-fit:contain;
+}
+
+.loginBrandTitle{
+  font-size:16px;
+  font-weight:800;
+  color:#1a1a1a;
+  letter-spacing:0.4px;
+}
+
+.loginBrandTitle{
+  font-size:16px;
+  font-weight:800;
+  color:#1a1a1a;
+  letter-spacing:0.4px;
+}
