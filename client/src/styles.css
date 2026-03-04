@@ -1,7 +1,7 @@
 /* =========================================================
-   LEMONS — PRO UI (Clean + Premium)
-   Lemon Yellow + Orange accents, deep navy typography
-   Legible, modern, not oversized
+   LEMONS — PRO DARK THEME
+   Dark Navy + Lemon/Orange accents
+   Clean, legible, premium
    ========================================================= */
 
 :root {
@@ -10,35 +10,36 @@
   --orange: #ff8a00;
   --navy: #0b2a6b;
 
-  /* Neutrals */
-  --ink: #0f172a;          /* texto principal */
-  --ink2: rgba(15, 23, 42, 0.72);
-  --line: rgba(15, 23, 42, 0.10);
+  /* Dark base */
+  --bg0: #070b14;
+  --bg1: #0a1224;
+  --panel: rgba(255, 255, 255, 0.06);
+  --panel2: rgba(255, 255, 255, 0.08);
+  --stroke: rgba(255, 255, 255, 0.12);
 
-  /* Surfaces */
-  --bg: #fbfaf7;           /* fondo crema suave (premium) */
-  --bg2: #f6f3ea;          /* variación */
-  --card: #ffffff;
-  --card2: rgba(255, 255, 255, 0.92);
+  /* Text */
+  --text: rgba(255, 255, 255, 0.92);
+  --muted: rgba(255, 255, 255, 0.65);
+  --muted2: rgba(255, 255, 255, 0.50);
 
   /* Radius / shadow */
   --r-xl: 18px;
   --r-lg: 14px;
   --r-md: 12px;
 
-  --shadow: 0 18px 55px rgba(2, 6, 23, 0.12);
-  --shadow-soft: 0 10px 26px rgba(2, 6, 23, 0.10);
+  --shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
+  --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.35);
 
   /* Gradients */
   --grad: linear-gradient(135deg, var(--lemon), var(--orange));
   --grad-soft: linear-gradient(
     135deg,
     rgba(255, 210, 0, 0.18),
-    rgba(255, 138, 0, 0.14)
+    rgba(255, 138, 0, 0.12)
   );
 
   /* Focus ring */
-  --ring: 0 0 0 4px rgba(255, 138, 0, 0.18);
+  --ring: 0 0 0 4px rgba(255, 210, 0, 0.18);
 }
 
 * { box-sizing: border-box; }
@@ -46,42 +47,52 @@
 html, body {
   margin: 0;
   padding: 0;
-  background: radial-gradient(900px 600px at 20% 10%, rgba(255,210,0,0.14), transparent 60%),
-              radial-gradient(900px 600px at 80% 20%, rgba(255,138,0,0.10), transparent 60%),
-              radial-gradient(900px 600px at 50% 85%, rgba(11,42,107,0.08), transparent 62%),
-              linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
-  color: var(--ink);
+  background: var(--bg0);
+  color: var(--text);
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
 }
 
 a { color: inherit; text-decoration: none; }
+.muted { color: var(--muted); }
 
-.muted { color: var(--ink2); }
+/* Background aura */
+body::before {
+  content: "";
+  position: fixed;
+  inset: -240px;
+  pointer-events: none;
+  background:
+    radial-gradient(900px 600px at 20% 10%, rgba(255, 210, 0, 0.16), transparent 60%),
+    radial-gradient(900px 600px at 80% 22%, rgba(255, 138, 0, 0.12), transparent 60%),
+    radial-gradient(900px 600px at 50% 85%, rgba(11, 42, 107, 0.14), transparent 62%),
+    radial-gradient(1200px 800px at 50% 50%, rgba(255,255,255,0.03), transparent 70%);
+  filter: blur(2px);
+  z-index: 0;
+}
 
-/* =========================================================
-   Layout wrapper
-   ========================================================= */
+/* Wrapper */
 .screen {
   position: relative;
+  z-index: 1;
   min-height: 100vh;
   padding: 16px;
 }
 
 /* =========================================================
-   TOPBAR — clean and pro
-   Works with your Topbar.jsx using:
-   .topbarShell > .topbarCard > (.topbarLeft/.topbarRight)
+   TOPBAR (works with .topbarCard OR .topbarCard--ig)
    ========================================================= */
 .topbarShell {
   position: sticky;
   top: 0;
   z-index: 50;
-  padding: 10px 0;
-  background: linear-gradient(180deg, rgba(251, 250, 247, 0.92), rgba(251, 250, 247, 0));
+  padding-top: 10px;
+  padding-bottom: 10px;
+  background: linear-gradient(180deg, rgba(7, 11, 20, 0.90), rgba(7, 11, 20, 0));
   backdrop-filter: blur(10px);
 }
 
-.topbarCard {
+.topbarCard,
+.topbarCard--ig {
   position: relative;
   display: flex;
   align-items: center;
@@ -89,14 +100,15 @@ a { color: inherit; text-decoration: none; }
   gap: 14px;
   padding: 12px 14px;
   border-radius: var(--r-xl);
-  background: rgba(255, 255, 255, 0.80);
-  border: 1px solid var(--line);
+  background: rgba(12, 18, 34, 0.70);
+  border: 1px solid rgba(255, 255, 255, 0.10);
   box-shadow: var(--shadow-soft);
   overflow: hidden;
 }
 
 /* Accent stripe */
-.topbarCard::before {
+.topbarCard::before,
+.topbarCard--ig::before {
   content: "";
   position: absolute;
   left: 12px;
@@ -109,12 +121,14 @@ a { color: inherit; text-decoration: none; }
 }
 
 /* subtle highlight */
-.topbarCard::after {
+.topbarCard::after,
+.topbarCard--ig::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: radial-gradient(520px 200px at 15% 0%, rgba(255,210,0,0.10), transparent 62%);
+  background: radial-gradient(520px 200px at 18% 0%, rgba(255, 210, 0, 0.10), transparent 62%);
   pointer-events: none;
+  opacity: 0.9;
 }
 
 .topbarLeft, .topbarRight { position: relative; z-index: 1; }
@@ -122,34 +136,35 @@ a { color: inherit; text-decoration: none; }
 .topbarLeft {
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-width: 220px;
+  gap: 10px;
+  min-width: 200px;
 }
 
-.topbarLogo {
-  width: 40px;
-  height: 40px;
+.topbarLogo,
+.topbarLogo--ig {
+  width: 38px;
+  height: 38px;
   border-radius: 14px;
   display: grid;
   place-items: center;
   font-weight: 1000;
   color: #0b1020;
   background: var(--grad);
-  box-shadow: 0 14px 30px rgba(255, 138, 0, 0.18);
+  box-shadow: 0 12px 24px rgba(255, 138, 0, 0.18);
 }
 
-.topbarTitle {
+.topbarTitle,
+.topbarTitle--ig {
   font-size: 14px;
   font-weight: 950;
   letter-spacing: 0.2px;
   line-height: 1.1;
-  color: var(--ink);
 }
 
 .topbarSubtitle {
   font-size: 12px;
+  color: rgba(255, 255, 255, 0.62);
   margin-top: 2px;
-  color: rgba(15, 23, 42, 0.65);
 }
 
 .topbarRight {
@@ -160,33 +175,58 @@ a { color: inherit; text-decoration: none; }
   justify-content: flex-end;
 }
 
-.topbarUser {
+.topbarUser,
+.topbarUser--ig {
   display: flex;
   flex-direction: column;
   gap: 2px;
   padding: 8px 10px;
   border-radius: 14px;
-  background: rgba(15, 23, 42, 0.03);
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.topbarAvatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-weight: 950;
+  color: #0b1020;
+  background: var(--grad);
+}
+
+.topbarRolePill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 950;
+  color: rgba(255,255,255,0.92);
+  background: rgba(255, 210, 0, 0.12);
+  border: 1px solid rgba(255, 210, 0, 0.22);
 }
 
 @media (max-width: 860px) {
-  .topbarCard { flex-direction: column; align-items: stretch; }
+  .topbarCard,
+  .topbarCard--ig { flex-direction: column; align-items: stretch; }
   .topbarRight { justify-content: space-between; }
 }
 
 /* =========================================================
-   Page header blocks (h1 + subtitle)
+   Page header block (h1)
    ========================================================= */
 .topbar {
   display: flex;
   flex-direction: column;
   gap: 6px;
   margin: 10px 0 14px 0;
-  padding: 12px 12px;
+  padding: 12px;
   border-radius: var(--r-xl);
-  background: rgba(255, 255, 255, 0.78);
-  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: var(--shadow-soft);
 }
 
@@ -194,104 +234,122 @@ a { color: inherit; text-decoration: none; }
   margin: 0;
   font-size: 20px;
   letter-spacing: 0.2px;
-  color: var(--ink);
 }
 
 /* =========================================================
-   Cards / Boxes
+   Boxes / cards
    ========================================================= */
 .box {
   position: relative;
-  background: rgba(255, 255, 255, 0.82);
-  border: 1px solid var(--line);
+  background: var(--panel);
+  border: 1px solid rgba(255, 255, 255, 0.10);
   border-radius: var(--r-xl);
   box-shadow: var(--shadow-soft);
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(10px);
   padding: 14px;
 }
 
 .note {
-  background: rgba(255, 255, 255, 0.86);
-  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10);
   border-radius: var(--r-lg);
   padding: 10px 12px;
   box-shadow: var(--shadow-soft);
 }
 
-/* Grid helpers used by OperatorPanel */
-.grid2 {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+/* =========================================================
+   CLIENT SHIPMENTS — "Envíos / Total / Estimado" prolijo
+   Uses your classes: .igHeaderRow .igStats .igStatCard .igActions
+   ========================================================= */
+.igHeaderRow {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
   gap: 12px;
-}
-@media (max-width: 900px) {
-  .grid2 { grid-template-columns: 1fr; }
+  flex-wrap: wrap;
 }
 
-.row {
+.igStats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  gap: 12px;
+  flex: 1;
+  min-width: 320px;
+}
+
+@media (max-width: 820px) {
+  .igStats { grid-template-columns: 1fr; min-width: 100%; }
+}
+
+.igStatCard {
+  border-radius: var(--r-xl);
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.22);
+  position: relative;
+  overflow: hidden;
+}
+
+/* subtle accent line per stat card */
+.igStatCard::before {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 10px;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(255,210,0,0.9), rgba(255,138,0,0.7));
+  opacity: 0.75;
+}
+
+.igStatValue {
+  font-size: 22px;
+  font-weight: 1000;
+  letter-spacing: 0.2px;
+  margin-top: 8px;
+  color: rgba(255,255,255,0.95);
+}
+
+.igStatHint {
+  margin-top: 4px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.62);
+}
+
+.igActions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+
+@media (max-width: 820px) {
+  .igActions { width: 100%; justify-content: stretch; }
+  .igActions .btn { width: 100%; }
+}
+
+/* Filters row (search + mostrando) */
+.filters {
   display: flex;
   gap: 10px;
   align-items: center;
   flex-wrap: wrap;
 }
-.col {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
 
-/* Stats cards (Operator dashboard) */
-.cards {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 12px;
-}
-@media (max-width: 1100px) {
-  .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@media (max-width: 560px) {
-  .cards { grid-template-columns: 1fr; }
-}
-
-.cardStat {
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid var(--line);
-  border-radius: var(--r-xl);
-  padding: 12px;
-  box-shadow: var(--shadow-soft);
-}
-
-.cardStat .k {
-  font-size: 11px;
-  letter-spacing: 0.10em;
-  text-transform: uppercase;
-  color: rgba(15, 23, 42, 0.62);
-  font-weight: 900;
-}
-
-.cardStat .v {
-  font-size: 24px;
-  font-weight: 1000;
-  line-height: 1.1;
-  margin-top: 8px;
-  color: var(--ink);
-}
-
-.cardStat .s {
-  margin-top: 6px;
-  font-size: 12px;
-  color: rgba(15, 23, 42, 0.55);
+.filters .input {
+  flex: 1;
+  min-width: 240px;
 }
 
 /* =========================================================
-   Inputs / selects — legible on light cards
+   Inputs
    ========================================================= */
 .input {
   width: 100%;
-  background: rgba(15, 23, 42, 0.04);
-  border: 1px solid rgba(15, 23, 42, 0.10);
-  color: var(--ink);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text);
   padding: 10px 12px;
   border-radius: 12px;
   outline: none;
@@ -299,34 +357,34 @@ a { color: inherit; text-decoration: none; }
   font-size: 13px;
 }
 
-.input::placeholder { color: rgba(15, 23, 42, 0.35); }
+.input::placeholder { color: rgba(255, 255, 255, 0.42); }
 
 .input:focus {
-  border-color: rgba(255, 138, 0, 0.50);
+  border-color: rgba(255, 210, 0, 0.50);
   box-shadow: var(--ring);
-  background: rgba(15, 23, 42, 0.05);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 /* =========================================================
-   Buttons — pro
+   Buttons
    ========================================================= */
 .btn {
   appearance: none;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  background: rgba(255, 255, 255, 0.90);
-  color: var(--ink);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
   padding: 10px 12px;
   border-radius: 12px;
-  font-weight: 900;
+  font-weight: 950;
   cursor: pointer;
   transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease, background 0.15s ease;
-  box-shadow: 0 8px 18px rgba(2, 6, 23, 0.10);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
   font-size: 13px;
 }
 
 .btn:hover {
   transform: translateY(-1px);
-  background: #fff;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .btn:disabled {
@@ -335,44 +393,28 @@ a { color: inherit; text-decoration: none; }
   transform: none;
 }
 
-/* Primary */
 .btnPrimary {
   border: none;
   background: var(--grad);
   color: #0b1020;
-  box-shadow: 0 16px 34px rgba(255, 138, 0, 0.20);
+  box-shadow: 0 14px 30px rgba(255, 138, 0, 0.18);
 }
 
 .btnPrimary:hover {
   filter: brightness(1.02);
-  box-shadow: 0 20px 46px rgba(255, 138, 0, 0.26);
+  box-shadow: 0 18px 44px rgba(255, 138, 0, 0.24);
 }
 
-.btnSmall {
-  padding: 9px 12px;
-  font-size: 12px;
-}
-
-/* Link button (used for forgot-password) */
-.link {
-  border: none;
-  background: transparent;
-  color: rgba(15, 23, 42, 0.75);
-  font-weight: 900;
-  cursor: pointer;
-  padding: 6px 0;
-  text-decoration: none;
-}
-.link:hover { text-decoration: underline; opacity: 0.92; }
+.btnSmall { padding: 9px 12px; font-size: 12px; }
 
 /* =========================================================
-   Tables — readable (zebra + sticky head)
+   Tables — compact, readable
    ========================================================= */
 .tableWrap {
   overflow: auto;
   border-radius: var(--r-lg);
-  border: 1px solid rgba(15, 23, 42, 0.10);
-  background: rgba(255, 255, 255, 0.80);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .table {
@@ -386,10 +428,10 @@ a { color: inherit; text-decoration: none; }
   font-size: 11px;
   letter-spacing: 0.10em;
   text-transform: uppercase;
-  color: rgba(15, 23, 42, 0.62);
+  color: rgba(255, 255, 255, 0.72);
   padding: 11px 12px;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.10);
-  background: rgba(255, 255, 255, 0.92);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.05);
   position: sticky;
   top: 0;
   z-index: 2;
@@ -397,18 +439,14 @@ a { color: inherit; text-decoration: none; }
 
 .table td {
   padding: 11px 12px;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
-  color: rgba(15, 23, 42, 0.92);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.90);
   font-size: 13px;
   vertical-align: top;
 }
 
-.table tbody tr:nth-child(even) td {
-  background: rgba(15, 23, 42, 0.02);
-}
-
 .table tbody tr:hover td {
-  background: rgba(255, 210, 0, 0.10);
+  background: rgba(255, 210, 0, 0.05);
 }
 
 /* Pills */
@@ -417,26 +455,90 @@ a { color: inherit; text-decoration: none; }
   align-items: center;
   padding: 6px 10px;
   border-radius: 999px;
-  font-weight: 900;
+  font-weight: 950;
   font-size: 12px;
   color: #0b1020;
   background: var(--grad);
-  box-shadow: 0 10px 22px rgba(255, 138, 0, 0.16);
+  box-shadow: 0 10px 22px rgba(255, 138, 0, 0.12);
 }
 
-/* Banner message */
+/* Tracking link (si lo usás) */
+.trackingLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 950;
+  color: rgba(255,255,255,0.92);
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.10);
+}
+.trackingLink:hover {
+  transform: translateY(-1px);
+  background: rgba(255,255,255,0.07);
+  border-color: rgba(255,255,255,0.14);
+}
+.trackingIcon { opacity: 0.85; font-size: 12px; }
+
+/* Banner */
 .banner {
   margin-top: 12px;
   padding: 10px 12px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 138, 0, 0.30);
-  background: rgba(255, 210, 0, 0.18);
-  color: rgba(15, 23, 42, 0.92);
-  font-weight: 900;
+  border: 1px solid rgba(255, 138, 0, 0.35);
+  background: rgba(255, 138, 0, 0.10);
+  color: rgba(255, 255, 255, 0.92);
+  font-weight: 950;
 }
 
 /* =========================================================
-   LOGIN — premium center card
+   Operator helpers
+   ========================================================= */
+.grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+@media (max-width: 1100px) { .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .cards { grid-template-columns: 1fr; } }
+
+.cardStat {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: var(--r-xl);
+  padding: 12px;
+  box-shadow: var(--shadow-soft);
+}
+.cardStat .k {
+  font-size: 11px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.62);
+  font-weight: 950;
+}
+.cardStat .v {
+  font-size: 24px;
+  font-weight: 1000;
+  line-height: 1.1;
+  margin-top: 8px;
+}
+.cardStat .s {
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.56);
+}
+
+/* =========================================================
+   LOGIN (si ya lo tenés armado con logo)
    ========================================================= */
 .loginPage {
   min-height: 100vh;
@@ -448,25 +550,24 @@ a { color: inherit; text-decoration: none; }
 .loginCard {
   width: 420px;
   max-width: 94vw;
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(12, 18, 34, 0.78);
+  border: 1px solid rgba(255,255,255,0.10);
   border-radius: 22px;
-  border: 1px solid rgba(15, 23, 42, 0.10);
-  box-shadow: 0 30px 90px rgba(2, 6, 23, 0.18);
-  padding: 24px;
+  box-shadow: var(--shadow);
+  padding: 22px;
   position: relative;
   overflow: hidden;
 }
 
-/* Accent aura inside the card */
 .loginCard::before {
   content: "";
   position: absolute;
   inset: -2px;
   pointer-events: none;
   background:
-    radial-gradient(520px 260px at 10% 0%, rgba(255, 210, 0, 0.20), transparent 58%),
-    radial-gradient(520px 260px at 90% 0%, rgba(255, 138, 0, 0.14), transparent 60%);
-  opacity: 0.95;
+    radial-gradient(520px 260px at 10% 0%, rgba(255, 210, 0, 0.18), transparent 58%),
+    radial-gradient(520px 260px at 90% 0%, rgba(255, 138, 0, 0.12), transparent 60%);
+  opacity: 0.9;
 }
 
 .loginHeader {
@@ -478,7 +579,7 @@ a { color: inherit; text-decoration: none; }
   padding: 6px 6px 12px 6px;
 }
 
-/* Logo wrapper (for your uploaded image) */
+/* wrapper del logo */
 .loginLogoWrap{
   width: 44px;
   height: 44px;
@@ -490,27 +591,21 @@ a { color: inherit; text-decoration: none; }
   box-shadow: 0 14px 30px rgba(255, 138, 0, 0.18);
 }
 
-/* Control image size here */
+/* ✅ tamaño del logo (bajalo acá si lo querés más chico) */
 .loginLogoImg{
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   object-fit: contain;
   display: block;
 }
 
-/* Brand text */
 .brandText,
 .loginBrandTitle{
   font-size: 15px;
   font-weight: 1000;
-  color: var(--ink);
   letter-spacing: 0.25px;
   line-height: 1.1;
-}
-
-/* If you show “Portal de envíos” near title with .muted */
-.loginCard .muted{
-  color: rgba(15, 23, 42, 0.55);
+  color: rgba(255,255,255,0.92);
 }
 
 .loginGrid {
@@ -533,8 +628,8 @@ a { color: inherit; text-decoration: none; }
   display: flex;
   align-items: center;
   gap: 8px;
-  color: rgba(15, 23, 42, 0.70);
-  font-weight: 900;
+  color: rgba(255,255,255,0.72);
+  font-weight: 950;
 }
 
 .loginFooter {
@@ -545,38 +640,24 @@ a { color: inherit; text-decoration: none; }
   margin-top: 12px;
 }
 
-/* Forgot password: visible and pro */
+/* forgot password pill legible */
 .loginFooter .link{
-  background: rgba(15, 23, 42, 0.04);
-  border: 1px solid rgba(15, 23, 42, 0.10);
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
   padding: 9px 12px;
   border-radius: 999px;
-  color: rgba(15, 23, 42, 0.78);
-  box-shadow: 0 10px 22px rgba(2, 6, 23, 0.08);
+  color: rgba(255,255,255,0.90);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.20);
   text-decoration: none;
 }
 .loginFooter .link:hover{
-  border-color: rgba(255, 138, 0, 0.30);
-  background: rgba(255, 210, 0, 0.16);
+  border-color: rgba(255, 210, 0, 0.28);
+  background: rgba(255,255,255,0.08);
   text-decoration: none;
 }
 
-/* Inputs inside login */
-.loginCard .input{
-  background: rgba(15, 23, 42, 0.04);
-  border: 1px solid rgba(15, 23, 42, 0.10);
-  color: var(--ink);
-}
-.loginCard .input::placeholder{
-  color: rgba(15, 23, 42, 0.35);
-}
-.loginCard .input:focus{
-  border-color: rgba(255, 138, 0, 0.50);
-  box-shadow: var(--ring);
-}
-
 /* =========================================================
-   STATUS BADGES (works with your StatusBadge.jsx)
+   Status badges (StatusBadge.jsx)
    ========================================================= */
 .badge {
   display: inline-flex;
@@ -587,10 +668,9 @@ a { color: inherit; text-decoration: none; }
   font-size: 12px;
   font-weight: 950;
   letter-spacing: 0.2px;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  background: rgba(255, 255, 255, 0.80);
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.05);
   backdrop-filter: blur(8px);
-  color: rgba(15, 23, 42, 0.88);
 }
 
 .dot {
@@ -600,49 +680,44 @@ a { color: inherit; text-decoration: none; }
 }
 
 .badge--received {
-  background: rgba(255, 210, 0, 0.18);
-  border-color: rgba(255, 210, 0, 0.30);
+  background: rgba(255, 210, 0, 0.12);
+  color: rgba(255, 255, 255, 0.92);
+  border-color: rgba(255, 210, 0, 0.28);
 }
-.badge--received .dot { background: var(--lemon); box-shadow: 0 0 10px rgba(255,210,0,0.45); }
+.badge--received .dot { background: var(--lemon); box-shadow: 0 0 10px rgba(255,210,0,0.55); }
 
 .badge--prep {
-  background: rgba(255, 138, 0, 0.14);
-  border-color: rgba(255, 138, 0, 0.26);
+  background: rgba(255, 138, 0, 0.12);
+  color: rgba(255, 255, 255, 0.92);
+  border-color: rgba(255, 138, 0, 0.28);
 }
-.badge--prep .dot { background: var(--orange); box-shadow: 0 0 10px rgba(255,138,0,0.40); }
+.badge--prep .dot { background: var(--orange); box-shadow: 0 0 10px rgba(255,138,0,0.55); }
 
 .badge--sent {
-  background: rgba(11, 42, 107, 0.10);
-  border-color: rgba(11, 42, 107, 0.18);
+  background: rgba(11, 42, 107, 0.18);
+  color: rgba(255, 255, 255, 0.92);
+  border-color: rgba(11, 42, 107, 0.32);
 }
-.badge--sent .dot { background: #2563eb; box-shadow: 0 0 10px rgba(37,99,235,0.30); }
+.badge--sent .dot { background: #3b82f6; box-shadow: 0 0 10px rgba(59,130,246,0.5); }
 
 .badge--transit {
-  background: rgba(15, 23, 42, 0.05);
-  border-color: rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.92);
+  border-color: rgba(255, 255, 255, 0.14);
 }
-.badge--transit .dot { background: #7c3aed; box-shadow: 0 0 10px rgba(124,58,237,0.25); }
+.badge--transit .dot { background: #a78bfa; box-shadow: 0 0 10px rgba(167,139,250,0.45); }
 
 .badge--ready {
   background: rgba(34, 197, 94, 0.12);
-  border-color: rgba(34, 197, 94, 0.18);
+  color: rgba(255, 255, 255, 0.92);
+  border-color: rgba(34, 197, 94, 0.28);
 }
-.badge--ready .dot { background: #16a34a; box-shadow: 0 0 10px rgba(22,163,74,0.25); }
+.badge--ready .dot { background: #22c55e; box-shadow: 0 0 10px rgba(34,197,94,0.5); }
 
 .badge--delivered {
   background: var(--grad);
   color: #0b1020;
   border: none;
-  box-shadow: 0 12px 26px rgba(255, 138, 0, 0.20);
+  box-shadow: 0 12px 26px rgba(255, 138, 0, 0.22);
 }
 .badge--delivered .dot { background: #0b1020; }
-
-/* =========================================================
-   Small helpers (optional but safe)
-   ========================================================= */
-.tableWrap::-webkit-scrollbar { height: 10px; }
-.tableWrap::-webkit-scrollbar-thumb {
-  background: rgba(15, 23, 42, 0.18);
-  border-radius: 999px;
-}
-.tableWrap::-webkit-scrollbar-track { background: transparent; }
