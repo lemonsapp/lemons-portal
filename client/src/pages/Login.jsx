@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import logo from "../assets/logo.png";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 

@@ -44,11 +44,12 @@
 html, body {
   margin: 0;
   padding: 0;
-  background: var(--bg0);
-  color: var(--text);
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  background: linear-gradient(
+    180deg,
+    #ffd600 0%,
+    #ffc400 100%
+  );
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto;
 }
 
 a { color: inherit; text-decoration: none; }
@@ -442,25 +443,19 @@ body::before {
    LOGIN — PRO
    ========================================================= */
 .loginPage {
-  position: relative;
-  z-index: 1;
   min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .loginCard {
   width: 420px;
   max-width: 94vw;
-  background: rgba(12, 18, 34, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: white;
   border-radius: 22px;
-  box-shadow: var(--shadow);
-  backdrop-filter: blur(12px);
-  padding: 16px;
-  position: relative;
-  overflow: hidden;
+  box-shadow: 0 30px 80px rgba(0,0,0,0.25);
+  padding: 28px;
 }
 
 /* Accent edge */
@@ -606,3 +601,9 @@ body::before {
   box-shadow: 0 12px 26px rgba(255, 138, 0, 0.22);
 }
 .badge--delivered .dot { background: #0b1020; }
+
+.loginLogo {
+  width: 90px;
+  height: 90px;
+  object-fit: contain;
+}
