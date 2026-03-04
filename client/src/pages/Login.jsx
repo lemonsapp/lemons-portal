@@ -85,8 +85,6 @@ export default function Login() {
                 <div className="loginBrandSub">Portal de envíos</div>
               </div>
             </div>
-
-            <div className="loginBadge">Acceso</div>
           </div>
 
           {/* Form */}
