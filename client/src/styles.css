@@ -603,8 +603,8 @@ body::before {
 .badge--delivered .dot { background: #0b1020; }
 
 .loginLogo {
-  width: 90px;
-  height: 90px;
+  width: 30px;
+  height: 30px;
   object-fit: contain;
 }
 
