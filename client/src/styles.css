@@ -1,4 +1,3 @@
-/* =========================================================
    LEMONS — PRO THEME (Verano)
    Yellow + Orange + Deep Blue
    Clean, premium, not oversized
@@ -614,8 +613,8 @@ body::before {
 }
 
 .loginLogoImg{
-  width:50px;
-  height:50px;
+  width:34px;
+  height:34px;
   object-fit:contain;
 }
 
@@ -631,4 +630,109 @@ body::before {
   font-weight:800;
   color:#1a1a1a;
   letter-spacing:0.4px;
+}
+
+/* =========================================================
+   LOGIN FIX (NO BORRAR NADA) — SOLO AJUSTES PROLIJOS
+   - achica logo gigante (el png que se te superpone)
+   - arregla header y el texto “LEMON’s / Portal de envíos”
+   - arregla “¿Olvidaste tu contraseña?” (no blanco ilegible)
+   ========================================================= */
+
+/* 1) Si tu logo es una <img> grande dentro del login, lo controlamos acá */
+.loginHeader img,
+.loginLogoImg {
+  width: 38px !important;   /* ✅ achicado prolijo */
+  height: 38px !important;
+  object-fit: contain !important;
+  display: block;
+}
+
+/* 2) Si estás usando el wrapper nuevo (loginLogoWrap), lo ajusto un toque */
+.loginLogoWrap{
+  width: 44px !important;   /* antes 52 */
+  height: 44px !important;
+  border-radius: 14px;
+}
+
+/* 3) Header del login: alineado y más prolijo */
+.loginHeader{
+  align-items: center !important;
+  gap: 12px !important;
+  padding-bottom: 14px !important;
+}
+
+/* 4) Tipografía del “LEMON’s / Portal de envíos” prolija */
+.brandText,
+.loginBrandTitle{
+  font-size: 15px !important;
+  font-weight: 950 !important;
+  letter-spacing: 0.25px !important;
+  color: #141414 !important; /* sobre fondo blanco */
+  line-height: 1.1 !important;
+}
+
+/* Si tenés un subtítulo “Portal de envíos” con .muted adentro del login */
+.loginCard .muted{
+  color: rgba(0,0,0,0.55) !important;
+}
+
+/* 5) LoginCard: tu ::before no se veía porque faltaba position relative */
+.loginCard{
+  position: relative !important; /* ✅ necesario para que el ::before se recorte al card */
+  overflow: hidden !important;   /* ✅ evita “manchas” fuera del card */
+}
+
+/* 6) Inputs dentro del login: en fondo blanco, mejor contraste */
+.loginCard .input{
+  background: rgba(0,0,0,0.04) !important;
+  border: 1px solid rgba(0,0,0,0.10) !important;
+  color: #141414 !important;
+}
+
+.loginCard .input::placeholder{
+  color: rgba(0,0,0,0.35) !important;
+}
+
+.loginCard .input:focus{
+  border-color: rgba(255, 138, 0, 0.55) !important;
+  box-shadow: 0 0 0 4px rgba(255, 210, 0, 0.20) !important;
+}
+
+/* 7) “¿Olvidaste tu contraseña?”: tu regla actual lo deja blanco.
+      Lo dejamos estilo pill amarillo suave, texto oscuro. */
+.loginFooter .link{
+  background: rgba(255, 210, 0, 0.25) !important;
+  border: 1px solid rgba(255, 138, 0, 0.25) !important;
+  color: #1a1a1a !important;
+  box-shadow: 0 10px 22px rgba(0,0,0,0.10) !important;
+  border-radius: 999px !important;
+}
+
+.loginFooter .link:hover{
+  background: rgba(255, 210, 0, 0.32) !important;
+  border-color: rgba(255, 138, 0, 0.35) !important;
+  text-decoration: none !important;
+}
+
+/* 8) Botón “Iniciar sesión” más premium en blanco (ya lo tenías bien, refuerzo) */
+.loginCard .btnPrimary{
+  color: #0b1020 !important;
+  font-weight: 950 !important;
+}
+
+/* 9) Si se te está superponiendo el logo (muy grande) por algún absolute:
+      evitamos que cualquier img dentro del login “salga” */
+.loginPage img{
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+/* 10) Ajuste fino de espaciados para que no se vea gigante */
+.loginCard{
+  padding: 24px !important; /* antes 28 */
+}
+
+.loginGrid{
+  gap: 8px !important;
 }
