@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import logo from "../assets/logo.png";
+import logo from "../assets/logo.png"; // ✅ tu logo (ponelo en src/assets/logo.png)
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
@@ -11,7 +11,6 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [msg, setMsg] = useState("");
-  const [loading, setLoading] = useState(false);
 
   const clearToken = () => {
     localStorage.removeItem("token");
@@ -20,10 +19,7 @@ export default function Login() {
 
   async function onSubmit(e) {
     e.preventDefault();
-    if (loading) return;
-
     setMsg("");
-    setLoading(true);
     clearToken();
 
     let res, data;
@@ -36,17 +32,14 @@ export default function Login() {
       data = await res.json().catch(() => ({}));
     } catch {
       setMsg("No pude conectar con la API. Revisá VITE_API_URL y Render.");
-      setLoading(false);
       return;
     }
 
     if (!res.ok) {
       setMsg(data?.error || "Error al iniciar sesión");
-      setLoading(false);
       return;
     }
 
-    // Guardar token
     if (remember) {
       localStorage.setItem("token", data.token);
       sessionStorage.removeItem("token");
@@ -55,7 +48,6 @@ export default function Login() {
       localStorage.removeItem("token");
     }
 
-    // Validar token con /auth/me
     try {
       const meRes = await fetch(`${API}/auth/me`, {
         headers: { Authorization: `Bearer ${data.token}` },
@@ -65,134 +57,97 @@ export default function Login() {
       if (!meRes.ok || !meData.user) {
         clearToken();
         setMsg(meData?.error || "Token inválido. Probá de nuevo.");
-        setLoading(false);
         return;
       }
 
       const role = meData.user.role;
-      if (role === "operator" || role === "admin") {
-        navigate("/operator", { replace: true });
-      } else {
-        navigate("/client/shipments", { replace: true });
-      }
+      if (role === "operator" || role === "admin") window.location.href = "/operator";
+      else window.location.href = "/client/shipments";
     } catch {
       clearToken();
       setMsg("Falló la verificación de sesión (/auth/me). Revisá la API.");
-      setLoading(false);
     }
   }
 
   return (
-    <div className="loginPage">
-      <div className="loginCard">
-        <div className="loginHeader">
-          <div className="logoCircle">L</div>
-          <div>
-            <div className="brandText">LEMON&apos;s</div>
-            <div className="muted" style={{ fontSize: 12, fontWeight: 800, marginTop: 2 }}>
-              Portal de envíos • Acceso seguro
+    <div className="loginPage loginPage--lemons">
+      <div className="loginShell">
+        <div className="loginCard loginCard--lemons">
+          {/* Header */}
+          <div className="loginHeader loginHeader--lemons">
+            <div className="loginBrand">
+              <div className="loginLogoWrap">
+                <img src={logo} alt="LEMONS" className="loginLogoImg" />
+              </div>
+
+              <div className="loginBrandText">
+                <div className="loginBrandTitle">LEMON&apos;s</div>
+                <div className="loginBrandSub">Portal de envíos</div>
+              </div>
             </div>
-          </div>
-        </div>
 
-        <form onSubmit={onSubmit} className="loginGrid">
-          {msg ? (
-            <div
-              style={{
-                borderRadius: 14,
-                padding: "10px 12px",
-                border: "1px solid rgba(255, 138, 0, 0.35)",
-                background: "rgba(255, 138, 0, 0.10)",
-                color: "rgba(255,255,255,0.92)",
-                fontWeight: 900,
-              }}
-            >
-              {msg}
-            </div>
-          ) : null}
-
-          <div style={{ display: "grid", gap: 6 }}>
-            <label className="muted" style={{ fontWeight: 900, fontSize: 12 }}>
-              Email
-            </label>
-            <input
-              className="input"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="tuemail@dominio.com"
-              autoComplete="email"
-              inputMode="email"
-            />
+            <div className="loginBadge">Acceso</div>
           </div>
 
-          <div style={{ display: "grid", gap: 6 }}>
-            <label className="muted" style={{ fontWeight: 900, fontSize: 12 }}>
-              Contraseña
-            </label>
-            <input
-              className="input"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              type="password"
-              autoComplete="current-password"
-            />
-          </div>
-
-          <div className="loginRow">
-            <label
-              className="loginLeft"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                userSelect: "none",
-              }}
-            >
+          {/* Form */}
+          <form onSubmit={onSubmit} className="loginForm">
+            <div className="loginField">
+              <label>Email</label>
               <input
-                type="checkbox"
-                checked={remember}
-                onChange={(e) => setRemember(e.target.checked)}
-                style={{
-                  width: 16,
-                  height: 16,
-                  accentColor: "#ffd200",
-                }}
+                className="input"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="tuemail@dominio.com"
+                autoComplete="email"
               />
-              <span style={{ fontWeight: 900, color: "rgba(255,255,255,0.85)", fontSize: 13 }}>
-                Recordarme
-              </span>
-            </label>
+            </div>
 
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <div className="loginField">
+              <label>Contraseña</label>
+              <input
+                className="input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                type="password"
+                autoComplete="current-password"
+              />
+            </div>
+
+            {/* row: remember + error */}
+            <div className="loginRow">
+              <label className="loginRemember">
+                <input
+                  type="checkbox"
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                />
+                <span>Recordarme</span>
+              </label>
+
+              {msg ? <div className="loginError">{msg}</div> : <div />}
+            </div>
+
+            {/* Footer actions */}
+            <div className="loginActions">
               <button
-                className="link"
+                className="btn btnGhost loginForgot"
                 type="button"
                 onClick={() => navigate("/forgot-password")}
-                style={{
-                  borderRadius: 999,
-                  padding: "9px 12px",
-                  background: "linear-gradient(135deg, rgba(255,210,0,0.18), rgba(255,138,0,0.12))",
-                  border: "1px solid rgba(255,255,255,0.12)",
-                  boxShadow: "0 10px 24px rgba(0,0,0,0.18)",
-                  textDecoration: "none",
-                }}
               >
                 ¿Olvidaste tu contraseña?
               </button>
+
+              <button className="btn btnPrimary loginSubmit" type="submit">
+                Iniciar sesión
+              </button>
             </div>
-          </div>
 
-          <div className="loginFooter" style={{ justifyContent: "flex-end" }}>
-            <button className="btn btnPrimary" type="submit" disabled={loading}>
-              {loading ? "INGRESANDO..." : "INICIAR SESIÓN"}
-            </button>
-          </div>
-
-          <div className="muted" style={{ fontSize: 12, fontWeight: 800, textAlign: "center" }}>
-            Si no recordás tu contraseña, recuperala desde el link de arriba.
-          </div>
-        </form>
+            <div className="loginHint">
+              Si sos staff, entrás al panel operador automáticamente.
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );
