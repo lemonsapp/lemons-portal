@@ -1,41 +1,44 @@
-   LEMONS — PRO THEME (Verano)
-   Yellow + Orange + Deep Blue
-   Clean, premium, not oversized
+/* =========================================================
+   LEMONS — PRO UI (Clean + Premium)
+   Lemon Yellow + Orange accents, deep navy typography
+   Legible, modern, not oversized
    ========================================================= */
 
 :root {
   /* Brand */
-  --lemon: #ffd200;   /* amarillo */
-  --orange: #ff8a00;  /* naranja */
-  --blue: #0b2a6b;    /* azul lemons */
-  --navy: #071530;
+  --lemon: #ffd200;
+  --orange: #ff8a00;
+  --navy: #0b2a6b;
 
-  /* Background / surfaces */
-  --bg0: #070b14;
-  --bg1: #0a1224;
+  /* Neutrals */
+  --ink: #0f172a;          /* texto principal */
+  --ink2: rgba(15, 23, 42, 0.72);
+  --line: rgba(15, 23, 42, 0.10);
 
-  --card: rgba(255, 255, 255, 0.06);
-  --card2: rgba(255, 255, 255, 0.08);
-  --stroke: rgba(255, 255, 255, 0.12);
-
-  /* Text */
-  --text: rgba(255, 255, 255, 0.92);
-  --muted: rgba(255, 255, 255, 0.62);
+  /* Surfaces */
+  --bg: #fbfaf7;           /* fondo crema suave (premium) */
+  --bg2: #f6f3ea;          /* variación */
+  --card: #ffffff;
+  --card2: rgba(255, 255, 255, 0.92);
 
   /* Radius / shadow */
   --r-xl: 18px;
   --r-lg: 14px;
   --r-md: 12px;
 
-  --shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
-  --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.35);
-
-  /* Controls */
-  --ring: 0 0 0 4px rgba(255, 210, 0, 0.18);
+  --shadow: 0 18px 55px rgba(2, 6, 23, 0.12);
+  --shadow-soft: 0 10px 26px rgba(2, 6, 23, 0.10);
 
   /* Gradients */
   --grad: linear-gradient(135deg, var(--lemon), var(--orange));
-  --grad-soft: linear-gradient(135deg, rgba(255, 210, 0, 0.18), rgba(255, 138, 0, 0.12));
+  --grad-soft: linear-gradient(
+    135deg,
+    rgba(255, 210, 0, 0.18),
+    rgba(255, 138, 0, 0.14)
+  );
+
+  /* Focus ring */
+  --ring: 0 0 0 4px rgba(255, 138, 0, 0.18);
 }
 
 * { box-sizing: border-box; }
@@ -43,51 +46,39 @@
 html, body {
   margin: 0;
   padding: 0;
-  background: linear-gradient(
-    180deg,
-    #ffc002 0%,
-    #ffa600 100%
-  );
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto;
+  background: radial-gradient(900px 600px at 20% 10%, rgba(255,210,0,0.14), transparent 60%),
+              radial-gradient(900px 600px at 80% 20%, rgba(255,138,0,0.10), transparent 60%),
+              radial-gradient(900px 600px at 50% 85%, rgba(11,42,107,0.08), transparent 62%),
+              linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
+  color: var(--ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
 }
 
 a { color: inherit; text-decoration: none; }
 
-.muted { color: var(--muted); }
+.muted { color: var(--ink2); }
 
-/* Background aura (pro, no IG violeta) */
-body::before {
-  content: "";
-  position: fixed;
-  inset: -220px;
-  pointer-events: none;
-  background:
-    radial-gradient(900px 600px at 20% 10%, rgba(255, 210, 0, 0.16), transparent 60%),
-    radial-gradient(900px 600px at 80% 25%, rgba(255, 138, 0, 0.12), transparent 60%),
-    radial-gradient(900px 600px at 50% 85%, rgba(11, 42, 107, 0.14), transparent 62%);
-  filter: blur(2px);
-  z-index: 0;
-}
-
-/* Generic wrapper */
+/* =========================================================
+   Layout wrapper
+   ========================================================= */
 .screen {
   position: relative;
-  z-index: 1;
   min-height: 100vh;
   padding: 16px;
 }
 
 /* =========================================================
-   TOPBAR — PRO
+   TOPBAR — clean and pro
+   Works with your Topbar.jsx using:
+   .topbarShell > .topbarCard > (.topbarLeft/.topbarRight)
    ========================================================= */
 .topbarShell {
   position: sticky;
   top: 0;
   z-index: 50;
-  padding-top: 10px;
-  padding-bottom: 10px;
-  background: linear-gradient(180deg, rgba(7, 11, 20, 0.85), rgba(7, 11, 20, 0));
-  backdrop-filter: blur(8px);
+  padding: 10px 0;
+  background: linear-gradient(180deg, rgba(251, 250, 247, 0.92), rgba(251, 250, 247, 0));
+  backdrop-filter: blur(10px);
 }
 
 .topbarCard {
@@ -98,13 +89,13 @@ body::before {
   gap: 14px;
   padding: 12px 14px;
   border-radius: var(--r-xl);
-  background: rgba(12, 18, 34, 0.68);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.80);
+  border: 1px solid var(--line);
   box-shadow: var(--shadow-soft);
   overflow: hidden;
 }
 
-/* Pro stripe */
+/* Accent stripe */
 .topbarCard::before {
   content: "";
   position: absolute;
@@ -122,9 +113,8 @@ body::before {
   content: "";
   position: absolute;
   inset: 0;
-  background: radial-gradient(500px 180px at 20% 0%, rgba(255, 210, 0, 0.10), transparent 62%);
+  background: radial-gradient(520px 200px at 15% 0%, rgba(255,210,0,0.10), transparent 62%);
   pointer-events: none;
-  opacity: 0.8;
 }
 
 .topbarLeft, .topbarRight { position: relative; z-index: 1; }
@@ -132,20 +122,20 @@ body::before {
 .topbarLeft {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-width: 200px;
+  gap: 12px;
+  min-width: 220px;
 }
 
 .topbarLogo {
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   border-radius: 14px;
   display: grid;
   place-items: center;
   font-weight: 1000;
   color: #0b1020;
   background: var(--grad);
-  box-shadow: 0 12px 24px rgba(255, 138, 0, 0.18);
+  box-shadow: 0 14px 30px rgba(255, 138, 0, 0.18);
 }
 
 .topbarTitle {
@@ -153,12 +143,13 @@ body::before {
   font-weight: 950;
   letter-spacing: 0.2px;
   line-height: 1.1;
+  color: var(--ink);
 }
 
 .topbarSubtitle {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.62);
   margin-top: 2px;
+  color: rgba(15, 23, 42, 0.65);
 }
 
 .topbarRight {
@@ -175,17 +166,17 @@ body::before {
   gap: 2px;
   padding: 8px 10px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(15, 23, 42, 0.03);
+  border: 1px solid rgba(15, 23, 42, 0.08);
 }
 
-@media (max-width: 800px) {
+@media (max-width: 860px) {
   .topbarCard { flex-direction: column; align-items: stretch; }
   .topbarRight { justify-content: space-between; }
 }
 
 /* =========================================================
-   HEADERS (page title blocks)
+   Page header blocks (h1 + subtitle)
    ========================================================= */
 .topbar {
   display: flex;
@@ -194,8 +185,8 @@ body::before {
   margin: 10px 0 14px 0;
   padding: 12px 12px;
   border-radius: var(--r-xl);
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid var(--line);
   box-shadow: var(--shadow-soft);
 }
 
@@ -203,24 +194,25 @@ body::before {
   margin: 0;
   font-size: 20px;
   letter-spacing: 0.2px;
+  color: var(--ink);
 }
 
 /* =========================================================
-   BOXES / CARDS
+   Cards / Boxes
    ========================================================= */
 .box {
   position: relative;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid var(--line);
   border-radius: var(--r-xl);
   box-shadow: var(--shadow-soft);
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(8px);
   padding: 14px;
 }
 
 .note {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid var(--line);
   border-radius: var(--r-lg);
   padding: 10px 12px;
   box-shadow: var(--shadow-soft);
@@ -263,8 +255,8 @@ body::before {
 }
 
 .cardStat {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--line);
   border-radius: var(--r-xl);
   padding: 12px;
   box-shadow: var(--shadow-soft);
@@ -274,31 +266,32 @@ body::before {
   font-size: 11px;
   letter-spacing: 0.10em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.62);
+  color: rgba(15, 23, 42, 0.62);
   font-weight: 900;
 }
 
 .cardStat .v {
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 1000;
   line-height: 1.1;
   margin-top: 8px;
+  color: var(--ink);
 }
 
 .cardStat .s {
   margin-top: 6px;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.56);
+  color: rgba(15, 23, 42, 0.55);
 }
 
 /* =========================================================
-   INPUTS / SELECTS
+   Inputs / selects — legible on light cards
    ========================================================= */
 .input {
   width: 100%;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: var(--text);
+  background: rgba(15, 23, 42, 0.04);
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  color: var(--ink);
   padding: 10px 12px;
   border-radius: 12px;
   outline: none;
@@ -306,34 +299,34 @@ body::before {
   font-size: 13px;
 }
 
-.input::placeholder { color: rgba(255, 255, 255, 0.42); }
+.input::placeholder { color: rgba(15, 23, 42, 0.35); }
 
 .input:focus {
-  border-color: rgba(255, 210, 0, 0.50);
+  border-color: rgba(255, 138, 0, 0.50);
   box-shadow: var(--ring);
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(15, 23, 42, 0.05);
 }
 
 /* =========================================================
-   BUTTONS — PRO
+   Buttons — pro
    ========================================================= */
 .btn {
   appearance: none;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.90);
+  color: var(--ink);
   padding: 10px 12px;
   border-radius: 12px;
   font-weight: 900;
   cursor: pointer;
   transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease, background 0.15s ease;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 8px 18px rgba(2, 6, 23, 0.10);
   font-size: 13px;
 }
 
 .btn:hover {
   transform: translateY(-1px);
-  background: rgba(255, 255, 255, 0.08);
+  background: #fff;
 }
 
 .btn:disabled {
@@ -342,17 +335,17 @@ body::before {
   transform: none;
 }
 
-/* Primary LEMONS */
+/* Primary */
 .btnPrimary {
   border: none;
   background: var(--grad);
   color: #0b1020;
-  box-shadow: 0 14px 30px rgba(255, 138, 0, 0.18);
+  box-shadow: 0 16px 34px rgba(255, 138, 0, 0.20);
 }
 
 .btnPrimary:hover {
   filter: brightness(1.02);
-  box-shadow: 0 18px 44px rgba(255, 138, 0, 0.24);
+  box-shadow: 0 20px 46px rgba(255, 138, 0, 0.26);
 }
 
 .btnSmall {
@@ -360,32 +353,32 @@ body::before {
   font-size: 12px;
 }
 
-/* Link button */
+/* Link button (used for forgot-password) */
 .link {
   border: none;
   background: transparent;
-  color: rgba(255, 255, 255, 0.85);
+  color: rgba(15, 23, 42, 0.75);
   font-weight: 900;
   cursor: pointer;
   padding: 6px 0;
   text-decoration: none;
 }
-.link:hover { text-decoration: underline; opacity: 0.9; }
+.link:hover { text-decoration: underline; opacity: 0.92; }
 
 /* =========================================================
-   TABLES — PRO, compact
+   Tables — readable (zebra + sticky head)
    ========================================================= */
 .tableWrap {
   overflow: auto;
   border-radius: var(--r-lg);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  background: rgba(255, 255, 255, 0.80);
 }
 
 .table {
   width: 100%;
   border-collapse: collapse;
   min-width: 980px;
-  background: rgba(255, 255, 255, 0.03);
 }
 
 .table thead th {
@@ -393,10 +386,10 @@ body::before {
   font-size: 11px;
   letter-spacing: 0.10em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.72);
+  color: rgba(15, 23, 42, 0.62);
   padding: 11px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
-  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.10);
+  background: rgba(255, 255, 255, 0.92);
   position: sticky;
   top: 0;
   z-index: 2;
@@ -404,14 +397,18 @@ body::before {
 
 .table td {
   padding: 11px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.90);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  color: rgba(15, 23, 42, 0.92);
   font-size: 13px;
   vertical-align: top;
 }
 
+.table tbody tr:nth-child(even) td {
+  background: rgba(15, 23, 42, 0.02);
+}
+
 .table tbody tr:hover td {
-  background: rgba(255, 210, 0, 0.04);
+  background: rgba(255, 210, 0, 0.10);
 }
 
 /* Pills */
@@ -424,7 +421,7 @@ body::before {
   font-size: 12px;
   color: #0b1020;
   background: var(--grad);
-  box-shadow: 0 10px 22px rgba(255, 138, 0, 0.12);
+  box-shadow: 0 10px 22px rgba(255, 138, 0, 0.16);
 }
 
 /* Banner message */
@@ -432,40 +429,44 @@ body::before {
   margin-top: 12px;
   padding: 10px 12px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 138, 0, 0.35);
-  background: rgba(255, 138, 0, 0.10);
-  color: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(255, 138, 0, 0.30);
+  background: rgba(255, 210, 0, 0.18);
+  color: rgba(15, 23, 42, 0.92);
   font-weight: 900;
 }
 
 /* =========================================================
-   LOGIN — PRO
+   LOGIN — premium center card
    ========================================================= */
 .loginPage {
   min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
+  padding: 22px;
 }
 
 .loginCard {
   width: 420px;
   max-width: 94vw;
-  background: white;
+  background: rgba(255, 255, 255, 0.92);
   border-radius: 22px;
-  box-shadow: 0 30px 80px rgba(0,0,0,0.25);
-  padding: 28px;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  box-shadow: 0 30px 90px rgba(2, 6, 23, 0.18);
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
 }
 
-/* Accent edge */
+/* Accent aura inside the card */
 .loginCard::before {
   content: "";
   position: absolute;
-  inset: 0;
+  inset: -2px;
   pointer-events: none;
-  background: radial-gradient(500px 240px at 15% 0%, rgba(255, 210, 0, 0.16), transparent 55%),
-              radial-gradient(500px 240px at 85% 0%, rgba(255, 138, 0, 0.12), transparent 58%);
-  opacity: 0.9;
+  background:
+    radial-gradient(520px 260px at 10% 0%, rgba(255, 210, 0, 0.20), transparent 58%),
+    radial-gradient(520px 260px at 90% 0%, rgba(255, 138, 0, 0.14), transparent 60%);
+  opacity: 0.95;
 }
 
 .loginHeader {
@@ -473,33 +474,50 @@ body::before {
   z-index: 1;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   padding: 6px 6px 12px 6px;
 }
 
-.logoCircle {
-  width: 42px;
-  height: 42px;
-  border-radius: 16px;
-  display: grid;
-  place-items: center;
-  font-weight: 1000;
-  color: #0b1020;
+/* Logo wrapper (for your uploaded image) */
+.loginLogoWrap{
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
   background: var(--grad);
+  display:flex;
+  align-items:center;
+  justify-content:center;
   box-shadow: 0 14px 30px rgba(255, 138, 0, 0.18);
 }
 
-.brandText {
+/* Control image size here */
+.loginLogoImg{
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  display: block;
+}
+
+/* Brand text */
+.brandText,
+.loginBrandTitle{
   font-size: 15px;
   font-weight: 1000;
-  letter-spacing: 0.5px;
+  color: var(--ink);
+  letter-spacing: 0.25px;
+  line-height: 1.1;
+}
+
+/* If you show “Portal de envíos” near title with .muted */
+.loginCard .muted{
+  color: rgba(15, 23, 42, 0.55);
 }
 
 .loginGrid {
   position: relative;
   z-index: 1;
   display: grid;
-  gap: 10px;
+  gap: 8px;
   padding: 6px;
 }
 
@@ -511,6 +529,14 @@ body::before {
   margin-top: 6px;
 }
 
+.loginLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(15, 23, 42, 0.70);
+  font-weight: 900;
+}
+
 .loginFooter {
   display: flex;
   align-items: center;
@@ -519,20 +545,34 @@ body::before {
   margin-top: 12px;
 }
 
-/* Forgot password pro pill */
-.loginFooter .link {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+/* Forgot password: visible and pro */
+.loginFooter .link{
+  background: rgba(15, 23, 42, 0.04);
+  border: 1px solid rgba(15, 23, 42, 0.10);
   padding: 9px 12px;
   border-radius: 999px;
+  color: rgba(15, 23, 42, 0.78);
+  box-shadow: 0 10px 22px rgba(2, 6, 23, 0.08);
   text-decoration: none;
-  color: rgba(255, 255, 255, 0.90);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
 }
-.loginFooter .link:hover {
-  border-color: rgba(255, 210, 0, 0.35);
-  background: rgba(255, 255, 255, 0.07);
+.loginFooter .link:hover{
+  border-color: rgba(255, 138, 0, 0.30);
+  background: rgba(255, 210, 0, 0.16);
   text-decoration: none;
+}
+
+/* Inputs inside login */
+.loginCard .input{
+  background: rgba(15, 23, 42, 0.04);
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  color: var(--ink);
+}
+.loginCard .input::placeholder{
+  color: rgba(15, 23, 42, 0.35);
+}
+.loginCard .input:focus{
+  border-color: rgba(255, 138, 0, 0.50);
+  box-shadow: var(--ring);
 }
 
 /* =========================================================
@@ -545,11 +585,12 @@ body::before {
   padding: 7px 12px;
   border-radius: 999px;
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 950;
   letter-spacing: 0.2px;
-  border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.80);
   backdrop-filter: blur(8px);
+  color: rgba(15, 23, 42, 0.88);
 }
 
 .dot {
@@ -559,180 +600,49 @@ body::before {
 }
 
 .badge--received {
-  background: rgba(255, 210, 0, 0.12);
-  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 210, 0, 0.18);
   border-color: rgba(255, 210, 0, 0.30);
 }
-.badge--received .dot { background: var(--lemon); box-shadow: 0 0 10px rgba(255,210,0,0.55); }
+.badge--received .dot { background: var(--lemon); box-shadow: 0 0 10px rgba(255,210,0,0.45); }
 
 .badge--prep {
-  background: rgba(255, 138, 0, 0.12);
-  color: rgba(255, 255, 255, 0.92);
-  border-color: rgba(255, 138, 0, 0.30);
+  background: rgba(255, 138, 0, 0.14);
+  border-color: rgba(255, 138, 0, 0.26);
 }
-.badge--prep .dot { background: var(--orange); box-shadow: 0 0 10px rgba(255,138,0,0.55); }
+.badge--prep .dot { background: var(--orange); box-shadow: 0 0 10px rgba(255,138,0,0.40); }
 
 .badge--sent {
-  background: rgba(11, 42, 107, 0.18);
-  color: rgba(255, 255, 255, 0.92);
-  border-color: rgba(11, 42, 107, 0.35);
+  background: rgba(11, 42, 107, 0.10);
+  border-color: rgba(11, 42, 107, 0.18);
 }
-.badge--sent .dot { background: #3b82f6; box-shadow: 0 0 10px rgba(59,130,246,0.5); }
+.badge--sent .dot { background: #2563eb; box-shadow: 0 0 10px rgba(37,99,235,0.30); }
 
 .badge--transit {
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.92);
-  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(15, 23, 42, 0.05);
+  border-color: rgba(15, 23, 42, 0.12);
 }
-.badge--transit .dot { background: #a78bfa; box-shadow: 0 0 10px rgba(167,139,250,0.45); }
+.badge--transit .dot { background: #7c3aed; box-shadow: 0 0 10px rgba(124,58,237,0.25); }
 
 .badge--ready {
   background: rgba(34, 197, 94, 0.12);
-  color: rgba(255, 255, 255, 0.92);
-  border-color: rgba(34, 197, 94, 0.30);
+  border-color: rgba(34, 197, 94, 0.18);
 }
-.badge--ready .dot { background: #22c55e; box-shadow: 0 0 10px rgba(34,197,94,0.5); }
+.badge--ready .dot { background: #16a34a; box-shadow: 0 0 10px rgba(22,163,74,0.25); }
 
 .badge--delivered {
   background: var(--grad);
   color: #0b1020;
   border: none;
-  box-shadow: 0 12px 26px rgba(255, 138, 0, 0.22);
+  box-shadow: 0 12px 26px rgba(255, 138, 0, 0.20);
 }
 .badge--delivered .dot { background: #0b1020; }
 
-.loginLogoWrap{
-  width: 52px;
-  height: 52px;
-  border-radius: 14px;
-  background: linear-gradient(135deg,#ff8a00,#ffd600);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  box-shadow:0 10px 25px rgba(0,0,0,0.15);
-}
-
-.loginLogoImg{
-  width:34px;
-  height:34px;
-  object-fit:contain;
-}
-
-.loginBrandTitle{
-  font-size:16px;
-  font-weight:800;
-  color:#1a1a1a;
-  letter-spacing:0.4px;
-}
-
-.loginBrandTitle{
-  font-size:16px;
-  font-weight:800;
-  color:#1a1a1a;
-  letter-spacing:0.4px;
-}
-
 /* =========================================================
-   LOGIN FIX (NO BORRAR NADA) — SOLO AJUSTES PROLIJOS
-   - achica logo gigante (el png que se te superpone)
-   - arregla header y el texto “LEMON’s / Portal de envíos”
-   - arregla “¿Olvidaste tu contraseña?” (no blanco ilegible)
+   Small helpers (optional but safe)
    ========================================================= */
-
-/* 1) Si tu logo es una <img> grande dentro del login, lo controlamos acá */
-.loginHeader img,
-.loginLogoImg {
-  width: 38px !important;   /* ✅ achicado prolijo */
-  height: 38px !important;
-  object-fit: contain !important;
-  display: block;
+.tableWrap::-webkit-scrollbar { height: 10px; }
+.tableWrap::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.18);
+  border-radius: 999px;
 }
-
-/* 2) Si estás usando el wrapper nuevo (loginLogoWrap), lo ajusto un toque */
-.loginLogoWrap{
-  width: 44px !important;   /* antes 52 */
-  height: 44px !important;
-  border-radius: 14px;
-}
-
-/* 3) Header del login: alineado y más prolijo */
-.loginHeader{
-  align-items: center !important;
-  gap: 12px !important;
-  padding-bottom: 14px !important;
-}
-
-/* 4) Tipografía del “LEMON’s / Portal de envíos” prolija */
-.brandText,
-.loginBrandTitle{
-  font-size: 15px !important;
-  font-weight: 950 !important;
-  letter-spacing: 0.25px !important;
-  color: #141414 !important; /* sobre fondo blanco */
-  line-height: 1.1 !important;
-}
-
-/* Si tenés un subtítulo “Portal de envíos” con .muted adentro del login */
-.loginCard .muted{
-  color: rgba(0,0,0,0.55) !important;
-}
-
-/* 5) LoginCard: tu ::before no se veía porque faltaba position relative */
-.loginCard{
-  position: relative !important; /* ✅ necesario para que el ::before se recorte al card */
-  overflow: hidden !important;   /* ✅ evita “manchas” fuera del card */
-}
-
-/* 6) Inputs dentro del login: en fondo blanco, mejor contraste */
-.loginCard .input{
-  background: rgba(0,0,0,0.04) !important;
-  border: 1px solid rgba(0,0,0,0.10) !important;
-  color: #141414 !important;
-}
-
-.loginCard .input::placeholder{
-  color: rgba(0,0,0,0.35) !important;
-}
-
-.loginCard .input:focus{
-  border-color: rgba(255, 138, 0, 0.55) !important;
-  box-shadow: 0 0 0 4px rgba(255, 210, 0, 0.20) !important;
-}
-
-/* 7) “¿Olvidaste tu contraseña?”: tu regla actual lo deja blanco.
-      Lo dejamos estilo pill amarillo suave, texto oscuro. */
-.loginFooter .link{
-  background: rgba(255, 210, 0, 0.25) !important;
-  border: 1px solid rgba(255, 138, 0, 0.25) !important;
-  color: #1a1a1a !important;
-  box-shadow: 0 10px 22px rgba(0,0,0,0.10) !important;
-  border-radius: 999px !important;
-}
-
-.loginFooter .link:hover{
-  background: rgba(255, 210, 0, 0.32) !important;
-  border-color: rgba(255, 138, 0, 0.35) !important;
-  text-decoration: none !important;
-}
-
-/* 8) Botón “Iniciar sesión” más premium en blanco (ya lo tenías bien, refuerzo) */
-.loginCard .btnPrimary{
-  color: #0b1020 !important;
-  font-weight: 950 !important;
-}
-
-/* 9) Si se te está superponiendo el logo (muy grande) por algún absolute:
-      evitamos que cualquier img dentro del login “salga” */
-.loginPage img{
-  max-width: 100% !important;
-  height: auto !important;
-}
-
-/* 10) Ajuste fino de espaciados para que no se vea gigante */
-.loginCard{
-  padding: 24px !important; /* antes 28 */
-}
-
-.loginGrid{
-  gap: 8px !important;
-}
+.tableWrap::-webkit-scrollbar-track { background: transparent; }
