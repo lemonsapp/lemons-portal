@@ -757,9 +757,11 @@ export default function OperatorPanel() {
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
             />
-            <button className="btn" onClick={createClient}>
+          <div className="actionsRight">
+            <button className="btn btnPrimary" onClick={createClient}>
               Crear cliente
             </button>
+          </div>
           </div>
         </div>
 
@@ -858,147 +860,153 @@ export default function OperatorPanel() {
         </div>
       </div>
 
-      {/* CREAR ENVÍO */}
-      <div className="box" style={{ marginTop: 12 }}>
-        <h2>Crear nuevo envío</h2>
+                {/* CREAR ENVÍO */}
+                <div className="box" style={{ marginTop: 12 }}>
+                  <h2>Crear nuevo envío</h2>
 
-        <div className="col">
-          <div className="muted">
-            Primero buscá un cliente arriba, y después cargá el envío.
-          </div>
+                  <div className="muted">
+                    Primero buscá un cliente arriba, y después cargá el envío.
+                  </div>
 
-          <input
-            className="input"
-            placeholder="Código de paquete"
-            value={packageCode}
-            onChange={(e) => setPackageCode(e.target.value)}
-          />
-          <input
-            className="input"
-            placeholder="Descripción item"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-          />
+                  <div className="operatorForm" style={{ marginTop: 10 }}>
+                    {/* Col izquierda */}
+                    <div className="operatorCol">
+                      <input
+                        className="input"
+                        placeholder="Código de paquete"
+                        value={packageCode}
+                        onChange={(e) => setPackageCode(e.target.value)}
+                      />
 
-          <div className="row">
-            <input
-              className="input"
-              placeholder="Caja (opcional)"
-              value={boxCode}
-              onChange={(e) => setBoxCode(e.target.value)}
-            />
-            <input
-              className="input"
-              placeholder="Tracking (opcional)"
-              value={tracking}
-              onChange={(e) => setTracking(e.target.value)}
-            />
-          </div>
+                      <input
+                        className="input"
+                        placeholder="Descripción item"
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                      />
 
-          <div className="row">
-            <input
-              className="input"
-              placeholder="Peso (kg) ej: 0.5"
-              value={weightKg}
-              onChange={(e) => setWeightKg(e.target.value)}
-              inputMode="decimal"
-            />
+                      <div className="row">
+                        <input
+                          className="input"
+                          placeholder="Caja (opcional)"
+                          value={boxCode}
+                          onChange={(e) => setBoxCode(e.target.value)}
+                        />
+                        <input
+                          className="input"
+                          placeholder="Tracking (opcional)"
+                          value={tracking}
+                          onChange={(e) => setTracking(e.target.value)}
+                        />
+                      </div>
 
-            <select
-              className="input"
-              value={origin}
-              onChange={(e) => setOrigin(e.target.value)}
-              title="Origen"
-            >
-              {ORIGINS.map((o) => (
-                <option key={o} value={o}>
-                  Origen: {o}
-                </option>
-              ))}
-            </select>
+                      <div className="row">
+                        <input
+                          className="input"
+                          placeholder="Peso (kg) ej: 0.5"
+                          value={weightKg}
+                          onChange={(e) => setWeightKg(e.target.value)}
+                          inputMode="decimal"
+                        />
 
-            <select
-              className="input"
-              value={origin === "EUROPA" ? "NORMAL" : service}
-              onChange={(e) => setService(e.target.value)}
-              disabled={origin === "EUROPA"}
-              title="Servicio"
-            >
-              {(SERVICES_BY_ORIGIN[origin] || ["NORMAL"]).map((s) => (
-                <option key={s} value={s}>
-                  Servicio: {s}
-                </option>
-              ))}
-            </select>
-          </div>
+                        <select
+                          className="input"
+                          value={origin}
+                          onChange={(e) => setOrigin(e.target.value)}
+                          title="Origen"
+                        >
+                          {ORIGINS.map((o) => (
+                            <option key={o} value={o}>
+                              Origen: {o}
+                            </option>
+                          ))}
+                        </select>
 
-          <div className="row">
-            <select
-              className="input"
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-            >
-              {STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
+                        <select
+                          className="input"
+                          value={origin === "EUROPA" ? "NORMAL" : service}
+                          onChange={(e) => setService(e.target.value)}
+                          disabled={origin === "EUROPA"}
+                          title="Servicio"
+                        >
+                          {(SERVICES_BY_ORIGIN[origin] || ["NORMAL"]).map((s) => (
+                            <option key={s} value={s}>
+                              Servicio: {s}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
 
-            <div style={{ display: "flex", alignItems: "center" }}>
-              <StatusBadge status={status} />
-            </div>
+                      <div className="row">
+                        <select className="input" value={status} onChange={(e) => setStatus(e.target.value)}>
+                          {STATUSES.map((s) => (
+                            <option key={s} value={s}>
+                              {s}
+                            </option>
+                          ))}
+                        </select>
 
-            <select
-              className="input"
-              style={{ minWidth: 180, marginLeft: "auto" }}
-              value={overrideEnabled ? "MANUAL" : "AUTO"}
-              onChange={(e) => {
-                const manual = e.target.value === "MANUAL";
-                setOverrideEnabled(manual);
-                if (!manual) setOverrideRate("");
-              }}
-              title="Modo tarifa"
-            >
-              <option value="AUTO">Tarifa: AUTO</option>
-              <option value="MANUAL">Tarifa: MANUAL</option>
-            </select>
-          </div>
+                        <div className="badgeCell">
+                          <StatusBadge status={status} />
+                        </div>
 
-          {overrideEnabled && (
-            <div className="row">
-              <input
-                className="input"
-                placeholder="Tarifa manual USD/kg"
-                value={overrideRate}
-                onChange={(e) => setOverrideRate(e.target.value)}
-                inputMode="decimal"
-              />
-              <div className="muted" style={{ display: "flex", alignItems: "center" }}>
-                Se usa solo en este envío
-              </div>
-            </div>
-          )}
+                        <select
+                          className="input"
+                          value={overrideEnabled ? "MANUAL" : "AUTO"}
+                          onChange={(e) => {
+                            const manual = e.target.value === "MANUAL";
+                            setOverrideEnabled(manual);
+                            if (!manual) setOverrideRate("");
+                          }}
+                          title="Modo tarifa"
+                        >
+                          <option value="AUTO">Tarifa: AUTO</option>
+                          <option value="MANUAL">Tarifa: MANUAL</option>
+                        </select>
+                      </div>
 
-          <div className="note" style={{ marginTop: 10 }}>
-            <div className="muted">Tarifa aplicada</div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <b>
-                {origin} {origin === "EUROPA" ? "" : service}
-              </b>
-              <b>${Number(appliedRate || 0).toFixed(2)} / kg</b>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span className="muted">Estimado (USD)</span>
-              <b>${Number(estimated || 0).toFixed(2)}</b>
-            </div>
-          </div>
+                      {overrideEnabled && (
+                        <div className="row">
+                          <input
+                            className="input"
+                            placeholder="Tarifa manual USD/kg"
+                            value={overrideRate}
+                            onChange={(e) => setOverrideRate(e.target.value)}
+                            inputMode="decimal"
+                          />
+                          <div className="muted" style={{ display: "flex", alignItems: "center" }}>
+                            Se usa solo en este envío
+                          </div>
+                        </div>
+                      )}
+                    </div>
 
-          <button className="btn" onClick={createShipment}>
-            Guardar envío
-          </button>
-        </div>
-      </div>
+                    {/* Col derecha */}
+                    <div className="operatorCol">
+                      <div className="summaryCard">
+                        <div className="muted">Tarifa aplicada</div>
+
+                        <div className="summaryRow">
+                          <b>
+                            {origin} {origin === "EUROPA" ? "" : service}
+                          </b>
+                          <b>${Number(appliedRate || 0).toFixed(2)} / kg</b>
+                        </div>
+
+                        <div className="summaryRow">
+                          <span className="muted">Estimado (USD)</span>
+                          <b>${Number(estimated || 0).toFixed(2)}</b>
+                        </div>
+                      </div>
+
+                      <div className="actionsRight">
+                        <button className="btn btnPrimary" onClick={createShipment}>
+                          Guardar envío
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
       {/* GESTIÓN ENVÍOS */}
       <div className="box" style={{ marginTop: 12 }}>

@@ -721,3 +721,226 @@ body::before {
   box-shadow: 0 12px 26px rgba(255, 138, 0, 0.22);
 }
 .badge--delivered .dot { background: #0b1020; }
+
+/* =========================================================
+   OPERATOR PANEL — Layout PRO (Crear cliente / Crear envío)
+   Pegalo al FINAL del style.css
+   ========================================================= */
+
+/* 1) Contenedores: más aire y separación visual */
+.box {
+  padding: 16px;
+}
+
+.box h2,
+.box h3 {
+  margin: 0 0 10px 0;
+}
+
+/* 2) Grid 2 columnas real para "Crear cliente" + "Buscar cliente" */
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+@media (max-width: 980px) {
+  .grid2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 3) Dentro de cada panel: form prolijo */
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* 4) Inputs: que no se vean gigantes y mantengan altura consistente */
+.input,
+select.input,
+textarea.input {
+  height: 42px;
+  padding: 10px 12px;
+  border-radius: 12px;
+}
+
+/* Si tenés selects sin clase .input */
+select {
+  height: 42px;
+  border-radius: 12px;
+}
+
+/* 5) Filas: cuando haya 2 inputs juntos, que se acomoden bien */
+.row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  align-items: center;
+}
+
+@media (max-width: 980px) {
+  .row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 6) Botones dentro del operador: alineación + tamaño */
+.box .btn {
+  height: 40px;
+  padding: 10px 14px;
+  border-radius: 12px;
+}
+
+/* 7) "Crear cliente" / "Buscar" / "Guardar envío" alineados a la derecha */
+.box .btnPrimary,
+.box button[type="submit"],
+.box button {
+  align-self: flex-start;
+}
+
+.box .actionsRight {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* 8) Hacemos que el "Crear nuevo envío" se vea como un form con secciones */
+.operatorForm {
+  display: grid;
+  gap: 12px;
+}
+
+/* 9) Si el operador tiene un bloque de “Tarifa aplicada / Estimado” que queda raro,
+      lo convertimos en tarjeta resumen */
+.summaryCard {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: var(--r-xl);
+  padding: 12px 14px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.22);
+}
+
+/* 10) Ajuste visual a títulos del operador */
+.box h2,
+.box h3 {
+  font-weight: 1000;
+  letter-spacing: 0.2px;
+}
+
+/* =========================================================
+   "Creación de envío" — input stack más pro (sin JSX)
+   ========================================================= */
+
+/* Cuando tengas muchos inputs uno debajo del otro (como en tu foto),
+   les ponemos separación uniforme y ancho correcto */
+.box form {
+  display: grid;
+  gap: 10px;
+}
+
+/* Separar select/inputs del label tipo "Origen: USA" si lo mostrás como texto */
+.box .muted {
+  line-height: 1.3;
+}
+
+/* Badge dentro del form (ej: "Recibido en depósito") que no rompa layout */
+.badge {
+  align-self: flex-start;
+}
+
+/* =========================================================
+   Opcional: compactar un toque los campos del form largo
+   ========================================================= */
+@media (min-width: 1100px) {
+  /* si el form es MUY largo, usamos 2 columnas para inputs cuando sea posible */
+  .box form .row,
+  .box .row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* =========================================================
+   OPERATOR PANEL — PRO LAYOUT FIX (con tu JSX actual)
+   Pegar al FINAL del style.css
+   ========================================================= */
+
+/* Botones de acción alineados prolijos */
+.actionsRight{
+  display:flex;
+  justify-content:flex-end;
+  gap:10px;
+  margin-top:10px;
+}
+
+/* No fuerces TODOS los botones a la izquierda */
+.box button{
+  align-self: unset;
+}
+
+/* ===== Crear envío: layout 2 columnas con resumen a la derecha ===== */
+.operatorForm{
+  display:grid;
+  grid-template-columns: 1.35fr 0.65fr;
+  gap:14px;
+  align-items:start;
+}
+
+.operatorCol{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+/* Cuando el row tiene 3 elementos (peso/origen/servicio) que no explote */
+.row{
+  display:grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap:10px;
+  align-items:center;
+}
+
+/* El row que tiene badge en el medio: que no rompa */
+.badgeCell{
+  display:flex;
+  align-items:center;
+  justify-content:flex-start;
+  min-height:42px;
+}
+
+/* Resumen pro (tarifa/estimado) */
+.summaryCard{
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: var(--r-xl);
+  padding: 12px 14px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.22);
+}
+
+.summaryRow{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  margin-top:8px;
+}
+
+/* Inputs/Selects: altura consistente */
+.input,
+select.input,
+textarea.input{
+  height:42px;
+  padding:10px 12px;
+  border-radius:12px;
+}
+
+/* Mobile: todo a 1 columna */
+@media (max-width: 980px){
+  .operatorForm{
+    grid-template-columns: 1fr;
+  }
+  .row{
+    grid-template-columns: 1fr;
+  }
+}
