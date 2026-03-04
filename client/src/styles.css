@@ -1,23 +1,43 @@
-/* =========================
-   BASE UI (principal, prolijo)
-   ========================= */
+/* =========================================================
+   LEMONS THEME — "Verano" (Yellow/Orange + Deep Blue)
+   Clean, prolijo, no gigante.
+   ========================================================= */
 
 :root {
-  --bg: #0b1020;
-  --panel: rgba(255, 255, 255, 0.06);
-  --border: rgba(255, 255, 255, 0.12);
-  --text: rgba(255, 255, 255, 0.92);
-  --muted: rgba(255, 255, 255, 0.65);
+  /* Brand */
+  --lemon: #ffd400;      /* amarillo limón */
+  --orange: #ff8a00;     /* naranja cálido */
+  --blue: #0b2a6b;       /* azul profundo */
+  --blue2: #143a86;      /* variante */
+  --sky: #e9f2ff;        /* celestito suave */
+  --ink: #0b1220;        /* texto principal */
+  --muted: rgba(11, 18, 32, 0.62);
 
-  --radius: 16px;
-  --radius-sm: 12px;
+  /* UI */
+  --bg: #f6f9ff;
+  --panel: #ffffff;
+  --panel2: rgba(255, 255, 255, 0.75);
+  --border: rgba(11, 42, 107, 0.12);
 
-  --shadow: 0 16px 50px rgba(0, 0, 0, 0.45);
+  /* Radii + shadow */
+  --r-xl: 18px;
+  --r-lg: 16px;
+  --r-md: 12px;
+  --r-sm: 10px;
 
-  --primary: #7c3aed; /* violeta */
-  --primary2: #d946ef; /* fucsia */
-  --primary3: #f97316; /* naranja */
-  --grad: linear-gradient(135deg, var(--primary), var(--primary2), var(--primary3));
+  --shadow: 0 18px 55px rgba(11, 42, 107, 0.10);
+  --shadow2: 0 12px 28px rgba(11, 42, 107, 0.10);
+
+  /* Accent gradients */
+  --grad-lemon: linear-gradient(135deg, var(--lemon), var(--orange));
+  --grad-blue: linear-gradient(135deg, var(--blue), var(--blue2));
+  --ring: 0 0 0 4px rgba(255, 212, 0, 0.25);
+
+  /* Sizes (control “no gigante”) */
+  --fs: 14px;
+  --fs-sm: 12px;
+  --fs-lg: 18px;
+  --pad: 14px;
 }
 
 * {
@@ -28,38 +48,21 @@ html,
 body {
   margin: 0;
   padding: 0;
-  background: radial-gradient(
-      1200px 700px at 20% 10%,
-      rgba(124, 58, 237, 0.18),
-      transparent 60%
-    ),
-    radial-gradient(
-      900px 600px at 80% 30%,
-      rgba(217, 70, 239, 0.14),
-      transparent 55%
-    ),
-    radial-gradient(
-      900px 600px at 70% 85%,
-      rgba(249, 115, 22, 0.12),
-      transparent 55%
-    ),
-    var(--bg);
-  color: var(--text);
+  font-size: var(--fs);
+  color: var(--ink);
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  background: radial-gradient(900px 500px at 20% 5%, rgba(255, 212, 0, 0.16), transparent 55%),
+              radial-gradient(900px 500px at 85% 10%, rgba(11, 42, 107, 0.10), transparent 55%),
+              radial-gradient(900px 650px at 55% 95%, rgba(255, 138, 0, 0.10), transparent 58%),
+              var(--bg);
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
-}
+a { color: inherit; text-decoration: none; }
+.muted { color: var(--muted); }
 
-.muted {
-  color: var(--muted);
-}
-
-/* =========================
+/* =========================================================
    Layout
-   ========================= */
+   ========================================================= */
 
 .screen {
   min-height: 100vh;
@@ -68,7 +71,7 @@ a {
   margin: 0 auto;
 }
 
-/* header dentro de páginas (h1 + subtítulo) */
+/* Page header block (h1 + subtitle) */
 .topbar {
   display: flex;
   flex-direction: column;
@@ -79,7 +82,8 @@ a {
 .topbar h1 {
   margin: 0;
   font-size: 22px;
-  font-weight: 900;
+  font-weight: 950;
+  letter-spacing: 0.2px;
 }
 
 .row {
@@ -101,14 +105,12 @@ a {
 }
 
 @media (max-width: 980px) {
-  .grid2 {
-    grid-template-columns: 1fr;
-  }
+  .grid2 { grid-template-columns: 1fr; }
 }
 
-/* =========================
+/* =========================================================
    Topbar component (Topbar.jsx)
-   ========================= */
+   ========================================================= */
 
 .topbarShell {
   margin-top: 12px;
@@ -119,9 +121,10 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
+
   padding: 12px 14px;
-  border-radius: var(--radius);
-  background: var(--panel);
+  border-radius: var(--r-xl);
+  background: var(--panel2);
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
   backdrop-filter: blur(10px);
@@ -141,7 +144,8 @@ a {
   place-items: center;
   font-weight: 1000;
   color: #0b1020;
-  background: var(--grad);
+  background: var(--grad-lemon);
+  box-shadow: 0 10px 22px rgba(255, 138, 0, 0.20);
 }
 
 .topbarTitle {
@@ -152,7 +156,7 @@ a {
 
 .topbarSubtitle {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   margin-top: 2px;
 }
 
@@ -167,31 +171,25 @@ a {
 .topbarUser {
   padding: 8px 10px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(11, 42, 107, 0.04);
+  border: 1px solid rgba(11, 42, 107, 0.10);
 }
 
 @media (max-width: 820px) {
-  .topbarCard {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .topbarRight {
-    justify-content: space-between;
-  }
+  .topbarCard { flex-direction: column; align-items: stretch; }
+  .topbarRight { justify-content: space-between; }
 }
 
-/* =========================
+/* =========================================================
    Panels / Boxes
-   ========================= */
+   ========================================================= */
 
 .box {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  backdrop-filter: blur(10px);
-  padding: 14px;
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow2);
+  padding: var(--pad);
 }
 
 .box h2 {
@@ -200,16 +198,17 @@ a {
   font-size: 16px;
 }
 
+/* “destacado” con borde azul */
 .note {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  border-radius: var(--radius);
+  background: rgba(233, 242, 255, 0.55);
+  border: 1px solid rgba(11, 42, 107, 0.12);
+  border-radius: var(--r-lg);
   padding: 10px 12px;
 }
 
-/* =========================
+/* =========================================================
    Dashboard cards (OperatorPanel)
-   ========================= */
+   ========================================================= */
 
 .cards {
   display: grid;
@@ -219,85 +218,104 @@ a {
 }
 
 @media (max-width: 1180px) {
-  .cards {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+  .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 600px) {
-  .cards {
-    grid-template-columns: 1fr;
-  }
+  .cards { grid-template-columns: 1fr; }
 }
 
 .cardStat {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  border-radius: var(--radius);
+  background: linear-gradient(180deg, #ffffff, rgba(255, 255, 255, 0.92));
+  border: 1px solid rgba(11, 42, 107, 0.10);
+  border-radius: var(--r-xl);
   padding: 12px;
+  box-shadow: 0 10px 24px rgba(11, 42, 107, 0.10);
+  position: relative;
+  overflow: hidden;
+}
+
+.cardStat::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  background: radial-gradient(260px 120px at 10% 0%, rgba(255, 212, 0, 0.22), transparent 60%),
+              radial-gradient(260px 120px at 90% 0%, rgba(11, 42, 107, 0.14), transparent 62%);
+  pointer-events: none;
+  opacity: 0.75;
 }
 
 .cardStat .k {
-  color: var(--muted);
+  position: relative;
+  z-index: 1;
+  color: rgba(11, 42, 107, 0.70);
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 900;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .cardStat .v {
+  position: relative;
+  z-index: 1;
   margin-top: 6px;
   font-size: 26px;
   font-weight: 1000;
   line-height: 1.1;
+  color: var(--blue);
 }
 
 .cardStat .s {
+  position: relative;
+  z-index: 1;
   margin-top: 4px;
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(11, 42, 107, 0.55);
   font-size: 12px;
 }
 
-/* =========================
-   Inputs / Buttons
-   ========================= */
+/* =========================================================
+   Inputs / Selects
+   ========================================================= */
 
 .input {
   width: 100%;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: var(--text);
+  background: #ffffff;
+  border: 1px solid rgba(11, 42, 107, 0.14);
+  color: var(--ink);
   padding: 10px 12px;
   border-radius: 14px;
   outline: none;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
 }
 
 .input::placeholder {
-  color: rgba(255, 255, 255, 0.42);
+  color: rgba(11, 18, 32, 0.45);
 }
 
 .input:focus {
-  border-color: rgba(217, 70, 239, 0.55);
-  box-shadow: 0 0 0 4px rgba(217, 70, 239, 0.12);
-  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 138, 0, 0.65);
+  box-shadow: var(--ring);
 }
+
+/* =========================================================
+   Buttons
+   ========================================================= */
 
 .btn {
   appearance: none;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text);
+  border: 1px solid rgba(11, 42, 107, 0.14);
+  background: #ffffff;
+  color: var(--blue);
   padding: 10px 12px;
   border-radius: 14px;
-  font-weight: 900;
+  font-weight: 950;
   cursor: pointer;
   transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
-  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 10px 20px rgba(11, 42, 107, 0.10);
 }
 
 .btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.30);
-  filter: brightness(1.03);
+  box-shadow: 0 14px 26px rgba(11, 42, 107, 0.14);
 }
 
 .btn:disabled {
@@ -306,20 +324,38 @@ a {
   transform: none;
 }
 
+/* Primary (LEMON button) */
 .btnPrimary {
   border: none;
-  background: var(--grad);
+  background: var(--grad-lemon);
   color: #0b1020;
+  box-shadow: 0 14px 26px rgba(255, 138, 0, 0.18);
 }
 
+.btnPrimary:hover {
+  filter: brightness(1.02);
+}
+
+/* Optional small */
 .btnSmall {
   padding: 9px 12px;
   font-size: 12px;
 }
 
-/* =========================
-   Filters / Table
-   ========================= */
+/* Link-ish button (for "Olvidé mi contraseña") */
+.link {
+  border: none;
+  background: transparent;
+  color: var(--blue);
+  font-weight: 950;
+  cursor: pointer;
+  padding: 6px 0;
+}
+.link:hover { text-decoration: underline; }
+
+/* =========================================================
+   Filters + Table
+   ========================================================= */
 
 .filters {
   display: flex;
@@ -329,11 +365,13 @@ a {
   align-items: center;
 }
 
+/* Table wrapper */
 .tableWrap {
   overflow: auto;
-  border-radius: var(--radius);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--r-xl);
+  border: 1px solid rgba(11, 42, 107, 0.12);
+  background: #ffffff;
+  box-shadow: 0 10px 22px rgba(11, 42, 107, 0.08);
 }
 
 .table {
@@ -342,15 +380,16 @@ a {
   min-width: 980px;
 }
 
+/* Sticky header */
 .table thead th {
   text-align: left;
   font-size: 11px;
   letter-spacing: 0.10em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.75);
+  color: rgba(11, 42, 107, 0.78);
   padding: 12px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
-  background: rgba(15, 18, 40, 0.60);
+  border-bottom: 1px solid rgba(11, 42, 107, 0.10);
+  background: linear-gradient(180deg, rgba(233, 242, 255, 0.90), rgba(233, 242, 255, 0.70));
   position: sticky;
   top: 0;
   z-index: 2;
@@ -358,44 +397,45 @@ a {
 
 .table td {
   padding: 12px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.90);
+  border-bottom: 1px solid rgba(11, 42, 107, 0.08);
+  color: rgba(11, 18, 32, 0.92);
   font-size: 13px;
   vertical-align: top;
 }
 
 .table tbody tr:hover td {
-  background: rgba(217, 70, 239, 0.06);
+  background: rgba(255, 212, 0, 0.08);
 }
 
-/* =========================
+/* =========================================================
    Pills / Banner
-   ========================= */
+   ========================================================= */
 
 .pill {
   display: inline-flex;
   align-items: center;
   padding: 6px 10px;
   border-radius: 999px;
-  font-weight: 900;
+  font-weight: 950;
   font-size: 12px;
   color: #0b1020;
-  background: var(--grad);
+  background: var(--grad-lemon);
+  box-shadow: 0 10px 18px rgba(255, 138, 0, 0.14);
 }
 
 .banner {
   margin-top: 12px;
   padding: 10px 12px;
   border-radius: 14px;
-  border: 1px solid rgba(239, 68, 68, 0.35);
-  background: rgba(239, 68, 68, 0.12);
-  color: #fecaca;
-  font-weight: 900;
+  border: 1px solid rgba(255, 138, 0, 0.35);
+  background: rgba(255, 212, 0, 0.18);
+  color: rgba(11, 42, 107, 0.90);
+  font-weight: 950;
 }
 
-/* =========================
+/* =========================================================
    Status badges (StatusBadge.jsx)
-   ========================= */
+   ========================================================= */
 
 .badge {
   display: inline-flex;
@@ -404,9 +444,10 @@ a {
   padding: 7px 12px;
   border-radius: 999px;
   font-size: 12px;
-  font-weight: 900;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.06);
+  font-weight: 950;
+  border: 1px solid rgba(11, 42, 107, 0.14);
+  background: rgba(233, 242, 255, 0.70);
+  color: rgba(11, 42, 107, 0.90);
 }
 
 .dot {
@@ -415,63 +456,53 @@ a {
   border-radius: 999px;
 }
 
+/* Received (azul) */
 .badge--received {
-  background: rgba(124, 58, 237, 0.14);
-  color: #c4b5fd;
-  border-color: rgba(124, 58, 237, 0.32);
+  background: rgba(11, 42, 107, 0.08);
+  border-color: rgba(11, 42, 107, 0.16);
 }
-.badge--received .dot {
-  background: #7c3aed;
-}
+.badge--received .dot { background: var(--blue); }
 
+/* Prep (amarillo) */
 .badge--prep {
-  background: rgba(217, 70, 239, 0.14);
-  color: #f0abfc;
-  border-color: rgba(217, 70, 239, 0.32);
+  background: rgba(255, 212, 0, 0.18);
+  border-color: rgba(255, 138, 0, 0.22);
 }
-.badge--prep .dot {
-  background: #d946ef;
-}
+.badge--prep .dot { background: var(--lemon); }
 
+/* Sent (naranja) */
 .badge--sent {
-  background: rgba(249, 115, 22, 0.14);
-  color: #fdba74;
-  border-color: rgba(249, 115, 22, 0.30);
+  background: rgba(255, 138, 0, 0.14);
+  border-color: rgba(255, 138, 0, 0.22);
 }
-.badge--sent .dot {
-  background: #f97316;
-}
+.badge--sent .dot { background: var(--orange); }
 
+/* Transit (celeste) */
 .badge--transit {
-  background: rgba(59, 130, 246, 0.14);
-  color: #93c5fd;
-  border-color: rgba(59, 130, 246, 0.30);
+  background: rgba(233, 242, 255, 0.95);
+  border-color: rgba(11, 42, 107, 0.12);
 }
-.badge--transit .dot {
-  background: #3b82f6;
-}
+.badge--transit .dot { background: #3b82f6; }
 
+/* Ready (verde ok) */
 .badge--ready {
-  background: rgba(34, 197, 94, 0.14);
-  color: #86efac;
-  border-color: rgba(34, 197, 94, 0.30);
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.22);
 }
-.badge--ready .dot {
-  background: #22c55e;
-}
+.badge--ready .dot { background: #22c55e; }
 
+/* Delivered (lemon gradient) */
 .badge--delivered {
-  background: var(--grad);
-  color: #0b1020;
+  background: var(--grad-lemon);
   border: none;
+  color: #0b1020;
 }
-.badge--delivered .dot {
-  background: #0b1020;
-}
+.badge--delivered .dot { background: #0b1020; }
 
-/* =========================
-   Login helpers (si usás)
-   ========================= */
+/* =========================================================
+   Login (si lo usás)
+   ========================================================= */
+
 .loginPage {
   min-height: 100vh;
   display: grid;
@@ -482,10 +513,564 @@ a {
 .loginCard {
   width: 420px;
   max-width: 94vw;
-  background: var(--panel);
-  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(11, 42, 107, 0.12);
   border-radius: 22px;
   box-shadow: var(--shadow);
-  backdrop-filter: blur(12px);
   padding: 18px;
+  backdrop-filter: blur(10px);
+}
+
+/* “Olvidé mi contraseña” premium */
+.loginFooter .link {
+  background: rgba(233, 242, 255, 0.80);
+  border: 1px solid rgba(11, 42, 107, 0.12);
+  padding: 9px 12px;
+  border-radius: 14px;
+  text-decoration: none;
+  color: var(--blue);
+  font-weight: 950;
+  box-shadow: 0 10px 18px rgba(11, 42, 107, 0.08);
+}
+.loginFooter .link:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 24px rgba(11, 42, 107, 0.10);
+}
+/* =========================================================
+   LEMONS THEME — "Verano" (Yellow/Orange + Deep Blue)
+   Clean, prolijo, no gigante.
+   ========================================================= */
+
+:root {
+  /* Brand */
+  --lemon: #ffd400;      /* amarillo limón */
+  --orange: #ff8a00;     /* naranja cálido */
+  --blue: #0b2a6b;       /* azul profundo */
+  --blue2: #143a86;      /* variante */
+  --sky: #e9f2ff;        /* celestito suave */
+  --ink: #0b1220;        /* texto principal */
+  --muted: rgba(11, 18, 32, 0.62);
+
+  /* UI */
+  --bg: #f6f9ff;
+  --panel: #ffffff;
+  --panel2: rgba(255, 255, 255, 0.75);
+  --border: rgba(11, 42, 107, 0.12);
+
+  /* Radii + shadow */
+  --r-xl: 18px;
+  --r-lg: 16px;
+  --r-md: 12px;
+  --r-sm: 10px;
+
+  --shadow: 0 18px 55px rgba(11, 42, 107, 0.10);
+  --shadow2: 0 12px 28px rgba(11, 42, 107, 0.10);
+
+  /* Accent gradients */
+  --grad-lemon: linear-gradient(135deg, var(--lemon), var(--orange));
+  --grad-blue: linear-gradient(135deg, var(--blue), var(--blue2));
+  --ring: 0 0 0 4px rgba(255, 212, 0, 0.25);
+
+  /* Sizes (control “no gigante”) */
+  --fs: 14px;
+  --fs-sm: 12px;
+  --fs-lg: 18px;
+  --pad: 14px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  font-size: var(--fs);
+  color: var(--ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  background: radial-gradient(900px 500px at 20% 5%, rgba(255, 212, 0, 0.16), transparent 55%),
+              radial-gradient(900px 500px at 85% 10%, rgba(11, 42, 107, 0.10), transparent 55%),
+              radial-gradient(900px 650px at 55% 95%, rgba(255, 138, 0, 0.10), transparent 58%),
+              var(--bg);
+}
+
+a { color: inherit; text-decoration: none; }
+.muted { color: var(--muted); }
+
+/* =========================================================
+   Layout
+   ========================================================= */
+
+.screen {
+  min-height: 100vh;
+  padding: 18px;
+  max-width: 1320px;
+  margin: 0 auto;
+}
+
+/* Page header block (h1 + subtitle) */
+.topbar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0 14px 0;
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 950;
+  letter-spacing: 0.2px;
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 980px) {
+  .grid2 { grid-template-columns: 1fr; }
+}
+
+/* =========================================================
+   Topbar component (Topbar.jsx)
+   ========================================================= */
+
+.topbarShell {
+  margin-top: 12px;
+}
+
+.topbarCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+
+  padding: 12px 14px;
+  border-radius: var(--r-xl);
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+}
+
+.topbarLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.topbarLogo {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  font-weight: 1000;
+  color: #0b1020;
+  background: var(--grad-lemon);
+  box-shadow: 0 10px 22px rgba(255, 138, 0, 0.20);
+}
+
+.topbarTitle {
+  font-weight: 1000;
+  letter-spacing: 0.2px;
+  line-height: 1.1;
+}
+
+.topbarSubtitle {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  margin-top: 2px;
+}
+
+.topbarRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.topbarUser {
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: rgba(11, 42, 107, 0.04);
+  border: 1px solid rgba(11, 42, 107, 0.10);
+}
+
+@media (max-width: 820px) {
+  .topbarCard { flex-direction: column; align-items: stretch; }
+  .topbarRight { justify-content: space-between; }
+}
+
+/* =========================================================
+   Panels / Boxes
+   ========================================================= */
+
+.box {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow2);
+  padding: var(--pad);
+}
+
+.box h2 {
+  margin: 0 0 12px 0;
+  font-weight: 950;
+  font-size: 16px;
+}
+
+/* “destacado” con borde azul */
+.note {
+  background: rgba(233, 242, 255, 0.55);
+  border: 1px solid rgba(11, 42, 107, 0.12);
+  border-radius: var(--r-lg);
+  padding: 10px 12px;
+}
+
+/* =========================================================
+   Dashboard cards (OperatorPanel)
+   ========================================================= */
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+@media (max-width: 1180px) {
+  .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  .cards { grid-template-columns: 1fr; }
+}
+
+.cardStat {
+  background: linear-gradient(180deg, #ffffff, rgba(255, 255, 255, 0.92));
+  border: 1px solid rgba(11, 42, 107, 0.10);
+  border-radius: var(--r-xl);
+  padding: 12px;
+  box-shadow: 0 10px 24px rgba(11, 42, 107, 0.10);
+  position: relative;
+  overflow: hidden;
+}
+
+.cardStat::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  background: radial-gradient(260px 120px at 10% 0%, rgba(255, 212, 0, 0.22), transparent 60%),
+              radial-gradient(260px 120px at 90% 0%, rgba(11, 42, 107, 0.14), transparent 62%);
+  pointer-events: none;
+  opacity: 0.75;
+}
+
+.cardStat .k {
+  position: relative;
+  z-index: 1;
+  color: rgba(11, 42, 107, 0.70);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cardStat .v {
+  position: relative;
+  z-index: 1;
+  margin-top: 6px;
+  font-size: 26px;
+  font-weight: 1000;
+  line-height: 1.1;
+  color: var(--blue);
+}
+
+.cardStat .s {
+  position: relative;
+  z-index: 1;
+  margin-top: 4px;
+  color: rgba(11, 42, 107, 0.55);
+  font-size: 12px;
+}
+
+/* =========================================================
+   Inputs / Selects
+   ========================================================= */
+
+.input {
+  width: 100%;
+  background: #ffffff;
+  border: 1px solid rgba(11, 42, 107, 0.14);
+  color: var(--ink);
+  padding: 10px 12px;
+  border-radius: 14px;
+  outline: none;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.input::placeholder {
+  color: rgba(11, 18, 32, 0.45);
+}
+
+.input:focus {
+  border-color: rgba(255, 138, 0, 0.65);
+  box-shadow: var(--ring);
+}
+
+/* =========================================================
+   Buttons
+   ========================================================= */
+
+.btn {
+  appearance: none;
+  border: 1px solid rgba(11, 42, 107, 0.14);
+  background: #ffffff;
+  color: var(--blue);
+  padding: 10px 12px;
+  border-radius: 14px;
+  font-weight: 950;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+  box-shadow: 0 10px 20px rgba(11, 42, 107, 0.10);
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 26px rgba(11, 42, 107, 0.14);
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Primary (LEMON button) */
+.btnPrimary {
+  border: none;
+  background: var(--grad-lemon);
+  color: #0b1020;
+  box-shadow: 0 14px 26px rgba(255, 138, 0, 0.18);
+}
+
+.btnPrimary:hover {
+  filter: brightness(1.02);
+}
+
+/* Optional small */
+.btnSmall {
+  padding: 9px 12px;
+  font-size: 12px;
+}
+
+/* Link-ish button (for "Olvidé mi contraseña") */
+.link {
+  border: none;
+  background: transparent;
+  color: var(--blue);
+  font-weight: 950;
+  cursor: pointer;
+  padding: 6px 0;
+}
+.link:hover { text-decoration: underline; }
+
+/* =========================================================
+   Filters + Table
+   ========================================================= */
+
+.filters {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  align-items: center;
+}
+
+/* Table wrapper */
+.tableWrap {
+  overflow: auto;
+  border-radius: var(--r-xl);
+  border: 1px solid rgba(11, 42, 107, 0.12);
+  background: #ffffff;
+  box-shadow: 0 10px 22px rgba(11, 42, 107, 0.08);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 980px;
+}
+
+/* Sticky header */
+.table thead th {
+  text-align: left;
+  font-size: 11px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: rgba(11, 42, 107, 0.78);
+  padding: 12px 12px;
+  border-bottom: 1px solid rgba(11, 42, 107, 0.10);
+  background: linear-gradient(180deg, rgba(233, 242, 255, 0.90), rgba(233, 242, 255, 0.70));
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.table td {
+  padding: 12px 12px;
+  border-bottom: 1px solid rgba(11, 42, 107, 0.08);
+  color: rgba(11, 18, 32, 0.92);
+  font-size: 13px;
+  vertical-align: top;
+}
+
+.table tbody tr:hover td {
+  background: rgba(255, 212, 0, 0.08);
+}
+
+/* =========================================================
+   Pills / Banner
+   ========================================================= */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 950;
+  font-size: 12px;
+  color: #0b1020;
+  background: var(--grad-lemon);
+  box-shadow: 0 10px 18px rgba(255, 138, 0, 0.14);
+}
+
+.banner {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 138, 0, 0.35);
+  background: rgba(255, 212, 0, 0.18);
+  color: rgba(11, 42, 107, 0.90);
+  font-weight: 950;
+}
+
+/* =========================================================
+   Status badges (StatusBadge.jsx)
+   ========================================================= */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 950;
+  border: 1px solid rgba(11, 42, 107, 0.14);
+  background: rgba(233, 242, 255, 0.70);
+  color: rgba(11, 42, 107, 0.90);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+/* Received (azul) */
+.badge--received {
+  background: rgba(11, 42, 107, 0.08);
+  border-color: rgba(11, 42, 107, 0.16);
+}
+.badge--received .dot { background: var(--blue); }
+
+/* Prep (amarillo) */
+.badge--prep {
+  background: rgba(255, 212, 0, 0.18);
+  border-color: rgba(255, 138, 0, 0.22);
+}
+.badge--prep .dot { background: var(--lemon); }
+
+/* Sent (naranja) */
+.badge--sent {
+  background: rgba(255, 138, 0, 0.14);
+  border-color: rgba(255, 138, 0, 0.22);
+}
+.badge--sent .dot { background: var(--orange); }
+
+/* Transit (celeste) */
+.badge--transit {
+  background: rgba(233, 242, 255, 0.95);
+  border-color: rgba(11, 42, 107, 0.12);
+}
+.badge--transit .dot { background: #3b82f6; }
+
+/* Ready (verde ok) */
+.badge--ready {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.22);
+}
+.badge--ready .dot { background: #22c55e; }
+
+/* Delivered (lemon gradient) */
+.badge--delivered {
+  background: var(--grad-lemon);
+  border: none;
+  color: #0b1020;
+}
+.badge--delivered .dot { background: #0b1020; }
+
+/* =========================================================
+   Login (si lo usás)
+   ========================================================= */
+
+.loginPage {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+}
+
+.loginCard {
+  width: 420px;
+  max-width: 94vw;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(11, 42, 107, 0.12);
+  border-radius: 22px;
+  box-shadow: var(--shadow);
+  padding: 18px;
+  backdrop-filter: blur(10px);
+}
+
+/* “Olvidé mi contraseña” premium */
+.loginFooter .link {
+  background: rgba(233, 242, 255, 0.80);
+  border: 1px solid rgba(11, 42, 107, 0.12);
+  padding: 9px 12px;
+  border-radius: 14px;
+  text-decoration: none;
+  color: var(--blue);
+  font-weight: 950;
+  box-shadow: 0 10px 18px rgba(11, 42, 107, 0.08);
+}
+.loginFooter .link:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 24px rgba(11, 42, 107, 0.10);
 }
