@@ -830,11 +830,12 @@ app.put(
 
       res.json({
         rates: {
-          usa_normal: up.rows[0].usa_normal,
-          usa_express: up.rows[0].usa_express,
-          china_normal: up.rows[0].china_normal,
-          china_express: up.rows[0].china_express,
-          europa_normal: up.rows[0].europa_normal,
+          usa_normal:       up.rows[0].usa_normal,
+          usa_express:      up.rows[0].usa_express,
+          usa_tech_premium: up.rows[0].usa_tech_premium,
+          china_normal:     up.rows[0].china_normal,
+          china_express:    up.rows[0].china_express,
+          europa_normal:    up.rows[0].europa_normal,
           updated_at: up.rows[0].updated_at,
         },
         defaults: DEFAULT_RATES,
