@@ -1198,68 +1198,159 @@ app.get("/shipments/:id/events", authRequired, async (req, res) => {
   }
 });
 
+
+// ── GET /operator/costs ─────────────────────────────────────────────────────
+app.get(
+  "/operator/costs",
+  authRequired,
+  requireRole(["operator", "admin"]),
+  async (req, res) => {
+    try {
+      const costs = await getOperatorCosts();
+      res.json({ costs, defaults: DEFAULT_OPERATOR_COSTS });
+    } catch (err) {
+      console.error("GET COSTS ERROR:", err);
+      res.status(500).json({ error: "Error leyendo costos" });
+    }
+  }
+);
+
+// ── PUT /operator/costs ──────────────────────────────────────────────────────
+app.put(
+  "/operator/costs",
+  authRequired,
+  requireRole(["operator", "admin"]),
+  async (req, res) => {
+    try {
+      const schema = z.object({
+        usa_normal:    z.number().min(0),
+        usa_express:   z.number().min(0),
+        china_normal:  z.number().min(0),
+        china_express: z.number().min(0),
+        europa_normal: z.number().min(0),
+      });
+      const p = schema.safeParse(req.body);
+      if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
+
+      const d = p.data;
+      await db.query(
+        `INSERT INTO operator_costs (id, usa_normal, usa_express, china_normal, china_express, europa_normal, updated_at)
+         VALUES (1, $1, $2, $3, $4, $5, NOW())
+         ON CONFLICT (id) DO UPDATE SET
+           usa_normal    = EXCLUDED.usa_normal,
+           usa_express   = EXCLUDED.usa_express,
+           china_normal  = EXCLUDED.china_normal,
+           china_express = EXCLUDED.china_express,
+           europa_normal = EXCLUDED.europa_normal,
+           updated_at    = NOW()`,
+        [d.usa_normal, d.usa_express, d.china_normal, d.china_express, d.europa_normal]
+      );
+      res.json({ ok: true, costs: d });
+    } catch (err) {
+      console.error("PUT COSTS ERROR:", err);
+      res.status(500).json({ error: "Error guardando costos" });
+    }
+  }
+);
+
+// ── GET /operator/dashboard ──────────────────────────────────────────────────
 app.get(
   "/operator/dashboard",
   authRequired,
   requireRole(["operator", "admin"]),
   async (req, res) => {
     try {
-      // ── 1. Stats generales ──────────────────────────────────────────────
+      // 1. Stats generales
       const statsQ = await db.query(`
         SELECT
-          COUNT(*)                                                      AS total,
-          COUNT(*) FILTER (WHERE status='Recibido en depósito')        AS received,
-          COUNT(*) FILTER (WHERE status='En preparación')              AS prep,
-          COUNT(*) FILTER (WHERE status='Despachado')                  AS sent,
-          COUNT(*) FILTER (WHERE status='En tránsito')                 AS transit,
-          COUNT(*) FILTER (WHERE status='Listo para entrega')          AS ready,
-          COUNT(*) FILTER (WHERE status='Entregado')                   AS delivered,
-          COALESCE(SUM(weight_kg), 0)                                  AS total_weight,
-          COALESCE(SUM(estimated_usd), 0)                              AS total_revenue,
-          COALESCE(SUM(estimated_usd) FILTER (WHERE status='Entregado'), 0) AS delivered_revenue,
-          COUNT(DISTINCT user_id)                                       AS active_clients
+          COUNT(*)                                                          AS total,
+          COUNT(*) FILTER (WHERE status='Recibido en depósito')            AS received,
+          COUNT(*) FILTER (WHERE status='En preparación')                  AS prep,
+          COUNT(*) FILTER (WHERE status='Despachado')                      AS sent,
+          COUNT(*) FILTER (WHERE status='En tránsito')                     AS transit,
+          COUNT(*) FILTER (WHERE status='Listo para entrega')              AS ready,
+          COUNT(*) FILTER (WHERE status='Entregado')                       AS delivered,
+          COALESCE(SUM(weight_kg), 0)                                      AS total_weight,
+          COALESCE(SUM(estimated_usd), 0)                                  AS total_revenue,
+          COALESCE(SUM(estimated_usd) FILTER (WHERE status='Entregado'),0) AS delivered_revenue,
+          COUNT(DISTINCT user_id)                                           AS active_clients
         FROM shipments
       `);
 
-      // ── 2. Envíos por origen ────────────────────────────────────────────
+      // 2. Por origen
       const byOriginQ = await db.query(`
         SELECT
           COALESCE(origin, 'Sin origen') AS origin,
           COUNT(*)                        AS count,
           COALESCE(SUM(weight_kg), 0)     AS weight
         FROM shipments
-        GROUP BY origin
-        ORDER BY count DESC
+        GROUP BY origin ORDER BY count DESC
       `);
 
-      // ── 3. Envíos por servicio ──────────────────────────────────────────
+      // 3. Por servicio
       const byServiceQ = await db.query(`
         SELECT
           COALESCE(service, 'NORMAL') AS service,
           COUNT(*)                     AS count
         FROM shipments
-        GROUP BY service
-        ORDER BY count DESC
+        GROUP BY service ORDER BY count DESC
       `);
 
-      // ── 4. Últimos 8 meses: envíos creados por mes ─────────────────────
+      // 4. Costos del operador
+      const operatorCosts = await getOperatorCosts();
+      const costsParams = [
+        Number(operatorCosts.usa_normal)    || 0,
+        Number(operatorCosts.usa_express)   || 0,
+        Number(operatorCosts.china_normal)  || 0,
+        Number(operatorCosts.china_express) || 0,
+        Number(operatorCosts.europa_normal) || 0,
+      ];
+
+      const laneCostExpr = `
+        weight_kg * CASE
+          WHEN origin='USA'   AND service='NORMAL'  THEN $1
+          WHEN origin='USA'   AND service='EXPRESS' THEN $2
+          WHEN origin='CHINA' AND service='NORMAL'  THEN $3
+          WHEN origin='CHINA' AND service='EXPRESS' THEN $4
+          WHEN origin='EUROPA'                       THEN $5
+          ELSE 0
+        END`;
+
+      // 5. Por mes: revenue + costo + ganancia
       const byMonthQ = await db.query(`
         SELECT
           TO_CHAR(DATE_TRUNC('month', date_in), 'YYYY-MM') AS month,
           COUNT(*)                                           AS count,
-          COALESCE(SUM(estimated_usd), 0)                   AS revenue
+          COALESCE(SUM(estimated_usd), 0)                   AS revenue,
+          COALESCE(SUM(${laneCostExpr}), 0)                 AS cost,
+          COALESCE(SUM(estimated_usd), 0)
+            - COALESCE(SUM(${laneCostExpr}), 0)             AS profit
         FROM shipments
         WHERE date_in >= NOW() - INTERVAL '8 months'
         GROUP BY DATE_TRUNC('month', date_in)
         ORDER BY DATE_TRUNC('month', date_in)
-      `);
+      `, costsParams);
 
-      // ── 5. Top 5 clientes por envíos ───────────────────────────────────
+      // 6. Por lane: ganancia histórica
+      const byLaneQ = await db.query(`
+        SELECT
+          COALESCE(origin, '-')  AS origin,
+          COALESCE(service, '-') AS service,
+          COUNT(*)               AS count,
+          COALESCE(SUM(estimated_usd), 0)     AS revenue,
+          COALESCE(SUM(${laneCostExpr}), 0)   AS cost,
+          COALESCE(SUM(estimated_usd), 0)
+            - COALESCE(SUM(${laneCostExpr}), 0) AS profit
+        FROM shipments
+        GROUP BY origin, service
+        ORDER BY revenue DESC
+      `, costsParams);
+
+      // 7. Top 5 clientes
       const topClientsQ = await db.query(`
         SELECT
-          u.client_number,
-          u.name,
-          COUNT(s.id)                     AS shipments,
+          u.client_number, u.name,
+          COUNT(s.id)                      AS shipments,
           COALESCE(SUM(s.estimated_usd),0) AS revenue
         FROM shipments s
         JOIN users u ON u.id = s.user_id
@@ -1268,12 +1359,11 @@ app.get(
         LIMIT 5
       `);
 
-      // ── 6. Últimos 5 envíos creados ────────────────────────────────────
+      // 8. Últimos 5 envíos
       const recentQ = await db.query(`
-        SELECT
-          s.id, s.code, s.description, s.status, s.date_in,
-          s.origin, s.estimated_usd,
-          u.client_number, u.name AS client_name
+        SELECT s.id, s.code, s.description, s.status, s.date_in,
+               s.origin, s.estimated_usd,
+               u.client_number, u.name AS client_name
         FROM shipments s
         JOIN users u ON u.id = s.user_id
         ORDER BY s.date_in DESC
@@ -1281,12 +1371,14 @@ app.get(
       `);
 
       res.json({
-        stats:       statsQ.rows[0],
-        by_origin:   byOriginQ.rows,
-        by_service:  byServiceQ.rows,
-        by_month:    byMonthQ.rows,
-        top_clients: topClientsQ.rows,
-        recent:      recentQ.rows,
+        stats:          statsQ.rows[0],
+        by_origin:      byOriginQ.rows,
+        by_service:     byServiceQ.rows,
+        by_month:       byMonthQ.rows,
+        by_lane:        byLaneQ.rows,
+        top_clients:    topClientsQ.rows,
+        recent:         recentQ.rows,
+        operator_costs: operatorCosts,
       });
     } catch (err) {
       console.error("DASHBOARD ERROR:", err);
