@@ -124,10 +124,18 @@ function toNumOrNull(v) {
   return Number.isFinite(n) ? n : null;
 }
 
-function computeEstimated(weightKg, rateUsdPerKg) {
+const MIN_BILLABLE_KG = 1; // Peso mínimo facturable
+
+function billableWeight(weightKg) {
   const w = Number(weightKg);
-  const r = Number(rateUsdPerKg);
   if (!Number.isFinite(w) || w <= 0) return null;
+  return w < MIN_BILLABLE_KG ? MIN_BILLABLE_KG : w;
+}
+
+function computeEstimated(weightKg, rateUsdPerKg) {
+  const w = billableWeight(weightKg);
+  if (w === null) return null;
+  const r = Number(rateUsdPerKg);
   if (!Number.isFinite(r) || r < 0) return null;
   return Number((w * r).toFixed(2));
 }

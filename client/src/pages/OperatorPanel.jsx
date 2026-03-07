@@ -36,6 +36,13 @@ const num = (v, fallback = 0) => {
   return Number.isFinite(n) ? n : fallback;
 };
 
+const MIN_BILLABLE_KG = 1;
+const billableWeight = (w) => {
+  const n = num(w, NaN);
+  if (!Number.isFinite(n) || n <= 0) return NaN;
+  return n < MIN_BILLABLE_KG ? MIN_BILLABLE_KG : n;
+};
+
 const numOrNull = (v) => {
   if (v === "" || v == null) return null;
   const n = Number(String(v).replace(",", "."));
@@ -287,11 +294,16 @@ export default function OperatorPanel() {
     return o ?? 0;
   }, [overrideEnabled, overrideRate, laneRate]);
 
-  const estimated = useMemo(() => {
+  const billedKg = useMemo(() => {
     const w = num(weightKg, NaN);
     if (!Number.isFinite(w) || w <= 0) return 0;
-    return w * Number(appliedRate || 0);
-  }, [weightKg, appliedRate]);
+    return w < MIN_BILLABLE_KG ? MIN_BILLABLE_KG : w;
+  }, [weightKg]);
+
+  const estimated = useMemo(() => {
+    if (billedKg <= 0) return 0;
+    return billedKg * Number(appliedRate || 0);
+  }, [billedKg, appliedRate]);
 
   useEffect(() => {
     const allowed = SERVICES_BY_ORIGIN[origin] || ["NORMAL"];
@@ -498,7 +510,8 @@ export default function OperatorPanel() {
   function recalcEdit(nextDraft, row, ctx) {
     const o = normalizeOrigin(nextDraft.origin ?? row.origin ?? "USA");
     const s = normalizeService(o, nextDraft.service ?? row.service ?? "NORMAL");
-    const w = num(nextDraft.weight_kg, NaN);
+    const wRaw = num(nextDraft.weight_kg, NaN);
+    const w = Number.isFinite(wRaw) && wRaw > 0 ? Math.max(wRaw, MIN_BILLABLE_KG) : wRaw;
     const override = Boolean(nextDraft.override_edit);
     const autoRate = getLaneRate({
       origin: o, service: s,
@@ -912,9 +925,18 @@ export default function OperatorPanel() {
               </div>
               <div style={{ height: 1, background: "rgba(255,255,255,0.07)" }} />
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-                <span style={{ color: "rgba(255,255,255,0.55)" }}>Peso</span>
+                <span style={{ color: "rgba(255,255,255,0.55)" }}>Peso real</span>
                 <span style={{ fontWeight: 700 }}>{num(weightKg, 0) > 0 ? `${num(weightKg, 0).toFixed(2)} kg` : "-"}</span>
               </div>
+              {num(weightKg, 0) > 0 && num(weightKg, 0) < MIN_BILLABLE_KG && (
+                <>
+                  <div style={{ height: 1, background: "rgba(255,255,255,0.07)" }} />
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                    <span style={{ color: "#ffd200", fontWeight: 700 }}>⚠ Peso facturable</span>
+                    <span style={{ fontWeight: 800, color: "#ffd200" }}>1.00 kg mínimo</span>
+                  </div>
+                </>
+              )}
               <div style={{ height: 1, background: "rgba(255,255,255,0.07)" }} />
               <div style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center",
