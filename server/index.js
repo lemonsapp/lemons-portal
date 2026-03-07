@@ -50,6 +50,27 @@ const DEFAULT_RATES = {
   europa_normal: 58, // EUROPA siempre NORMAL
 };
 
+// ── Costos reales del operador ───────────────────────────────────────────────
+const DEFAULT_OPERATOR_COSTS = {
+  usa_normal:    0,
+  usa_express:   0,
+  china_normal:  0,
+  china_express: 0,
+  europa_normal: 0,
+};
+
+async function getOperatorCosts() {
+  try {
+    const r = await db.query(
+      `SELECT usa_normal, usa_express, china_normal, china_express, europa_normal
+       FROM operator_costs LIMIT 1`
+    );
+    return r.rows[0] || DEFAULT_OPERATOR_COSTS;
+  } catch {
+    return DEFAULT_OPERATOR_COSTS;
+  }
+}
+
 function normalizeOrigin(origin) {
   const o = (origin || "").toUpperCase().trim();
   if (o === "USA" || o === "CHINA" || o === "EUROPA") return o;
