@@ -46,10 +46,8 @@ function AuthGate({ children, allowRoles }) {
 
   if (loading) return <div style={{ padding: 20 }}>Cargando…</div>;
 
-  // No token / sesión inválida => login
   if (!me) return <Navigate to="/" replace state={{ from: location.pathname }} />;
 
-  // Si hay restricción de roles y no coincide => mandalo a su dashboard
   if (allowRoles && !allowRoles.includes(me.role)) {
     return <Navigate to="/client/shipments" replace />;
   }
@@ -61,11 +59,11 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        
-      <Route path="/quote" element={<QuotePublic />} />
+
+        <Route path="/quote" element={<QuotePublic />} />
         <Route path="/client/quote" element={<AuthGate><QuoteClient /></AuthGate>} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
-      <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
 
         {/* Login */}
         <Route path="/" element={<Login />} />
@@ -90,6 +88,16 @@ export default function App() {
           }
         />
 
+        {/* Dashboard */}
+        <Route
+          path="/dashboard"
+          element={
+            <AuthGate allowRoles={["operator", "admin"]}>
+              <Dashboard />
+            </AuthGate>
+          }
+        />
+
         {/* Caja */}
         <Route
           path="/caja"
@@ -105,9 +113,8 @@ export default function App() {
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
+
       </Routes>
     </BrowserRouter>
-
-
   );
-} 
+}
