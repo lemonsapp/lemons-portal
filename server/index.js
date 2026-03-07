@@ -1327,13 +1327,15 @@ app.get(
         Number(operatorCosts.europa_normal) || 0,
       ];
 
-      const laneCostExpr = `
+      // Expresión de costo por lane — parámetros casteados a NUMERIC para evitar errores de tipo
+      const [c1, c2, c3, c4, c5] = costsParams;
+      const laneCost = (p) => `
         weight_kg * CASE
-          WHEN origin='USA'   AND service='NORMAL'  THEN $1
-          WHEN origin='USA'   AND service='EXPRESS' THEN $2
-          WHEN origin='CHINA' AND service='NORMAL'  THEN $3
-          WHEN origin='CHINA' AND service='EXPRESS' THEN $4
-          WHEN origin='EUROPA'                       THEN $5
+          WHEN origin='USA'   AND service='NORMAL'  THEN ${p}::numeric
+          WHEN origin='USA'   AND service='EXPRESS' THEN ${p+1}::numeric
+          WHEN origin='CHINA' AND service='NORMAL'  THEN ${p+2}::numeric
+          WHEN origin='CHINA' AND service='EXPRESS' THEN ${p+3}::numeric
+          WHEN origin='EUROPA'                       THEN ${p+4}::numeric
           ELSE 0
         END`;
 
@@ -1343,9 +1345,26 @@ app.get(
           TO_CHAR(DATE_TRUNC('month', date_in), 'YYYY-MM') AS month,
           COUNT(*)                                           AS count,
           COALESCE(SUM(estimated_usd), 0)                   AS revenue,
-          COALESCE(SUM(${laneCostExpr}), 0)                 AS cost,
-          COALESCE(SUM(estimated_usd), 0)
-            - COALESCE(SUM(${laneCostExpr}), 0)             AS profit
+          COALESCE(SUM(
+            weight_kg * CASE
+              WHEN origin='USA'   AND service='NORMAL'  THEN $1::numeric
+              WHEN origin='USA'   AND service='EXPRESS' THEN $2::numeric
+              WHEN origin='CHINA' AND service='NORMAL'  THEN $3::numeric
+              WHEN origin='CHINA' AND service='EXPRESS' THEN $4::numeric
+              WHEN origin='EUROPA'                       THEN $5::numeric
+              ELSE 0
+            END
+          ), 0)                                              AS cost,
+          COALESCE(SUM(estimated_usd), 0) - COALESCE(SUM(
+            weight_kg * CASE
+              WHEN origin='USA'   AND service='NORMAL'  THEN $1::numeric
+              WHEN origin='USA'   AND service='EXPRESS' THEN $2::numeric
+              WHEN origin='CHINA' AND service='NORMAL'  THEN $3::numeric
+              WHEN origin='CHINA' AND service='EXPRESS' THEN $4::numeric
+              WHEN origin='EUROPA'                       THEN $5::numeric
+              ELSE 0
+            END
+          ), 0)                                              AS profit
         FROM shipments
         WHERE date_in >= NOW() - INTERVAL '8 months'
         GROUP BY DATE_TRUNC('month', date_in)
@@ -1358,10 +1377,27 @@ app.get(
           COALESCE(origin, '-')  AS origin,
           COALESCE(service, '-') AS service,
           COUNT(*)               AS count,
-          COALESCE(SUM(estimated_usd), 0)     AS revenue,
-          COALESCE(SUM(${laneCostExpr}), 0)   AS cost,
-          COALESCE(SUM(estimated_usd), 0)
-            - COALESCE(SUM(${laneCostExpr}), 0) AS profit
+          COALESCE(SUM(estimated_usd), 0) AS revenue,
+          COALESCE(SUM(
+            weight_kg * CASE
+              WHEN origin='USA'   AND service='NORMAL'  THEN $1::numeric
+              WHEN origin='USA'   AND service='EXPRESS' THEN $2::numeric
+              WHEN origin='CHINA' AND service='NORMAL'  THEN $3::numeric
+              WHEN origin='CHINA' AND service='EXPRESS' THEN $4::numeric
+              WHEN origin='EUROPA'                       THEN $5::numeric
+              ELSE 0
+            END
+          ), 0) AS cost,
+          COALESCE(SUM(estimated_usd), 0) - COALESCE(SUM(
+            weight_kg * CASE
+              WHEN origin='USA'   AND service='NORMAL'  THEN $1::numeric
+              WHEN origin='USA'   AND service='EXPRESS' THEN $2::numeric
+              WHEN origin='CHINA' AND service='NORMAL'  THEN $3::numeric
+              WHEN origin='CHINA' AND service='EXPRESS' THEN $4::numeric
+              WHEN origin='EUROPA'                       THEN $5::numeric
+              ELSE 0
+            END
+          ), 0) AS profit
         FROM shipments
         GROUP BY origin, service
         ORDER BY revenue DESC
