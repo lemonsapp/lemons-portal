@@ -868,7 +868,7 @@ app.post(
         status: z.string().min(1),
 
         origin: z.enum(["USA", "CHINA", "EUROPA"]).optional(),
-        service: z.enum(["NORMAL", "EXPRESS"]).optional(),
+        service: z.enum(["NORMAL", "EXPRESS", "TECH_PREMIUM"]).optional(),
 
         rate_usd_per_kg: z.number().min(0).nullable().optional(),
         estimated_usd: z.number().min(0).nullable().optional(), // (ignorado: server recalcula)
