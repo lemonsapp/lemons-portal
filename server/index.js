@@ -1791,6 +1791,96 @@ app.delete(
 
 
 
+
+// ════════════════════════════════════════════════════════════════════
+// PRESUPUESTADOR
+// ════════════════════════════════════════════════════════════════════
+
+const DEFAULT_RATES_FALLBACK = {
+  usa_normal: 45, usa_express: 55, usa_tech_premium: 75,
+  china_normal: 58, china_express: 68, europa_normal: 58,
+};
+const MIN_BILLABLE_KG = 1;
+
+// ── GET /quote/rates — tarifas públicas + TC ──────────────────────
+app.get("/quote/rates", async (req, res) => {
+  try {
+    const [costsQ, fxQ] = await Promise.all([
+      db.query(`SELECT * FROM operator_costs WHERE id=1`),
+      db.query(`SELECT value FROM app_settings WHERE key='fx_usd_ars'`),
+    ]);
+    const rates = costsQ.rows[0] || DEFAULT_RATES_FALLBACK;
+    const fx    = fxQ.rows[0] ? Number(fxQ.rows[0].value) : null;
+    res.json({ rates, fx_rate: fx });
+  } catch(err) { res.status(500).json({ error: "Error obteniendo tarifas" }); }
+});
+
+// ── GET /quote/my-rates — tarifas personalizadas del cliente logueado ─
+app.get("/quote/my-rates", authRequired, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const [ratesQ, fxQ] = await Promise.all([
+      db.query(`SELECT * FROM client_rates WHERE user_id=$1`, [userId]),
+      db.query(`SELECT value FROM app_settings WHERE key='fx_usd_ars'`),
+    ]);
+    const defaults = DEFAULT_RATES_FALLBACK;
+    const custom   = ratesQ.rows[0] || {};
+    const rates = {
+      usa_normal:        Number(custom.usa_normal        ?? defaults.usa_normal),
+      usa_express:       Number(custom.usa_express       ?? defaults.usa_express),
+      usa_tech_premium:  Number(custom.usa_tech_premium  ?? defaults.usa_tech_premium),
+      china_normal:      Number(custom.china_normal      ?? defaults.china_normal),
+      china_express:     Number(custom.china_express     ?? defaults.china_express),
+      europa_normal:     Number(custom.europa_normal     ?? defaults.europa_normal),
+    };
+    const fx = fxQ.rows[0] ? Number(fxQ.rows[0].value) : null;
+    res.json({ rates, fx_rate: fx, personalized: !!ratesQ.rows[0] });
+  } catch(err) { res.status(500).json({ error: "Error obteniendo tarifas" }); }
+});
+
+// ── POST /quote/request — solicitar envío desde presupuestador (cliente logueado) ─
+app.post("/quote/request", authRequired, async (req, res) => {
+  try {
+    const schema = z.object({
+      origin:      z.enum(["usa","china","europa"]),
+      service:     z.enum(["NORMAL","EXPRESS","TECH_PREMIUM"]),
+      weight_kg:   z.number().min(0.01),
+      description: z.string().min(1),
+      estimated_usd: z.number().min(0),
+    });
+    const p = schema.safeParse(req.body);
+    if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
+
+    const userId = req.user.id;
+    const { origin, service, weight_kg, description, estimated_usd } = p.data;
+    const billable = Math.max(weight_kg, MIN_BILLABLE_KG);
+
+    // Crear envío en estado "Recibido en depósito" con nota de solicitud
+    const code = `SOL-${Date.now().toString(36).toUpperCase()}`;
+    const r = await db.query(`
+      INSERT INTO shipments
+        (user_id, code, description, weight_kg, status, origin, service, rate_usd_per_kg, estimated_usd, date_in)
+      VALUES ($1,$2,$3,$4,'Recibido en depósito',$5,$6,
+        (SELECT COALESCE(cr.${origin}_${service.toLowerCase()}, oc.${origin}_${service.toLowerCase()})
+         FROM operator_costs oc
+         LEFT JOIN client_rates cr ON cr.user_id=$1
+         WHERE oc.id=1),
+        $7, CURRENT_DATE)
+      RETURNING *
+    `, [userId, code, description, weight_kg, origin.toUpperCase(), service, estimated_usd]);
+
+    await db.query(
+      `INSERT INTO shipment_events (shipment_id, old_status, new_status) VALUES ($1, NULL, 'Recibido en depósito')`,
+      [r.rows[0].id]
+    );
+
+    res.json({ ok: true, shipment: r.rows[0] });
+  } catch(err) {
+    console.error(err);
+    res.status(500).json({ error: "Error creando solicitud" });
+  }
+});
+
 // ════════════════════════════════════════════════════════════════════
 // TIPO DE CAMBIO DIARIO
 // ════════════════════════════════════════════════════════════════════
