@@ -1800,7 +1800,6 @@ const DEFAULT_RATES_FALLBACK = {
   usa_normal: 45, usa_express: 55, usa_tech_premium: 75,
   china_normal: 58, china_express: 68, europa_normal: 58,
 };
-const MIN_BILLABLE_KG = 1;
 
 // ── GET /quote/rates — tarifas públicas + TC ──────────────────────
 app.get("/quote/rates", async (req, res) => {
