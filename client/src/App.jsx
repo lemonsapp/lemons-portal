@@ -6,6 +6,8 @@ import OperatorPanel from "./pages/OperatorPanel.jsx";
 import ClientShipments from "./pages/ClientShipments.jsx";
 import ForgotPassword from "./pages/ForgotPassword.jsx";
 import ResetPassword from "./pages/ResetPassword.jsx";
+import Dashboard from "./pages/Dashboard.jsx";
+import CashRegister from "./pages/CashRegister.jsx";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
