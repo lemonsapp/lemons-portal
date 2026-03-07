@@ -1306,6 +1306,33 @@ function FondosTab() {
 // ══════════════════════════════════════════════════════════════════════════════
 export default function CashRegister() {
   const [tab, setTab] = useState("cobros");
+  const [fxRate, setFxRate]   = useState(null);
+  const [fxInput, setFxInput] = useState("");
+  const [savingFx, setSavingFx] = useState(false);
+  const [fxMsg, setFxMsg]     = useState("");
+
+  React.useEffect(() => {
+    fetch(`${API}/settings/fx`, { headers: { Authorization: `Bearer ${getToken()}` } })
+      .then(r => r.json())
+      .then(d => { if (d.rate) { setFxRate(d.rate); setFxInput(String(d.rate)); } })
+      .catch(() => {});
+  }, []); // eslint-disable-line
+
+  async function saveFx() {
+    const n = Number(String(fxInput).replace(",","."));
+    if (!n || n <= 0) return setFxMsg("Valor inválido");
+    setSavingFx(true); setFxMsg("");
+    try {
+      const res = await fetch(`${API}/settings/fx`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ rate: n }),
+      });
+      if (res.ok) setFxMsg("✅ Guardado");
+      else setFxMsg("Error");
+    } catch { setFxMsg("Error de red"); }
+    finally { setSavingFx(false); setTimeout(() => setFxMsg(""), 2500); }
+  }
 
   return (
     <div className="screen" style={{ maxWidth: 1400, margin: "0 auto" }}>
@@ -1342,6 +1369,30 @@ export default function CashRegister() {
               transition: "all 0.15s",
             }}>{t.label}</button>
           ))}
+        </div>
+      </div>
+
+      {/* FX widget */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "12px 0", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 12, padding: "8px 14px" }}>
+          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", fontWeight: 700 }}>💱 USD/ARS hoy</span>
+          <input
+            className="input"
+            value={fxInput}
+            onChange={e => setFxInput(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && saveFx()}
+            inputMode="decimal"
+            placeholder="Ej: 1200"
+            style={{ width: 110, height: 34, fontSize: 14 }}
+          />
+          <button className="btn btnPrimary" onClick={saveFx} disabled={savingFx}
+            style={{ height: 34, padding: "0 14px", fontSize: 12 }}>
+            {savingFx ? "…" : "Guardar"}
+          </button>
+          {fxMsg
+            ? <span style={{ fontSize: 12, color: "#86efac" }}>{fxMsg}</span>
+            : fxRate && <span style={{ fontSize: 11, color: "rgba(255,255,255,0.30)" }}>Actual: ${Number(fxRate).toLocaleString("es-AR")}</span>
+          }
         </div>
       </div>
 

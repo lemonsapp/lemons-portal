@@ -435,6 +435,11 @@ export default function Dashboard() {
   const [monthly, setMonthly]       = useState([]);
   const [selMonth, setSelMonth]     = useState(new Date().toISOString().slice(0,7));
   const [accounts, setAccounts]     = useState([]);
+  const [fxRate, setFxRate]         = useState(null);
+  const [totalCapital, setTotalCapital] = useState(null);
+  const [fxInput, setFxInput]       = useState("");
+  const [savingFx, setSavingFx]     = useState(false);
+  const [fxMsg, setFxMsg]           = useState("");
 
   async function loadDashboard() {
     setLoading(true); setError("");
@@ -460,8 +465,29 @@ export default function Dashboard() {
     try {
       const res = await fetch(`${API}/accounts/summary`, { headers: { Authorization: `Bearer ${getToken()}` } });
       const json = await res.json();
-      if (res.ok) setAccounts(json.accounts || []);
+      if (res.ok) {
+        setAccounts(json.accounts || []);
+        setFxRate(json.fx_rate || null);
+        setTotalCapital(json.total_capital_usd ?? null);
+        if (!fxInput) setFxInput(json.fx_rate ? String(json.fx_rate) : "");
+      }
     } catch { /* no-op */ }
+  }
+
+  async function saveFx() {
+    const n = Number(String(fxInput).replace(",","."));
+    if (!n || n <= 0) return setFxMsg("Valor inválido");
+    setSavingFx(true); setFxMsg("");
+    try {
+      const res = await fetch(`${API}/settings/fx`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ rate: n }),
+      });
+      if (res.ok) { setFxMsg("✅ Guardado"); await loadAccounts(); }
+      else setFxMsg("Error guardando");
+    } catch { setFxMsg("Error de red"); }
+    finally { setSavingFx(false); }
   }
 
   useEffect(() => { loadDashboard(); loadMonthly(); loadAccounts(); }, []); // eslint-disable-line
@@ -613,6 +639,34 @@ export default function Dashboard() {
                 </div>
               ) : (
                 <>
+                  {/* Tipo de cambio + Total capital */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 12, padding: "8px 14px" }}>
+                      <span style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", fontWeight: 700 }}>💱 USD/ARS</span>
+                      <input
+                        className="input"
+                        value={fxInput}
+                        onChange={e => setFxInput(e.target.value)}
+                        onKeyDown={e => e.key === "Enter" && saveFx()}
+                        inputMode="decimal"
+                        placeholder="Ej: 1200"
+                        style={{ width: 100, height: 34, fontSize: 13 }}
+                      />
+                      <button className="btn btnPrimary" onClick={saveFx} disabled={savingFx}
+                        style={{ height: 34, padding: "0 12px", fontSize: 12 }}>
+                        {savingFx ? "…" : "Guardar"}
+                      </button>
+                      {fxMsg && <span style={{ fontSize: 12, color: "#86efac" }}>{fxMsg}</span>}
+                    </div>
+                    {totalCapital !== null && (
+                      <div style={{ background: "rgba(255,210,0,0.08)", border: "1px solid rgba(255,210,0,0.25)", borderRadius: 12, padding: "8px 18px" }}>
+                        <span style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", fontWeight: 700 }}>CAPITAL TOTAL USD </span>
+                        <span style={{ fontSize: 22, fontWeight: 900, color: "#ffd200", marginLeft: 8 }}>{fmtUsd(totalCapital)}</span>
+                        {fxRate && <span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginLeft: 6 }}>@ ${Number(fxRate).toLocaleString("es-AR")}</span>}
+                      </div>
+                    )}
+                  </div>
+
                   {/* Totales por moneda */}
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 10, marginBottom: 18 }}>
                     {Object.entries(accounts.reduce((acc, a) => {
@@ -625,6 +679,11 @@ export default function Dashboard() {
                       }}>
                         <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", fontWeight: 700, marginBottom: 4 }}>
                           TOTAL {cur}
+                          {cur === "ARS" && fxRate && (
+                            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", marginLeft: 6 }}>
+                              ≈ {fmtUsd(bal / fxRate)} USD
+                            </span>
+                          )}
                         </div>
                         <div style={{ fontSize: 22, fontWeight: 900, color: cur==="USD"?"#22c55e":cur==="USDT"?"#3b82f6":"#ffd200" }}>
                           {cur==="ARS" ? fmtArs(bal) : fmtUsd(bal)}

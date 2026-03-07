@@ -1790,6 +1790,34 @@ app.delete(
 
 
 
+
+// ════════════════════════════════════════════════════════════════════
+// TIPO DE CAMBIO DIARIO
+// ════════════════════════════════════════════════════════════════════
+
+// ── GET /settings/fx ─────────────────────────────────────────────────
+app.get("/settings/fx", authRequired, requireRole(["operator","admin"]), async (req, res) => {
+  try {
+    const q = await db.query(`SELECT value, updated_at FROM app_settings WHERE key='fx_usd_ars'`);
+    const rate = q.rows[0] ? Number(q.rows[0].value) : null;
+    res.json({ rate, updated_at: q.rows[0]?.updated_at || null });
+  } catch(err) { res.status(500).json({ error: "Error leyendo tipo de cambio" }); }
+});
+
+// ── PUT /settings/fx ─────────────────────────────────────────────────
+app.put("/settings/fx", authRequired, requireRole(["operator","admin"]), async (req, res) => {
+  try {
+    const { rate } = req.body;
+    const n = Number(rate);
+    if (!Number.isFinite(n) || n <= 0) return res.status(400).json({ error: "Tipo de cambio inválido" });
+    await db.query(`
+      INSERT INTO app_settings (key, value, updated_at) VALUES ('fx_usd_ars', $1, NOW())
+      ON CONFLICT (key) DO UPDATE SET value=$1, updated_at=NOW()
+    `, [String(n)]);
+    res.json({ ok: true, rate: n });
+  } catch(err) { res.status(500).json({ error: "Error guardando tipo de cambio" }); }
+});
+
 // ════════════════════════════════════════════════════════════════════
 // MÓDULO CUENTAS / FONDOS
 // ════════════════════════════════════════════════════════════════════
@@ -1922,12 +1950,25 @@ app.get("/accounts/summary", authRequired, requireRole(["operator","admin"]), as
         (SELECT COUNT(*) FROM account_movements WHERE account_id=a.id) AS movement_count
       FROM accounts a WHERE a.active=true ORDER BY a.id
     `);
+    // Tipo de cambio
+    const fxQ = await db.query(`SELECT value FROM app_settings WHERE key='fx_usd_ars'`);
+    const fxRate = fxQ.rows[0] ? Number(fxQ.rows[0].value) : null;
+
     // Totales por moneda
     const totals = q.rows.reduce((acc, r) => {
       acc[r.currency] = (acc[r.currency]||0) + Number(r.balance);
       return acc;
     }, {});
-    res.json({ accounts: q.rows, totals });
+
+    // Total capital en USD (ARS / fx, USDT = USD)
+    let totalCapitalUsd = 0;
+    q.rows.forEach(a => {
+      if (a.currency === 'USD')  totalCapitalUsd += Number(a.balance);
+      if (a.currency === 'USDT') totalCapitalUsd += Number(a.balance);
+      if (a.currency === 'ARS' && fxRate) totalCapitalUsd += Number(a.balance) / fxRate;
+    });
+
+    res.json({ accounts: q.rows, totals, fx_rate: fxRate, total_capital_usd: Number(totalCapitalUsd.toFixed(2)) });
   } catch(err) { res.status(500).json({ error: "Error summary fondos" }); }
 });
 
