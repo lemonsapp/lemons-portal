@@ -1311,7 +1311,7 @@ export default function CashRegister() {
   const [savingFx, setSavingFx] = useState(false);
   const [fxMsg, setFxMsg]     = useState("");
 
-  React.useEffect(() => {
+  useEffect(() => {
     fetch(`${API}/settings/fx`, { headers: { Authorization: `Bearer ${getToken()}` } })
       .then(r => r.json())
       .then(d => { if (d.rate) { setFxRate(d.rate); setFxInput(String(d.rate)); } })
