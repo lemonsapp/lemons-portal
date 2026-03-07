@@ -690,16 +690,8 @@ app.post(
       res.json({ user: ins.rows[0] });
     } catch (e) {
       console.error("CREATE CLIENT ERROR", e);
-      // Postgres unique violation = code 23505
-      if (e?.code === "23505") {
-        const detail = String(e?.detail || "");
-        if (detail.includes("email")) {
-          return res.status(400).json({ error: "Ese email ya está registrado en el sistema." });
-        }
-        if (detail.includes("client_number")) {
-          return res.status(400).json({ error: "Ese número de cliente ya está en uso." });
-        }
-        return res.status(400).json({ error: "Email o número de cliente ya existe." });
+      if (String(e?.message || "").includes("duplicate")) {
+        return res.status(400).json({ error: "Email o client_number ya existe" });
       }
       res.status(500).json({ error: "Error interno" });
     }
@@ -1212,20 +1204,90 @@ app.get(
   requireRole(["operator", "admin"]),
   async (req, res) => {
     try {
-      const stats = await db.query(`
+      // ── 1. Stats generales ──────────────────────────────────────────────
+      const statsQ = await db.query(`
         SELECT
-          COUNT(*) AS total,
-          COUNT(*) FILTER (WHERE status='Recibido en depósito') AS received,
-          COUNT(*) FILTER (WHERE status='En preparación') AS prep,
-          COUNT(*) FILTER (WHERE status='Despachado') AS sent,
-          COUNT(*) FILTER (WHERE status='En tránsito') AS transit,
-          COUNT(*) FILTER (WHERE status='Listo para entrega') AS ready,
-          COUNT(*) FILTER (WHERE status='Entregado') AS delivered,
-          COALESCE(SUM(weight_kg),0) AS total_weight
+          COUNT(*)                                                      AS total,
+          COUNT(*) FILTER (WHERE status='Recibido en depósito')        AS received,
+          COUNT(*) FILTER (WHERE status='En preparación')              AS prep,
+          COUNT(*) FILTER (WHERE status='Despachado')                  AS sent,
+          COUNT(*) FILTER (WHERE status='En tránsito')                 AS transit,
+          COUNT(*) FILTER (WHERE status='Listo para entrega')          AS ready,
+          COUNT(*) FILTER (WHERE status='Entregado')                   AS delivered,
+          COALESCE(SUM(weight_kg), 0)                                  AS total_weight,
+          COALESCE(SUM(estimated_usd), 0)                              AS total_revenue,
+          COALESCE(SUM(estimated_usd) FILTER (WHERE status='Entregado'), 0) AS delivered_revenue,
+          COUNT(DISTINCT user_id)                                       AS active_clients
         FROM shipments
       `);
 
-      res.json({ stats: stats.rows[0] });
+      // ── 2. Envíos por origen ────────────────────────────────────────────
+      const byOriginQ = await db.query(`
+        SELECT
+          COALESCE(origin, 'Sin origen') AS origin,
+          COUNT(*)                        AS count,
+          COALESCE(SUM(weight_kg), 0)     AS weight
+        FROM shipments
+        GROUP BY origin
+        ORDER BY count DESC
+      `);
+
+      // ── 3. Envíos por servicio ──────────────────────────────────────────
+      const byServiceQ = await db.query(`
+        SELECT
+          COALESCE(service, 'NORMAL') AS service,
+          COUNT(*)                     AS count
+        FROM shipments
+        GROUP BY service
+        ORDER BY count DESC
+      `);
+
+      // ── 4. Últimos 8 meses: envíos creados por mes ─────────────────────
+      const byMonthQ = await db.query(`
+        SELECT
+          TO_CHAR(DATE_TRUNC('month', date_in), 'YYYY-MM') AS month,
+          COUNT(*)                                           AS count,
+          COALESCE(SUM(estimated_usd), 0)                   AS revenue
+        FROM shipments
+        WHERE date_in >= NOW() - INTERVAL '8 months'
+        GROUP BY DATE_TRUNC('month', date_in)
+        ORDER BY DATE_TRUNC('month', date_in)
+      `);
+
+      // ── 5. Top 5 clientes por envíos ───────────────────────────────────
+      const topClientsQ = await db.query(`
+        SELECT
+          u.client_number,
+          u.name,
+          COUNT(s.id)                     AS shipments,
+          COALESCE(SUM(s.estimated_usd),0) AS revenue
+        FROM shipments s
+        JOIN users u ON u.id = s.user_id
+        GROUP BY u.id, u.client_number, u.name
+        ORDER BY shipments DESC
+        LIMIT 5
+      `);
+
+      // ── 6. Últimos 5 envíos creados ────────────────────────────────────
+      const recentQ = await db.query(`
+        SELECT
+          s.id, s.code, s.description, s.status, s.date_in,
+          s.origin, s.estimated_usd,
+          u.client_number, u.name AS client_name
+        FROM shipments s
+        JOIN users u ON u.id = s.user_id
+        ORDER BY s.date_in DESC
+        LIMIT 5
+      `);
+
+      res.json({
+        stats:       statsQ.rows[0],
+        by_origin:   byOriginQ.rows,
+        by_service:  byServiceQ.rows,
+        by_month:    byMonthQ.rows,
+        top_clients: topClientsQ.rows,
+        recent:      recentQ.rows,
+      });
     } catch (err) {
       console.error("DASHBOARD ERROR:", err);
       res.status(500).json({ error: "Error dashboard" });
