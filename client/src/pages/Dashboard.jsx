@@ -34,11 +34,12 @@ const STATUS_COLOR  = {
   "Entregado":            "#86efac",
 };
 const LANE_LABELS = {
-  usa_normal:    "🇺🇸 USA · Normal",
-  usa_express:   "🇺🇸 USA · Express",
-  china_normal:  "🇨🇳 China · Normal",
-  china_express: "🇨🇳 China · Express",
-  europa_normal: "🇪🇺 Europa · Normal",
+  usa_normal:       "🇺🇸 USA · Normal",
+  usa_express:      "🇺🇸 USA · Express",
+  usa_tech_premium: "📱 USA · Tecnología Premium",
+  china_normal:     "🇨🇳 China · Normal",
+  china_express:    "🇨🇳 China · Express",
+  europa_normal:    "🇪🇺 Europa · Normal",
 };
 
 // ── Componentes UI base ───────────────────────────────────────────────────────

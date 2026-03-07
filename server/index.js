@@ -43,26 +43,28 @@ app.get("/health", (req, res) => res.json({ ok: true }));
 // ==================== TARIFAS (defaults + helpers) ====================
 
 const DEFAULT_RATES = {
-  usa_normal: 45,
-  usa_express: 55,
-  china_normal: 58,
-  china_express: 68,
-  europa_normal: 58, // EUROPA siempre NORMAL
+  usa_normal:       45,
+  usa_express:      55,
+  usa_tech_premium: 75, // Tecnología Premium — solo USA
+  china_normal:     58,
+  china_express:    68,
+  europa_normal:    58, // EUROPA siempre NORMAL
 };
 
 // ── Costos reales del operador ───────────────────────────────────────────────
 const DEFAULT_OPERATOR_COSTS = {
-  usa_normal:    0,
-  usa_express:   0,
-  china_normal:  0,
-  china_express: 0,
-  europa_normal: 0,
+  usa_normal:       0,
+  usa_express:      0,
+  usa_tech_premium: 50, // Costo real Tecnología Premium
+  china_normal:     0,
+  china_express:    0,
+  europa_normal:    0,
 };
 
 async function getOperatorCosts() {
   try {
     const r = await db.query(
-      `SELECT usa_normal, usa_express, china_normal, china_express, europa_normal
+      `SELECT usa_normal, usa_express, usa_tech_premium, china_normal, china_express, europa_normal
        FROM operator_costs LIMIT 1`
     );
     return r.rows[0] || DEFAULT_OPERATOR_COSTS;
@@ -79,22 +81,23 @@ function normalizeOrigin(origin) {
 
 function normalizeService(service) {
   const s = (service || "").toUpperCase().trim();
-  if (s === "NORMAL" || s === "EXPRESS") return s;
+  if (s === "NORMAL" || s === "EXPRESS" || s === "TECH_PREMIUM") return s;
   return null;
 }
 
 function rateKeyFor(origin, service) {
   if (origin === "EUROPA") return "europa_normal";
-  if (origin === "USA" && service === "NORMAL") return "usa_normal";
-  if (origin === "USA" && service === "EXPRESS") return "usa_express";
-  if (origin === "CHINA" && service === "NORMAL") return "china_normal";
-  if (origin === "CHINA" && service === "EXPRESS") return "china_express";
+  if (origin === "USA" && service === "NORMAL")       return "usa_normal";
+  if (origin === "USA" && service === "EXPRESS")      return "usa_express";
+  if (origin === "USA" && service === "TECH_PREMIUM") return "usa_tech_premium";
+  if (origin === "CHINA" && service === "NORMAL")     return "china_normal";
+  if (origin === "CHINA" && service === "EXPRESS")    return "china_express";
   return null;
 }
 
 async function getClientRatesByUserId(userId) {
   const r = await db.query(
-    `SELECT user_id, usa_normal, usa_express, china_normal, china_express, europa_normal, updated_at
+    `SELECT user_id, usa_normal, usa_express, usa_tech_premium, china_normal, china_express, europa_normal, updated_at
      FROM client_rates
      WHERE user_id=$1`,
     [userId]
@@ -153,6 +156,7 @@ async function computeRateAndEstimatedServer({
 
   let service = normalizeService(serviceRaw) || "NORMAL";
   if (origin === "EUROPA") service = "NORMAL";
+  if (origin !== "USA" && service === "TECH_PREMIUM") service = "NORMAL"; // TECH_PREMIUM solo USA
 
   const override = toNumOrNull(rateOverride);
   if (override !== null) {
@@ -776,11 +780,12 @@ app.put(
       if (Number.isNaN(userId)) return res.status(400).json({ error: "ID inválido" });
 
       const schema = z.object({
-        usa_normal: z.number().min(0).nullable().optional(),
-        usa_express: z.number().min(0).nullable().optional(),
-        china_normal: z.number().min(0).nullable().optional(),
-        china_express: z.number().min(0).nullable().optional(),
-        europa_normal: z.number().min(0).nullable().optional(),
+        usa_normal:       z.number().min(0).nullable().optional(),
+        usa_express:      z.number().min(0).nullable().optional(),
+        usa_tech_premium: z.number().min(0).nullable().optional(),
+        china_normal:     z.number().min(0).nullable().optional(),
+        china_express:    z.number().min(0).nullable().optional(),
+        europa_normal:    z.number().min(0).nullable().optional(),
       });
 
       const p = schema.safeParse(req.body);
@@ -793,24 +798,26 @@ app.put(
       let up;
       try {
         up = await db.query(
-          `INSERT INTO client_rates (user_id, usa_normal, usa_express, china_normal, china_express, europa_normal, updated_at)
-           VALUES ($1,$2,$3,$4,$5,$6, NOW())
+          `INSERT INTO client_rates (user_id, usa_normal, usa_express, usa_tech_premium, china_normal, china_express, europa_normal, updated_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7, NOW())
            ON CONFLICT (user_id)
            DO UPDATE SET
-             usa_normal = EXCLUDED.usa_normal,
-             usa_express = EXCLUDED.usa_express,
-             china_normal = EXCLUDED.china_normal,
-             china_express = EXCLUDED.china_express,
-             europa_normal = EXCLUDED.europa_normal,
-             updated_at = NOW()
-           RETURNING user_id, usa_normal, usa_express, china_normal, china_express, europa_normal, updated_at`,
+             usa_normal       = EXCLUDED.usa_normal,
+             usa_express      = EXCLUDED.usa_express,
+             usa_tech_premium = EXCLUDED.usa_tech_premium,
+             china_normal     = EXCLUDED.china_normal,
+             china_express    = EXCLUDED.china_express,
+             europa_normal    = EXCLUDED.europa_normal,
+             updated_at       = NOW()
+           RETURNING user_id, usa_normal, usa_express, usa_tech_premium, china_normal, china_express, europa_normal, updated_at`,
           [
             userId,
-            p.data.usa_normal ?? null,
-            p.data.usa_express ?? null,
-            p.data.china_normal ?? null,
-            p.data.china_express ?? null,
-            p.data.europa_normal ?? null,
+            p.data.usa_normal       ?? null,
+            p.data.usa_express      ?? null,
+            p.data.usa_tech_premium ?? null,
+            p.data.china_normal     ?? null,
+            p.data.china_express    ?? null,
+            p.data.europa_normal    ?? null,
           ]
         );
       } catch (e) {
@@ -1244,27 +1251,29 @@ app.put(
   async (req, res) => {
     try {
       const schema = z.object({
-        usa_normal:    z.number().min(0),
-        usa_express:   z.number().min(0),
-        china_normal:  z.number().min(0),
-        china_express: z.number().min(0),
-        europa_normal: z.number().min(0),
+        usa_normal:       z.number().min(0),
+        usa_express:      z.number().min(0),
+        usa_tech_premium: z.number().min(0),
+        china_normal:     z.number().min(0),
+        china_express:    z.number().min(0),
+        europa_normal:    z.number().min(0),
       });
       const p = schema.safeParse(req.body);
       if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
 
       const d = p.data;
       await db.query(
-        `INSERT INTO operator_costs (id, usa_normal, usa_express, china_normal, china_express, europa_normal, updated_at)
-         VALUES (1, $1, $2, $3, $4, $5, NOW())
+        `INSERT INTO operator_costs (id, usa_normal, usa_express, usa_tech_premium, china_normal, china_express, europa_normal, updated_at)
+         VALUES (1, $1, $2, $3, $4, $5, $6, NOW())
          ON CONFLICT (id) DO UPDATE SET
-           usa_normal    = EXCLUDED.usa_normal,
-           usa_express   = EXCLUDED.usa_express,
-           china_normal  = EXCLUDED.china_normal,
-           china_express = EXCLUDED.china_express,
-           europa_normal = EXCLUDED.europa_normal,
-           updated_at    = NOW()`,
-        [d.usa_normal, d.usa_express, d.china_normal, d.china_express, d.europa_normal]
+           usa_normal       = EXCLUDED.usa_normal,
+           usa_express      = EXCLUDED.usa_express,
+           usa_tech_premium = EXCLUDED.usa_tech_premium,
+           china_normal     = EXCLUDED.china_normal,
+           china_express    = EXCLUDED.china_express,
+           europa_normal    = EXCLUDED.europa_normal,
+           updated_at       = NOW()`,
+        [d.usa_normal, d.usa_express, d.usa_tech_premium, d.china_normal, d.china_express, d.europa_normal]
       );
       res.json({ ok: true, costs: d });
     } catch (err) {
@@ -1320,11 +1329,12 @@ app.get(
       // 4. Costos del operador
       const operatorCosts = await getOperatorCosts();
       const costsParams = [
-        Number(operatorCosts.usa_normal)    || 0,
-        Number(operatorCosts.usa_express)   || 0,
-        Number(operatorCosts.china_normal)  || 0,
-        Number(operatorCosts.china_express) || 0,
-        Number(operatorCosts.europa_normal) || 0,
+        Number(operatorCosts.usa_normal)       || 0,
+        Number(operatorCosts.usa_express)      || 0,
+        Number(operatorCosts.usa_tech_premium) || 0,
+        Number(operatorCosts.china_normal)     || 0,
+        Number(operatorCosts.china_express)    || 0,
+        Number(operatorCosts.europa_normal)    || 0,
       ];
 
       // Expresión de costo por lane — parámetros casteados a NUMERIC para evitar errores de tipo
@@ -1347,21 +1357,23 @@ app.get(
           COALESCE(SUM(estimated_usd), 0)                   AS revenue,
           COALESCE(SUM(
             weight_kg * CASE
-              WHEN origin='USA'   AND service='NORMAL'  THEN $1::numeric
-              WHEN origin='USA'   AND service='EXPRESS' THEN $2::numeric
-              WHEN origin='CHINA' AND service='NORMAL'  THEN $3::numeric
-              WHEN origin='CHINA' AND service='EXPRESS' THEN $4::numeric
-              WHEN origin='EUROPA'                       THEN $5::numeric
+              WHEN origin='USA'   AND service='NORMAL'       THEN $1::numeric
+              WHEN origin='USA'   AND service='EXPRESS'      THEN $2::numeric
+              WHEN origin='USA'   AND service='TECH_PREMIUM' THEN $3::numeric
+              WHEN origin='CHINA' AND service='NORMAL'       THEN $4::numeric
+              WHEN origin='CHINA' AND service='EXPRESS'      THEN $5::numeric
+              WHEN origin='EUROPA'                            THEN $6::numeric
               ELSE 0
             END
           ), 0)                                              AS cost,
           COALESCE(SUM(estimated_usd), 0) - COALESCE(SUM(
             weight_kg * CASE
-              WHEN origin='USA'   AND service='NORMAL'  THEN $1::numeric
-              WHEN origin='USA'   AND service='EXPRESS' THEN $2::numeric
-              WHEN origin='CHINA' AND service='NORMAL'  THEN $3::numeric
-              WHEN origin='CHINA' AND service='EXPRESS' THEN $4::numeric
-              WHEN origin='EUROPA'                       THEN $5::numeric
+              WHEN origin='USA'   AND service='NORMAL'       THEN $1::numeric
+              WHEN origin='USA'   AND service='EXPRESS'      THEN $2::numeric
+              WHEN origin='USA'   AND service='TECH_PREMIUM' THEN $3::numeric
+              WHEN origin='CHINA' AND service='NORMAL'       THEN $4::numeric
+              WHEN origin='CHINA' AND service='EXPRESS'      THEN $5::numeric
+              WHEN origin='EUROPA'                            THEN $6::numeric
               ELSE 0
             END
           ), 0)                                              AS profit
@@ -1380,21 +1392,23 @@ app.get(
           COALESCE(SUM(estimated_usd), 0) AS revenue,
           COALESCE(SUM(
             weight_kg * CASE
-              WHEN origin='USA'   AND service='NORMAL'  THEN $1::numeric
-              WHEN origin='USA'   AND service='EXPRESS' THEN $2::numeric
-              WHEN origin='CHINA' AND service='NORMAL'  THEN $3::numeric
-              WHEN origin='CHINA' AND service='EXPRESS' THEN $4::numeric
-              WHEN origin='EUROPA'                       THEN $5::numeric
+              WHEN origin='USA'   AND service='NORMAL'       THEN $1::numeric
+              WHEN origin='USA'   AND service='EXPRESS'      THEN $2::numeric
+              WHEN origin='USA'   AND service='TECH_PREMIUM' THEN $3::numeric
+              WHEN origin='CHINA' AND service='NORMAL'       THEN $4::numeric
+              WHEN origin='CHINA' AND service='EXPRESS'      THEN $5::numeric
+              WHEN origin='EUROPA'                            THEN $6::numeric
               ELSE 0
             END
           ), 0) AS cost,
           COALESCE(SUM(estimated_usd), 0) - COALESCE(SUM(
             weight_kg * CASE
-              WHEN origin='USA'   AND service='NORMAL'  THEN $1::numeric
-              WHEN origin='USA'   AND service='EXPRESS' THEN $2::numeric
-              WHEN origin='CHINA' AND service='NORMAL'  THEN $3::numeric
-              WHEN origin='CHINA' AND service='EXPRESS' THEN $4::numeric
-              WHEN origin='EUROPA'                       THEN $5::numeric
+              WHEN origin='USA'   AND service='NORMAL'       THEN $1::numeric
+              WHEN origin='USA'   AND service='EXPRESS'      THEN $2::numeric
+              WHEN origin='USA'   AND service='TECH_PREMIUM' THEN $3::numeric
+              WHEN origin='CHINA' AND service='NORMAL'       THEN $4::numeric
+              WHEN origin='CHINA' AND service='EXPRESS'      THEN $5::numeric
+              WHEN origin='EUROPA'                            THEN $6::numeric
               ELSE 0
             END
           ), 0) AS profit

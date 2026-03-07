@@ -17,14 +17,15 @@ const STATUSES = [
 
 const ORIGINS = ["USA", "CHINA", "EUROPA"];
 const SERVICES_BY_ORIGIN = {
-  USA: ["NORMAL", "EXPRESS"],
+  USA: ["NORMAL", "EXPRESS", "TECH_PREMIUM"],
   CHINA: ["NORMAL", "EXPRESS"],
   EUROPA: ["NORMAL"],
 };
 
 const DEFAULT_RATES_FALLBACK = {
   usa_normal: 45,
-  usa_express: 55,
+  usa_express:      55,
+  usa_tech_premium: 75, // Tecnología Premium
   china_normal: 58,
   china_express: 68,
   europa_normal: 58,
@@ -65,6 +66,7 @@ function normalizeService(origin, v) {
   const o = normalizeOrigin(origin);
   if (o === "EUROPA") return "NORMAL";
   const s = String(v || "").toUpperCase().trim();
+  if (s === "TECH_PREMIUM" && o === "USA") return "TECH_PREMIUM";
   return s === "EXPRESS" ? "EXPRESS" : "NORMAL";
 }
 
@@ -76,10 +78,12 @@ function getLaneRate({ origin, service, rates, defaults }) {
   const chN = numOrNull(r.china_normal);
   const chE = numOrNull(r.china_express);
   const euN = numOrNull(r.europa_normal);
-  if (origin === "USA" && service === "NORMAL") return usaN ?? num(d.usa_normal);
-  if (origin === "USA" && service === "EXPRESS") return usaE ?? num(d.usa_express);
-  if (origin === "CHINA" && service === "NORMAL") return chN ?? num(d.china_normal);
-  if (origin === "CHINA" && service === "EXPRESS") return chE ?? num(d.china_express);
+  const usaTP = numOrNull(r.usa_tech_premium);
+  if (origin === "USA" && service === "NORMAL")       return usaN  ?? num(d.usa_normal);
+  if (origin === "USA" && service === "EXPRESS")      return usaE  ?? num(d.usa_express);
+  if (origin === "USA" && service === "TECH_PREMIUM") return usaTP ?? num(d.usa_tech_premium ?? 75);
+  if (origin === "CHINA" && service === "NORMAL")     return chN   ?? num(d.china_normal);
+  if (origin === "CHINA" && service === "EXPRESS")    return chE   ?? num(d.china_express);
   if (origin === "EUROPA") return euN ?? num(d.europa_normal);
   return 0;
 }
@@ -230,7 +234,7 @@ export default function OperatorPanel() {
   // Tarifas por cliente
   const [defaults, setDefaults] = useState(DEFAULT_RATES_FALLBACK);
   const [rates, setRates] = useState({
-    usa_normal: "", usa_express: "",
+    usa_normal: "", usa_express: "", usa_tech_premium: "",
     china_normal: "", china_express: "",
     europa_normal: "",
   });
@@ -340,7 +344,7 @@ export default function OperatorPanel() {
     setDefaults(nextDefaults);
     const r = data.rates || null;
     setRates({
-      usa_normal: r?.usa_normal ?? "", usa_express: r?.usa_express ?? "",
+      usa_normal: r?.usa_normal ?? "", usa_express: r?.usa_express ?? "", usa_tech_premium: r?.usa_tech_premium ?? "",
       china_normal: r?.china_normal ?? "", china_express: r?.china_express ?? "",
       europa_normal: r?.europa_normal ?? "",
     });
@@ -348,8 +352,9 @@ export default function OperatorPanel() {
 
   function applyDefaultsToInputs() {
     setRates({
-      usa_normal: String(defaults.usa_normal ?? DEFAULT_RATES_FALLBACK.usa_normal),
-      usa_express: String(defaults.usa_express ?? DEFAULT_RATES_FALLBACK.usa_express),
+      usa_normal:       String(defaults.usa_normal       ?? DEFAULT_RATES_FALLBACK.usa_normal),
+      usa_express:      String(defaults.usa_express      ?? DEFAULT_RATES_FALLBACK.usa_express),
+      usa_tech_premium: String(defaults.usa_tech_premium ?? DEFAULT_RATES_FALLBACK.usa_tech_premium ?? 75),
       china_normal: String(defaults.china_normal ?? DEFAULT_RATES_FALLBACK.china_normal),
       china_express: String(defaults.china_express ?? DEFAULT_RATES_FALLBACK.china_express),
       europa_normal: String(defaults.europa_normal ?? DEFAULT_RATES_FALLBACK.europa_normal),
@@ -358,7 +363,7 @@ export default function OperatorPanel() {
   }
 
   function clearRatesToAuto() {
-    setRates({ usa_normal: "", usa_express: "", china_normal: "", china_express: "", europa_normal: "" });
+    setRates({ usa_normal: "", usa_express: "", usa_tech_premium: "", china_normal: "", china_express: "", europa_normal: "" });
     setMsg("Listo: quedó en modo AUTO ✅");
   }
 
@@ -368,7 +373,7 @@ export default function OperatorPanel() {
     setSavingRates(true);
     try {
       const payload = {
-        usa_normal: numOrNull(rates.usa_normal), usa_express: numOrNull(rates.usa_express),
+        usa_normal: numOrNull(rates.usa_normal), usa_express: numOrNull(rates.usa_express), usa_tech_premium: numOrNull(rates.usa_tech_premium),
         china_normal: numOrNull(rates.china_normal), china_express: numOrNull(rates.china_express),
         europa_normal: numOrNull(rates.europa_normal),
       };
@@ -381,7 +386,7 @@ export default function OperatorPanel() {
       if (!res.ok) return setMsg(data?.error || "Error guardando tarifas");
       setDefaults(data.defaults || DEFAULT_RATES_FALLBACK);
       setRates({
-        usa_normal: data?.rates?.usa_normal ?? "", usa_express: data?.rates?.usa_express ?? "",
+        usa_normal: data?.rates?.usa_normal ?? "", usa_express: data?.rates?.usa_express ?? "", usa_tech_premium: data?.rates?.usa_tech_premium ?? "",
         china_normal: data?.rates?.china_normal ?? "", china_express: data?.rates?.china_express ?? "",
         europa_normal: data?.rates?.europa_normal ?? "",
       });
@@ -499,6 +504,7 @@ export default function OperatorPanel() {
       origin: o, service: s,
       rates: {
         usa_normal: ctx?.rates?.usa_normal ?? "", usa_express: ctx?.rates?.usa_express ?? "",
+        usa_tech_premium: ctx?.rates?.usa_tech_premium ?? "",
         china_normal: ctx?.rates?.china_normal ?? "", china_express: ctx?.rates?.china_express ?? "",
         europa_normal: ctx?.rates?.europa_normal ?? "",
       },
@@ -747,6 +753,8 @@ export default function OperatorPanel() {
                   onChange={(v) => setRates((r) => ({ ...r, usa_normal: v }))} />
                 <RateField label="USA • Express" value={rates.usa_express} placeholder={String(defaults.usa_express)}
                   onChange={(v) => setRates((r) => ({ ...r, usa_express: v }))} />
+                <RateField label="📱 USA • Tecnología Premium" value={rates.usa_tech_premium} placeholder={String(defaults.usa_tech_premium ?? 75)}
+                  onChange={(v) => setRates((r) => ({ ...r, usa_tech_premium: v }))} />
                 <RateField label="China • Normal" value={rates.china_normal} placeholder={String(defaults.china_normal)}
                   onChange={(v) => setRates((r) => ({ ...r, china_normal: v }))} />
                 <RateField label="China • Express" value={rates.china_express} placeholder={String(defaults.china_express)}
@@ -837,7 +845,11 @@ export default function OperatorPanel() {
                 <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", marginBottom: 5, fontWeight: 600 }}>SERVICIO</div>
                 <select className="input" value={origin === "EUROPA" ? "NORMAL" : service}
                   onChange={(e) => setService(e.target.value)} disabled={origin === "EUROPA"}>
-                  {(SERVICES_BY_ORIGIN[origin] || ["NORMAL"]).map((s) => <option key={s} value={s}>{s}</option>)}
+                  {(SERVICES_BY_ORIGIN[origin] || ["NORMAL"]).map((s) => (
+                    <option key={s} value={s}>
+                      {s === "TECH_PREMIUM" ? "📱 Tecnología Premium" : s}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
