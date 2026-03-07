@@ -99,6 +99,8 @@ function CobrosTab() {
   const [exchangeRate, setExchangeRate] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  const [accounts, setAccounts] = useState([]);
+  const [payAccount, setPayAccount] = useState("");
 
   // Historial
   const [history, setHistory] = useState([]);
@@ -161,6 +163,7 @@ function CobrosTab() {
         exchange_rate: needsArs ? num(exchangeRate) : null,
         amount_ars: arsEquiv,
         notes: notes || null,
+        account_id: payAccount ? parseInt(payAccount, 10) : null,
       };
       const res = await fetch(`${API}/cash/payments`, {
         method: "POST",
@@ -368,6 +371,15 @@ function CobrosTab() {
                         onChange={e => setNotes(e.target.value)} />
                     </div>
 
+                    {/* Cuenta destino */}
+                    <div style={{ marginBottom: 14 }}>
+                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", fontWeight: 700, marginBottom: 6 }}>ACREDITAR EN CUENTA (opcional)</div>
+                      <select className="input" value={payAccount} onChange={e => setPayAccount(e.target.value)}>
+                        <option value="">— Sin asignar —</option>
+                        {accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({a.currency})</option>)}
+                      </select>
+                    </div>
+
                     <button className="btn btnPrimary" onClick={registerPayment} disabled={saving}
                       style={{ width: "100%", height: 46, fontSize: 15, fontWeight: 900 }}>
                       {saving ? "Registrando…" : `✓ Confirmar cobro ${fmtUsd(totalUsd)}`}
@@ -477,6 +489,7 @@ function GastosTab() {
     date: new Date().toISOString().slice(0, 10),
   });
   const [saving, setSaving] = useState(false);
+  const [accounts, setAccounts] = useState([]);
 
   const [expenses, setExpenses] = useState([]);
   const [totals, setTotals]     = useState({});
@@ -509,7 +522,7 @@ function GastosTab() {
       const res = await fetch(`${API}/cash/expenses`, {
         method: "POST",
         headers: { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, amount: amt }),
+        body: JSON.stringify({ ...form, amount: amt, account_id: form.account_id ? parseInt(form.account_id,10) : null }),
       });
       const data = await res.json();
       if (!res.ok) { setMsg(data?.error || "Error"); return; }
@@ -529,7 +542,11 @@ function GastosTab() {
     else setMsg("Error eliminando");
   }
 
-  useEffect(() => { loadExpenses(); }, []); // eslint-disable-line
+  useEffect(() => {
+    loadExpenses();
+    fetch(`${API}/accounts`, { headers: { Authorization: `Bearer ${getToken()}` } })
+      .then(r => r.json()).then(d => setAccounts(d.accounts || [])).catch(() => {});
+  }, []); // eslint-disable-line
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -595,6 +612,14 @@ function GastosTab() {
             <input type="date" className="input" value={form.date}
               onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
           </div>
+        </div>
+
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", fontWeight: 700, marginBottom: 6 }}>DEBITADO DE CUENTA (opcional)</div>
+          <select className="input" value={form.account_id} onChange={e => setForm(f => ({ ...f, account_id: e.target.value }))} style={{ maxWidth: 280 }}>
+            <option value="">— Sin asignar —</option>
+            {accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({a.currency})</option>)}
+          </select>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10, alignItems: "end" }}>
@@ -967,6 +992,315 @@ function IngresosTab() {
   );
 }
 
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TAB 4 — FONDOS / CUENTAS
+// ══════════════════════════════════════════════════════════════════════════════
+const ACCOUNT_TYPE_LABELS = {
+  usd_cash: { label: "💵 USD Efectivo",       color: "#22c55e" },
+  usdt:     { label: "🔷 USDT",               color: "#3b82f6" },
+  bank_ars: { label: "🏦 Banco ARS",          color: "#a78bfa" },
+  bank_usd: { label: "🏦 Banco USD",          color: "#34d399" },
+  prepaid:  { label: "💳 Prepaga",            color: "#fbbf24" },
+  other:    { label: "📁 Otra",               color: "#94a3b8" },
+};
+
+function FondosTab() {
+  const [msg, setMsg]           = useState("");
+  const [accounts, setAccounts] = useState([]);
+  const [loading, setLoading]   = useState(false);
+
+  // Nuevo movimiento manual
+  const [selAccount, setSelAccount] = useState(null);
+  const [movements, setMovements]   = useState([]);
+  const [loadingMov, setLoadingMov] = useState(false);
+  const [movForm, setMovForm]       = useState({ direction: "in", amount: "", description: "" });
+  const [savingMov, setSavingMov]   = useState(false);
+
+  // Nuevo saldo manual
+  const [editBalId, setEditBalId]   = useState(null);
+  const [editBal, setEditBal]       = useState("");
+  const [savingBal, setSavingBal]   = useState(false);
+
+  // Nueva cuenta
+  const [showNew, setShowNew]       = useState(false);
+  const [newAcc, setNewAcc]         = useState({ name: "", type: "usd_cash", currency: "USD", balance: "0", notes: "" });
+  const [savingNew, setSavingNew]   = useState(false);
+
+  async function loadAccounts() {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API}/accounts`, { headers: { Authorization: `Bearer ${getToken()}` } });
+      const data = await res.json();
+      if (res.ok) setAccounts(data.accounts || []);
+    } catch { /* no-op */ }
+    finally { setLoading(false); }
+  }
+
+  async function loadMovements(accountId) {
+    setLoadingMov(true);
+    try {
+      const res = await fetch(`${API}/accounts/${accountId}/movements`, { headers: { Authorization: `Bearer ${getToken()}` } });
+      const data = await res.json();
+      if (res.ok) setMovements(data.rows || []);
+    } catch { /* no-op */ }
+    finally { setLoadingMov(false); }
+  }
+
+  async function saveBalance(accountId) {
+    const amt = Number(String(editBal).replace(",","."));
+    if (isNaN(amt)) return setMsg("Monto inválido");
+    setSavingBal(true);
+    try {
+      const res = await fetch(`${API}/accounts/${accountId}`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ balance: amt }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setMsg(data?.error || "Error"); return; }
+      setMsg("Saldo actualizado ✅");
+      setEditBalId(null); setEditBal("");
+      await loadAccounts();
+    } catch { setMsg("Error de red"); }
+    finally { setSavingBal(false); }
+  }
+
+  async function addMovement(accountId) {
+    const amt = Number(String(movForm.amount).replace(",","."));
+    if (!amt || amt <= 0) return setMsg("Monto inválido");
+    if (!movForm.description.trim()) return setMsg("Ingresá una descripción");
+    setSavingMov(true);
+    try {
+      const res = await fetch(`${API}/accounts/${accountId}/movements`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ direction: movForm.direction, amount: amt, description: movForm.description }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setMsg(data?.error || "Error"); return; }
+      setMsg(`Movimiento registrado ✅ — nuevo saldo: ${data.balance}`);
+      setMovForm({ direction: "in", amount: "", description: "" });
+      await loadAccounts();
+      await loadMovements(accountId);
+    } catch { setMsg("Error de red"); }
+    finally { setSavingMov(false); }
+  }
+
+  async function createAccount() {
+    if (!newAcc.name.trim()) return setMsg("Ingresá un nombre");
+    setSavingNew(true);
+    try {
+      const res = await fetch(`${API}/accounts`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ ...newAcc, balance: Number(newAcc.balance)||0 }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setMsg(data?.error || "Error"); return; }
+      setMsg("Cuenta creada ✅");
+      setShowNew(false);
+      setNewAcc({ name: "", type: "usd_cash", currency: "USD", balance: "0", notes: "" });
+      await loadAccounts();
+    } catch { setMsg("Error de red"); }
+    finally { setSavingNew(false); }
+  }
+
+  async function archiveAccount(id) {
+    if (!confirm("¿Archivar esta cuenta?")) return;
+    await fetch(`${API}/accounts/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${getToken()}` } });
+    await loadAccounts();
+  }
+
+  useEffect(() => { loadAccounts(); }, []); // eslint-disable-line
+  useEffect(() => {
+    if (selAccount) loadMovements(selAccount.id);
+  }, [selAccount]); // eslint-disable-line
+
+  // Totales por moneda
+  const totals = accounts.reduce((acc, a) => {
+    acc[a.currency] = (acc[a.currency]||0) + Number(a.balance);
+    return acc;
+  }, {});
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <MsgBanner msg={msg} onClose={() => setMsg("")} />
+
+      {/* KPIs totales */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 10 }}>
+        {Object.entries(totals).map(([cur, bal]) => (
+          <KpiCard key={cur} icon={cur==="USD"?"💵":cur==="USDT"?"🔷":"💴"}
+            label={`Total ${cur}`} value={cur==="ARS"?fmtArs(bal):fmtUsd(bal)}
+            accent={cur==="USD"?"#22c55e":cur==="USDT"?"#3b82f6":"#ffd200"} />
+        ))}
+      </div>
+
+      {/* Cards de cuentas */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: 12 }}>
+        {accounts.map(a => {
+          const typeInfo = ACCOUNT_TYPE_LABELS[a.type] || ACCOUNT_TYPE_LABELS.other;
+          const isSelected = selAccount?.id === a.id;
+          const isEditing  = editBalId === a.id;
+          return (
+            <div key={a.id} style={{
+              background: isSelected ? "rgba(255,210,0,0.06)" : "rgba(255,255,255,0.04)",
+              border: `1px solid ${isSelected ? "rgba(255,210,0,0.30)" : "rgba(255,255,255,0.09)"}`,
+              borderRadius: 18, padding: "16px 18px", cursor: "pointer",
+              transition: "all 0.15s",
+            }} onClick={() => setSelAccount(isSelected ? null : a)}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                <div>
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 6,
+                    background: `${typeInfo.color}20`, border: `1px solid ${typeInfo.color}44`, color: typeInfo.color,
+                  }}>{typeInfo.label}</span>
+                  <div style={{ fontWeight: 800, fontSize: 15, marginTop: 6 }}>{a.name}</div>
+                </div>
+                <button onClick={e => { e.stopPropagation(); archiveAccount(a.id); }} style={{
+                  background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.20)",
+                  color: "#fca5a5", borderRadius: 6, padding: "2px 8px", cursor: "pointer", fontSize: 11,
+                }}>✕</button>
+              </div>
+
+              <div style={{ marginBottom: 10 }}>
+                {isEditing ? (
+                  <div style={{ display: "flex", gap: 6 }} onClick={e => e.stopPropagation()}>
+                    <input className="input" value={editBal} onChange={e => setEditBal(e.target.value)}
+                      inputMode="decimal" placeholder="Nuevo saldo" style={{ flex: 1 }} autoFocus />
+                    <button className="btn btnPrimary" onClick={() => saveBalance(a.id)} disabled={savingBal}
+                      style={{ height: 40, padding: "0 14px" }}>{savingBal ? "…" : "✓"}</button>
+                    <button className="btn" onClick={() => setEditBalId(null)}
+                      style={{ height: 40, padding: "0 10px" }}>✕</button>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                    <span style={{ fontSize: 26, fontWeight: 900, color: Number(a.balance) >= 0 ? typeInfo.color : "#ef4444" }}>
+                      {a.currency === "ARS" ? fmtArs(a.balance) : fmtUsd(a.balance)}
+                    </span>
+                    <span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>{a.currency}</span>
+                    <button onClick={e => { e.stopPropagation(); setEditBalId(a.id); setEditBal(String(a.balance)); }}
+                      style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", background: "none", border: "none", cursor: "pointer", marginLeft: 4 }}>
+                      ✏
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {a.notes && <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 4 }}>{a.notes}</div>}
+            </div>
+          );
+        })}
+
+        {/* Nueva cuenta */}
+        {!showNew ? (
+          <div onClick={() => setShowNew(true)} style={{
+            background: "rgba(255,255,255,0.02)", border: "1px dashed rgba(255,255,255,0.15)",
+            borderRadius: 18, padding: "16px 18px", cursor: "pointer", display: "flex",
+            alignItems: "center", justifyContent: "center", gap: 8, color: "rgba(255,255,255,0.35)",
+            fontSize: 14, fontWeight: 700, minHeight: 100,
+          }}>
+            + Nueva cuenta
+          </div>
+        ) : (
+          <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,210,0,0.25)", borderRadius: 18, padding: "16px 18px" }}>
+            <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 12, color: "#ffd200" }}>NUEVA CUENTA</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <input className="input" placeholder="Nombre (ej: Efectivo caja)" value={newAcc.name}
+                onChange={e => setNewAcc(a => ({ ...a, name: e.target.value }))} />
+              <select className="input" value={newAcc.type}
+                onChange={e => setNewAcc(a => ({ ...a, type: e.target.value }))}>
+                {Object.entries(ACCOUNT_TYPE_LABELS).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
+              </select>
+              <select className="input" value={newAcc.currency}
+                onChange={e => setNewAcc(a => ({ ...a, currency: e.target.value }))}>
+                <option value="USD">USD</option>
+                <option value="ARS">ARS</option>
+                <option value="USDT">USDT</option>
+              </select>
+              <input className="input" placeholder="Saldo inicial" inputMode="decimal" value={newAcc.balance}
+                onChange={e => setNewAcc(a => ({ ...a, balance: e.target.value }))} />
+              <input className="input" placeholder="Notas (opcional)" value={newAcc.notes}
+                onChange={e => setNewAcc(a => ({ ...a, notes: e.target.value }))} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="btn btnPrimary" onClick={createAccount} disabled={savingNew}
+                  style={{ flex: 1, height: 40 }}>{savingNew ? "…" : "Crear"}</button>
+                <button className="btn" onClick={() => setShowNew(false)} style={{ height: 40, padding: "0 14px" }}>Cancelar</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Panel de movimientos de cuenta seleccionada */}
+      {selAccount && (
+        <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,210,0,0.20)", borderRadius: 18, padding: "16px 18px" }}>
+          <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 14, color: "#ffd200" }}>
+            📋 Movimientos — {selAccount.name}
+          </div>
+
+          {/* Form movimiento manual */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 6 }}>
+              {[["in","⬆ Ingreso","#22c55e"],["out","⬇ Egreso","#ef4444"]].map(([v,l,c]) => (
+                <button key={v} onClick={() => setMovForm(f => ({ ...f, direction: v }))} style={{
+                  height: 40, padding: "0 16px", borderRadius: 10, border: "none", cursor: "pointer",
+                  fontWeight: 700, fontSize: 12,
+                  background: movForm.direction === v ? c : "rgba(255,255,255,0.07)",
+                  color: movForm.direction === v ? "#fff" : "rgba(255,255,255,0.55)",
+                }}>{l}</button>
+              ))}
+            </div>
+            <input className="input" placeholder="Monto" inputMode="decimal" value={movForm.amount}
+              onChange={e => setMovForm(f => ({ ...f, amount: e.target.value }))} style={{ width: 130 }} />
+            <input className="input" placeholder="Descripción" value={movForm.description}
+              onChange={e => setMovForm(f => ({ ...f, description: e.target.value }))} style={{ flex: 1, minWidth: 180 }} />
+            <button className="btn btnPrimary" onClick={() => addMovement(selAccount.id)} disabled={savingMov}
+              style={{ height: 42, padding: "0 18px" }}>{savingMov ? "…" : "Registrar"}</button>
+          </div>
+
+          {/* Tabla movimientos */}
+          <div className="tableWrap">
+            <table className="table">
+              <thead>
+                <tr><th>FECHA</th><th>TIPO</th><th>DESCRIPCIÓN</th><th>MONTO</th><th>SALDO DESPUÉS</th></tr>
+              </thead>
+              <tbody>
+                {loadingMov ? (
+                  <tr><td colSpan={5} style={{ textAlign: "center", padding: 16, color: "rgba(255,255,255,0.30)" }}>Cargando…</td></tr>
+                ) : movements.map(m => (
+                  <tr key={m.id}>
+                    <td style={{ fontSize: 12, whiteSpace: "nowrap" }}>{fmtDate(m.created_at)}</td>
+                    <td>
+                      <span style={{
+                        fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 6,
+                        background: m.direction==="in" ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)",
+                        color: m.direction==="in" ? "#86efac" : "#fca5a5",
+                      }}>{m.direction==="in" ? "⬆ Ingreso" : "⬇ Egreso"}</span>
+                    </td>
+                    <td style={{ fontSize: 13 }}>{m.description}</td>
+                    <td>
+                      <b style={{ color: m.direction==="in" ? "#22c55e" : "#ef4444" }}>
+                        {m.direction==="in" ? "+" : "-"}{fmtUsd(m.amount)}
+                      </b>
+                    </td>
+                    <td style={{ fontSize: 12, color: "rgba(255,255,255,0.55)" }}>
+                      {m.balance_after != null ? fmtUsd(m.balance_after) : "-"}
+                    </td>
+                  </tr>
+                ))}
+                {!loadingMov && !movements.length && (
+                  <tr><td colSpan={5} style={{ textAlign: "center", padding: 20, color: "rgba(255,255,255,0.30)" }}>Sin movimientos.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // PÁGINA PRINCIPAL
 // ══════════════════════════════════════════════════════════════════════════════
@@ -998,6 +1332,7 @@ export default function CashRegister() {
             { key: "cobros",   label: "💵 Cobros" },
             { key: "ingresos", label: "➕ Ingresos" },
             { key: "gastos",   label: "📋 Gastos" },
+            { key: "fondos",   label: "💳 Fondos" },
           ].map(t => (
             <button key={t.key} onClick={() => setTab(t.key)} style={{
               height: 36, padding: "0 20px", borderRadius: 9, border: "none", cursor: "pointer",
@@ -1013,7 +1348,8 @@ export default function CashRegister() {
       <div style={{ marginTop: 14 }}>
         {tab === "cobros"   ? <CobrosTab />   :
          tab === "ingresos" ? <IngresosTab /> :
-         <GastosTab />}
+         tab === "gastos"   ? <GastosTab />   :
+         <FondosTab />}
       </div>
     </div>
   );

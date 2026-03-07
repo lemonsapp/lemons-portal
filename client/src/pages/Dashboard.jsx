@@ -434,6 +434,7 @@ export default function Dashboard() {
   const [showCosts, setShowCosts]   = useState(false);
   const [monthly, setMonthly]       = useState([]);
   const [selMonth, setSelMonth]     = useState(new Date().toISOString().slice(0,7));
+  const [accounts, setAccounts]     = useState([]);
 
   async function loadDashboard() {
     setLoading(true); setError("");
@@ -455,7 +456,15 @@ export default function Dashboard() {
     } catch { /* no-op */ }
   }
 
-  useEffect(() => { loadDashboard(); loadMonthly(); }, []); // eslint-disable-line
+  async function loadAccounts() {
+    try {
+      const res = await fetch(`${API}/accounts/summary`, { headers: { Authorization: `Bearer ${getToken()}` } });
+      const json = await res.json();
+      if (res.ok) setAccounts(json.accounts || []);
+    } catch { /* no-op */ }
+  }
+
+  useEffect(() => { loadDashboard(); loadMonthly(); loadAccounts(); }, []); // eslint-disable-line
 
   const s = data?.stats;
   const totalProfit  = (data?.by_month || []).reduce((a, d) => a + num(d.profit), 0);
@@ -593,6 +602,62 @@ export default function Dashboard() {
             </ChartShell>
           </div>
 
+
+
+          {/* ══ FONDOS / CUENTAS ════════════════════════════════════════ */}
+          <div style={{ marginTop: 12, marginBottom: 8 }}>
+            <ChartShell title="💳 Estado de Fondos">
+              {accounts.length === 0 ? (
+                <div style={{ color: "rgba(255,255,255,0.30)", fontSize: 13, padding: "12px 0" }}>
+                  Sin cuentas configuradas. Creá cuentas en <b>/caja → Fondos</b>.
+                </div>
+              ) : (
+                <>
+                  {/* Totales por moneda */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 10, marginBottom: 18 }}>
+                    {Object.entries(accounts.reduce((acc, a) => {
+                      acc[a.currency] = (acc[a.currency]||0) + Number(a.balance);
+                      return acc;
+                    }, {})).map(([cur, bal]) => (
+                      <div key={cur} style={{
+                        background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
+                        borderRadius: 14, padding: "12px 14px",
+                      }}>
+                        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", fontWeight: 700, marginBottom: 4 }}>
+                          TOTAL {cur}
+                        </div>
+                        <div style={{ fontSize: 22, fontWeight: 900, color: cur==="USD"?"#22c55e":cur==="USDT"?"#3b82f6":"#ffd200" }}>
+                          {cur==="ARS" ? fmtArs(bal) : fmtUsd(bal)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Cards de cuentas */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 10 }}>
+                    {accounts.map(a => {
+                      const colors = { usd_cash:"#22c55e", usdt:"#3b82f6", bank_ars:"#a78bfa", bank_usd:"#34d399", prepaid:"#fbbf24", other:"#94a3b8" };
+                      const c = colors[a.type] || "#94a3b8";
+                      return (
+                        <div key={a.id} style={{
+                          position: "relative", background: "rgba(255,255,255,0.04)",
+                          border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14,
+                          padding: "12px 14px", overflow: "hidden",
+                        }}>
+                          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: c }} />
+                          <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.60)", marginBottom: 6, marginTop: 4 }}>{a.name}</div>
+                          <div style={{ fontSize: 20, fontWeight: 900, color: Number(a.balance) >= 0 ? c : "#ef4444" }}>
+                            {a.currency === "ARS" ? fmtArs(a.balance) : fmtUsd(a.balance)}
+                          </div>
+                          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.30)", marginTop: 3 }}>{a.currency}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </ChartShell>
+          </div>
 
           {/* ══ P&L MENSUAL ══════════════════════════════════════════════ */}
           <div style={{ marginTop: 12, marginBottom: 8 }}>

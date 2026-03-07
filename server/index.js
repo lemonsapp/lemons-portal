@@ -1578,6 +1578,24 @@ app.post(
           }
         }
 
+        // Mover saldo de cuenta si se especificó
+        if (req.body.account_id) {
+          const aid = parseInt(req.body.account_id, 10);
+          if (Number.isFinite(aid)) {
+            const accQ = await db.query(`SELECT balance FROM accounts WHERE id=$1`, [aid]);
+            if (accQ.rows[0]) {
+              const newBal = Number(accQ.rows[0].balance) + total_usd;
+              await db.query(`UPDATE accounts SET balance=$1, updated_at=NOW() WHERE id=$2`, [newBal, aid]);
+              await db.query(
+                `INSERT INTO account_movements (account_id, operator_id, direction, amount, description, ref_type, ref_id, balance_after)
+                 VALUES ($1,$2,'in',$3,$4,'payment',$5,$6)`,
+                [aid, operator_id, total_usd, `Cobro paquetes — cliente #${user_id}`, payment.id, newBal]
+              );
+              await db.query(`UPDATE payments SET account_id=$1 WHERE id=$2`, [aid, payment.id]);
+            }
+          }
+        }
+
         res.json({ ok: true, payment });
       } finally {
         if (client) client.release();
@@ -1682,11 +1700,28 @@ app.post(
       const operator_id = req.user?.id || null;
 
       const r = await db.query(
-        `INSERT INTO expenses (operator_id, type, category, description, amount, currency, date)
-         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+        `INSERT INTO expenses (operator_id, type, category, description, amount, currency, date, account_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
         [operator_id, type, category, description, amount, currency,
-         date || new Date().toISOString().slice(0, 10)]
+         date || new Date().toISOString().slice(0, 10),
+         req.body.account_id || null]
       );
+      // Mover saldo de cuenta si se especificó
+      if (req.body.account_id) {
+        const aid = parseInt(req.body.account_id, 10);
+        if (Number.isFinite(aid)) {
+          const accQ = await db.query(`SELECT balance FROM accounts WHERE id=$1`, [aid]);
+          if (accQ.rows[0]) {
+            const newBal = Number(accQ.rows[0].balance) - amount;
+            await db.query(`UPDATE accounts SET balance=$1, updated_at=NOW() WHERE id=$2`, [newBal, aid]);
+            await db.query(
+              `INSERT INTO account_movements (account_id, operator_id, direction, amount, description, ref_type, ref_id, balance_after)
+               VALUES ($1,$2,'out',$3,$4,'expense',$5,$6)`,
+              [aid, operator_id, amount, `${type} — ${category}: ${description}`, r.rows[0].id, newBal]
+            );
+          }
+        }
+      }
       res.json({ ok: true, expense: r.rows[0] });
     } catch (err) {
       console.error("POST EXPENSE ERROR:", err);
@@ -1753,6 +1788,148 @@ app.delete(
   }
 );
 
+
+
+// ════════════════════════════════════════════════════════════════════
+// MÓDULO CUENTAS / FONDOS
+// ════════════════════════════════════════════════════════════════════
+
+// ── GET /accounts ────────────────────────────────────────────────────
+app.get("/accounts", authRequired, requireRole(["operator","admin"]), async (req, res) => {
+  try {
+    const q = await db.query(`
+      SELECT a.*,
+        COALESCE((SELECT SUM(CASE WHEN direction='in' THEN amount ELSE -amount END)
+                  FROM account_movements WHERE account_id=a.id), 0) AS movements_balance
+      FROM accounts a WHERE a.active=true ORDER BY a.id
+    `);
+    res.json({ accounts: q.rows });
+  } catch(err) { res.status(500).json({ error: "Error obteniendo cuentas" }); }
+});
+
+// ── POST /accounts ───────────────────────────────────────────────────
+app.post("/accounts", authRequired, requireRole(["operator","admin"]), async (req, res) => {
+  try {
+    const schema = z.object({
+      name:     z.string().min(1),
+      type:     z.enum(["usd_cash","usdt","bank_ars","bank_usd","prepaid","other"]),
+      currency: z.enum(["USD","ARS","USDT"]),
+      balance:  z.number().default(0),
+      notes:    z.string().nullable().optional(),
+    });
+    const p = schema.safeParse(req.body);
+    if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
+    const r = await db.query(
+      `INSERT INTO accounts (name,type,currency,balance,notes) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [p.data.name, p.data.type, p.data.currency, p.data.balance, p.data.notes||null]
+    );
+    res.json({ ok: true, account: r.rows[0] });
+  } catch(err) { res.status(500).json({ error: "Error creando cuenta" }); }
+});
+
+// ── PUT /accounts/:id — actualizar saldo manual ──────────────────────
+app.put("/accounts/:id", authRequired, requireRole(["operator","admin"]), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const schema = z.object({
+      name:    z.string().min(1).optional(),
+      balance: z.number().optional(),
+      notes:   z.string().nullable().optional(),
+      active:  z.boolean().optional(),
+    });
+    const p = schema.safeParse(req.body);
+    if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
+
+    const fields = []; const vals = []; let pi = 1;
+    if (p.data.name    !== undefined) { fields.push(`name=$${pi++}`);    vals.push(p.data.name); }
+    if (p.data.balance !== undefined) { fields.push(`balance=$${pi++}`); vals.push(p.data.balance); }
+    if (p.data.notes   !== undefined) { fields.push(`notes=$${pi++}`);   vals.push(p.data.notes); }
+    if (p.data.active  !== undefined) { fields.push(`active=$${pi++}`);  vals.push(p.data.active); }
+    fields.push(`updated_at=NOW()`);
+    vals.push(id);
+
+    const r = await db.query(
+      `UPDATE accounts SET ${fields.join(",")} WHERE id=$${pi} RETURNING *`, vals
+    );
+    if (p.data.balance !== undefined) {
+      // Registrar como ajuste manual
+      await db.query(
+        `INSERT INTO account_movements (account_id, operator_id, direction, amount, description, ref_type, balance_after)
+         VALUES ($1,$2,'in',$3,'Ajuste manual de saldo','manual',$4)`,
+        [id, req.user?.id||null, p.data.balance, p.data.balance]
+      );
+    }
+    res.json({ ok: true, account: r.rows[0] });
+  } catch(err) { res.status(500).json({ error: "Error actualizando cuenta" }); }
+});
+
+// ── DELETE /accounts/:id ─────────────────────────────────────────────
+app.delete("/accounts/:id", authRequired, requireRole(["operator","admin"]), async (req, res) => {
+  try {
+    await db.query(`UPDATE accounts SET active=false WHERE id=$1`, [parseInt(req.params.id,10)]);
+    res.json({ ok: true });
+  } catch(err) { res.status(500).json({ error: "Error eliminando cuenta" }); }
+});
+
+// ── POST /accounts/:id/movements — movimiento manual ─────────────────
+app.post("/accounts/:id/movements", authRequired, requireRole(["operator","admin"]), async (req, res) => {
+  try {
+    const account_id = parseInt(req.params.id, 10);
+    const schema = z.object({
+      direction:   z.enum(["in","out"]),
+      amount:      z.number().min(0.01),
+      description: z.string().min(1),
+    });
+    const p = schema.safeParse(req.body);
+    if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
+
+    // Get current balance
+    const accQ = await db.query(`SELECT balance FROM accounts WHERE id=$1`, [account_id]);
+    if (!accQ.rows[0]) return res.status(404).json({ error: "Cuenta no encontrada" });
+    const current = Number(accQ.rows[0].balance);
+    const delta = p.data.direction === 'in' ? p.data.amount : -p.data.amount;
+    const newBalance = current + delta;
+
+    await db.query(`UPDATE accounts SET balance=$1, updated_at=NOW() WHERE id=$2`, [newBalance, account_id]);
+    const mv = await db.query(
+      `INSERT INTO account_movements (account_id, operator_id, direction, amount, description, ref_type, balance_after)
+       VALUES ($1,$2,$3,$4,$5,'manual',$6) RETURNING *`,
+      [account_id, req.user?.id||null, p.data.direction, p.data.amount, p.data.description, newBalance]
+    );
+    res.json({ ok: true, movement: mv.rows[0], balance: newBalance });
+  } catch(err) { res.status(500).json({ error: "Error registrando movimiento" }); }
+});
+
+// ── GET /accounts/:id/movements ──────────────────────────────────────
+app.get("/accounts/:id/movements", authRequired, requireRole(["operator","admin"]), async (req, res) => {
+  try {
+    const q = await db.query(`
+      SELECT m.*, u.name AS operator_name
+      FROM account_movements m
+      LEFT JOIN users u ON u.id = m.operator_id
+      WHERE m.account_id = $1
+      ORDER BY m.created_at DESC LIMIT 100
+    `, [parseInt(req.params.id,10)]);
+    res.json({ rows: q.rows });
+  } catch(err) { res.status(500).json({ error: "Error obteniendo movimientos" }); }
+});
+
+// ── GET /accounts/summary — resumen de fondos para dashboard ─────────
+app.get("/accounts/summary", authRequired, requireRole(["operator","admin"]), async (req, res) => {
+  try {
+    const q = await db.query(`
+      SELECT a.*,
+        (SELECT COUNT(*) FROM account_movements WHERE account_id=a.id) AS movement_count
+      FROM accounts a WHERE a.active=true ORDER BY a.id
+    `);
+    // Totales por moneda
+    const totals = q.rows.reduce((acc, r) => {
+      acc[r.currency] = (acc[r.currency]||0) + Number(r.balance);
+      return acc;
+    }, {});
+    res.json({ accounts: q.rows, totals });
+  } catch(err) { res.status(500).json({ error: "Error summary fondos" }); }
+});
 
 // ── POST /cash/income — registrar ingreso adicional ─────────────────
 app.post(
