@@ -8,6 +8,7 @@ const getToken = () =>
 const NAV_STAFF = [
   { path: "/dashboard", label: "Dashboard", icon: "📊" },
   { path: "/operator",  label: "Operador",  icon: "🗂" },
+  { path: "/caja",      label: "Caja",      icon: "💵" },
 ];
 
 const NAV_CLIENT = [

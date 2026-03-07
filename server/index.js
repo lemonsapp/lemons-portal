@@ -1467,6 +1467,364 @@ app.get(
   }
 );
 
+
+// ════════════════════════════════════════════════════════════════════
+// MÓDULO CAJA — pagos y gastos
+// ════════════════════════════════════════════════════════════════════
+
+const PAYMENT_METHODS = ["USD_CASH", "USDT", "ARS_TRANSFER", "ARS_CASH"];
+const EXPENSE_CATEGORIES = [
+  "Alquiler / Oficina", "Sueldos / Personal", "Logística / Flete",
+  "Marketing", "Servicios", "Otros"
+];
+
+// ── GET /cash/pending/:clientNumber — paquetes pendientes de cobro ──
+app.get(
+  "/cash/pending/:clientNumber",
+  authRequired,
+  requireRole(["operator", "admin"]),
+  async (req, res) => {
+    try {
+      const cn = parseInt(req.params.clientNumber, 10);
+      if (!Number.isFinite(cn)) return res.status(400).json({ error: "Número de cliente inválido" });
+
+      // Buscar usuario
+      const uq = await db.query(
+        "SELECT id, client_number, name, email FROM users WHERE client_number=$1", [cn]
+      );
+      if (!uq.rows[0]) return res.status(404).json({ error: "Cliente no encontrado" });
+      const user = uq.rows[0];
+
+      // Paquetes no cobrados (no aparecen en ningún payment_item)
+      const sq = await db.query(`
+        SELECT s.id, s.code, s.description, s.weight_kg, s.origin, s.service,
+               s.status, s.estimated_usd, s.date_in
+        FROM shipments s
+        WHERE s.user_id = $1
+          AND s.estimated_usd IS NOT NULL
+          AND s.id NOT IN (SELECT shipment_id FROM payment_items)
+        ORDER BY s.date_in DESC
+      `, [user.id]);
+
+      res.json({ user, shipments: sq.rows });
+    } catch (err) {
+      console.error("GET PENDING ERROR:", err);
+      res.status(500).json({ error: "Error obteniendo pendientes" });
+    }
+  }
+);
+
+// ── POST /cash/payments — registrar cobro ───────────────────────────
+app.post(
+  "/cash/payments",
+  authRequired,
+  requireRole(["operator", "admin"]),
+  async (req, res) => {
+    try {
+      const schema = z.object({
+        user_id:       z.number().int().positive(),
+        shipment_ids:  z.array(z.number().int().positive()).min(1),
+        method:        z.enum(["USD_CASH", "USDT", "ARS_TRANSFER", "ARS_CASH"]),
+        exchange_rate: z.number().min(0).nullable().optional(),
+        amount_ars:    z.number().min(0).nullable().optional(),
+        notes:         z.string().nullable().optional(),
+      });
+      const p = schema.safeParse(req.body);
+      if (!p.success) return res.status(400).json({ error: "Datos inválidos", details: p.error.issues });
+
+      const { user_id, shipment_ids, method, exchange_rate, amount_ars, notes } = p.data;
+      const operator_id = req.user?.id || null;
+
+      // Calcular total USD de los paquetes seleccionados
+      const sq = await db.query(
+        `SELECT id, estimated_usd FROM shipments
+         WHERE id = ANY($1::int[]) AND user_id = $2`,
+        [shipment_ids, user_id]
+      );
+      if (sq.rows.length !== shipment_ids.length) {
+        return res.status(400).json({ error: "Algunos paquetes no pertenecen al cliente o no existen" });
+      }
+      const total_usd = sq.rows.reduce((a, r) => a + Number(r.estimated_usd || 0), 0);
+
+      // Insertar pago en transacción
+      const client = await db.pool ? db.pool.connect() : null;
+      try {
+        const payRes = await db.query(
+          `INSERT INTO payments (user_id, operator_id, amount_usd, method, exchange_rate, amount_ars, notes)
+           VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+          [user_id, operator_id, total_usd, method,
+           exchange_rate ?? null, amount_ars ?? null, notes ?? null]
+        );
+        const payment = payRes.rows[0];
+
+        // Insertar items + marcar paquetes como Entregado
+        for (const sid of shipment_ids) {
+          const shipAmt = sq.rows.find(r => r.id === sid)?.estimated_usd || 0;
+          await db.query(
+            `INSERT INTO payment_items (payment_id, shipment_id, amount_usd) VALUES ($1, $2, $3)`,
+            [payment.id, sid, shipAmt]
+          );
+          // Registrar evento de cambio de estado
+          const prevQ = await db.query(`SELECT status FROM shipments WHERE id=$1`, [sid]);
+          const prevStatus = prevQ.rows[0]?.status || null;
+          if (prevStatus !== "Entregado") {
+            await db.query(
+              `UPDATE shipments SET status='Entregado', updated_at=NOW() WHERE id=$1`, [sid]
+            );
+            await db.query(
+              `INSERT INTO shipment_events (shipment_id, old_status, new_status) VALUES ($1, $2, $3)`,
+              [sid, prevStatus, "Entregado"]
+            );
+          }
+        }
+
+        res.json({ ok: true, payment });
+      } finally {
+        if (client) client.release();
+      }
+    } catch (err) {
+      console.error("POST PAYMENT ERROR:", err);
+      res.status(500).json({ error: "Error registrando pago" });
+    }
+  }
+);
+
+// ── GET /cash/payments — historial de cobros ────────────────────────
+app.get(
+  "/cash/payments",
+  authRequired,
+  requireRole(["operator", "admin"]),
+  async (req, res) => {
+    try {
+      const { from, to, method, client_number } = req.query;
+      const conditions = ["1=1"];
+      const params = [];
+      let pi = 1;
+
+      if (from)   { conditions.push(`p.created_at >= $${pi++}`); params.push(from); }
+      if (to)     { conditions.push(`p.created_at <  $${pi++}`); params.push(to + "T23:59:59"); }
+      if (method) { conditions.push(`p.method = $${pi++}`);      params.push(method); }
+      if (client_number) {
+        conditions.push(`u.client_number = $${pi++}`);
+        params.push(parseInt(client_number, 10));
+      }
+
+      const q = await db.query(`
+        SELECT
+          p.id, p.amount_usd, p.method, p.exchange_rate, p.amount_ars,
+          p.notes, p.created_at,
+          u.client_number, u.name AS client_name,
+          op.name AS operator_name,
+          (
+            SELECT json_agg(json_build_object(
+              'shipment_id', pi2.shipment_id,
+              'amount_usd',  pi2.amount_usd,
+              'code',        s.code,
+              'description', s.description
+            ))
+            FROM payment_items pi2
+            JOIN shipments s ON s.id = pi2.shipment_id
+            WHERE pi2.payment_id = p.id
+          ) AS items
+        FROM payments p
+        JOIN users u  ON u.id = p.user_id
+        LEFT JOIN users op ON op.id = p.operator_id
+        WHERE ${conditions.join(" AND ")}
+        ORDER BY p.created_at DESC
+        LIMIT 200
+      `, params);
+
+      res.json({ rows: q.rows });
+    } catch (err) {
+      console.error("GET PAYMENTS ERROR:", err);
+      res.status(500).json({ error: "Error obteniendo pagos" });
+    }
+  }
+);
+
+// ── DELETE /cash/payments/:id — anular cobro ────────────────────────
+app.delete(
+  "/cash/payments/:id",
+  authRequired,
+  requireRole(["operator", "admin"]),
+  async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      await db.query("DELETE FROM payment_items WHERE payment_id=$1", [id]);
+      await db.query("DELETE FROM payments WHERE id=$1", [id]);
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("DELETE PAYMENT ERROR:", err);
+      res.status(500).json({ error: "Error anulando pago" });
+    }
+  }
+);
+
+// ── POST /cash/expenses — registrar gasto ───────────────────────────
+app.post(
+  "/cash/expenses",
+  authRequired,
+  requireRole(["operator", "admin"]),
+  async (req, res) => {
+    try {
+      const schema = z.object({
+        type:        z.enum(["empresa", "personal"]),
+        category:    z.string().min(1),
+        description: z.string().min(1),
+        amount:      z.number().min(0.01),
+        currency:    z.enum(["USD", "ARS"]),
+        date:        z.string().optional(),
+      });
+      const p = schema.safeParse(req.body);
+      if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
+
+      const { type, category, description, amount, currency, date } = p.data;
+      const operator_id = req.user?.id || null;
+
+      const r = await db.query(
+        `INSERT INTO expenses (operator_id, type, category, description, amount, currency, date)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+        [operator_id, type, category, description, amount, currency,
+         date || new Date().toISOString().slice(0, 10)]
+      );
+      res.json({ ok: true, expense: r.rows[0] });
+    } catch (err) {
+      console.error("POST EXPENSE ERROR:", err);
+      res.status(500).json({ error: "Error registrando gasto" });
+    }
+  }
+);
+
+// ── GET /cash/expenses — listar gastos ─────────────────────────────
+app.get(
+  "/cash/expenses",
+  authRequired,
+  requireRole(["operator", "admin"]),
+  async (req, res) => {
+    try {
+      const { from, to, type, currency } = req.query;
+      const conditions = ["1=1"];
+      const params = [];
+      let pi = 1;
+
+      if (from)     { conditions.push(`e.date >= $${pi++}`);     params.push(from); }
+      if (to)       { conditions.push(`e.date <= $${pi++}`);     params.push(to); }
+      if (type)     { conditions.push(`e.type = $${pi++}`);      params.push(type); }
+      if (currency) { conditions.push(`e.currency = $${pi++}`);  params.push(currency); }
+
+      const q = await db.query(`
+        SELECT e.*, u.name AS operator_name
+        FROM expenses e
+        LEFT JOIN users u ON u.id = e.operator_id
+        WHERE ${conditions.join(" AND ")}
+        ORDER BY e.date DESC, e.created_at DESC
+        LIMIT 500
+      `, params);
+
+      // Totales
+      const totals = q.rows.reduce((acc, r) => {
+        const k = r.currency;
+        acc[k] = (acc[k] || 0) + Number(r.amount);
+        if (r.type === "empresa") acc[`empresa_${k}`] = (acc[`empresa_${k}`] || 0) + Number(r.amount);
+        if (r.type === "personal") acc[`personal_${k}`] = (acc[`personal_${k}`] || 0) + Number(r.amount);
+        return acc;
+      }, {});
+
+      res.json({ rows: q.rows, totals });
+    } catch (err) {
+      console.error("GET EXPENSES ERROR:", err);
+      res.status(500).json({ error: "Error obteniendo gastos" });
+    }
+  }
+);
+
+// ── DELETE /cash/expenses/:id ───────────────────────────────────────
+app.delete(
+  "/cash/expenses/:id",
+  authRequired,
+  requireRole(["operator", "admin"]),
+  async (req, res) => {
+    try {
+      await db.query("DELETE FROM expenses WHERE id=$1", [parseInt(req.params.id, 10)]);
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: "Error eliminando gasto" });
+    }
+  }
+);
+
+// ── GET /cash/summary — resumen para dashboard ──────────────────────
+app.get(
+  "/cash/summary",
+  authRequired,
+  requireRole(["operator", "admin"]),
+  async (req, res) => {
+    try {
+      const month = req.query.month || new Date().toISOString().slice(0, 7); // YYYY-MM
+      const from = `${month}-01`;
+      const to   = new Date(new Date(from).getFullYear(), new Date(from).getMonth() + 1, 0)
+                   .toISOString().slice(0, 10);
+
+      // Cobros del mes
+      const payQ = await db.query(`
+        SELECT
+          COUNT(*)                                          AS payment_count,
+          COALESCE(SUM(amount_usd), 0)                    AS total_usd,
+          COALESCE(SUM(amount_usd) FILTER (WHERE method='USD_CASH'),  0) AS usd_cash,
+          COALESCE(SUM(amount_usd) FILTER (WHERE method='USDT'),      0) AS usdt,
+          COALESCE(SUM(amount_usd) FILTER (WHERE method='ARS_TRANSFER'),0) AS ars_transfer_usd,
+          COALESCE(SUM(amount_usd) FILTER (WHERE method='ARS_CASH'),  0) AS ars_cash_usd
+        FROM payments
+        WHERE created_at >= $1 AND created_at <= $2::date + INTERVAL '1 day'
+      `, [from, to]);
+
+      // Gastos del mes
+      const expQ = await db.query(`
+        SELECT
+          COUNT(*)                                             AS expense_count,
+          COALESCE(SUM(amount) FILTER (WHERE currency='USD'), 0) AS total_usd,
+          COALESCE(SUM(amount) FILTER (WHERE currency='ARS'), 0) AS total_ars,
+          COALESCE(SUM(amount) FILTER (WHERE type='empresa' AND currency='USD'), 0) AS empresa_usd,
+          COALESCE(SUM(amount) FILTER (WHERE type='empresa' AND currency='ARS'), 0) AS empresa_ars,
+          COALESCE(SUM(amount) FILTER (WHERE type='personal' AND currency='USD'), 0) AS personal_usd,
+          COALESCE(SUM(amount) FILTER (WHERE type='personal' AND currency='ARS'), 0) AS personal_ars
+        FROM expenses
+        WHERE date >= $1 AND date <= $2
+      `, [from, to]);
+
+      // Cobros por día (últimos 30 días)
+      const byDayQ = await db.query(`
+        SELECT
+          TO_CHAR(created_at, 'YYYY-MM-DD') AS day,
+          COALESCE(SUM(amount_usd), 0)       AS collected
+        FROM payments
+        WHERE created_at >= NOW() - INTERVAL '30 days'
+        GROUP BY TO_CHAR(created_at, 'YYYY-MM-DD')
+        ORDER BY day
+      `);
+
+      // Paquetes pendientes de cobro (todos)
+      const pendQ = await db.query(`
+        SELECT COUNT(*) AS count, COALESCE(SUM(s.estimated_usd), 0) AS total
+        FROM shipments s
+        WHERE s.estimated_usd IS NOT NULL
+          AND s.id NOT IN (SELECT shipment_id FROM payment_items)
+      `);
+
+      res.json({
+        month,
+        payments:  payQ.rows[0],
+        expenses:  expQ.rows[0],
+        by_day:    byDayQ.rows,
+        pending:   pendQ.rows[0],
+      });
+    } catch (err) {
+      console.error("CASH SUMMARY ERROR:", err);
+      res.status(500).json({ error: "Error summary caja" });
+    }
+  }
+);
+
 app.listen(PORT, () => {
   console.log(`API corriendo en http://localhost:${PORT}`);
 });

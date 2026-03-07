@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Login from "./pages/Login.jsx";
 import OperatorPanel from "./pages/OperatorPanel.jsx";
 import ClientShipments from "./pages/ClientShipments.jsx";
-import Dashboard from "./pages/Dashboard.jsx";
 import ForgotPassword from "./pages/ForgotPassword.jsx";
 import ResetPassword from "./pages/ResetPassword.jsx";
 
@@ -85,12 +84,12 @@ export default function App() {
           }
         />
 
-        {/* Dashboard */}
+        {/* Caja */}
         <Route
-          path="/dashboard"
+          path="/caja"
           element={
             <AuthGate allowRoles={["operator", "admin"]}>
-              <Dashboard />
+              <CashRegister />
             </AuthGate>
           }
         />
