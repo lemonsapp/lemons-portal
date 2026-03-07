@@ -469,7 +469,7 @@ export default function Dashboard() {
         setAccounts(json.accounts || []);
         setFxRate(json.fx_rate || null);
         setTotalCapital(json.total_capital_usd ?? null);
-        if (!fxInput) setFxInput(json.fx_rate ? String(json.fx_rate) : "");
+        if (json.fx_rate) setFxInput(String(json.fx_rate));
       }
     } catch { /* no-op */ }
   }
@@ -658,7 +658,7 @@ export default function Dashboard() {
                       </button>
                       {fxMsg && <span style={{ fontSize: 12, color: "#86efac" }}>{fxMsg}</span>}
                     </div>
-                    {totalCapital !== null && (
+                    {(totalCapital !== null && totalCapital !== undefined) && (
                       <div style={{ background: "rgba(255,210,0,0.08)", border: "1px solid rgba(255,210,0,0.25)", borderRadius: 12, padding: "8px 18px" }}>
                         <span style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", fontWeight: 700 }}>CAPITAL TOTAL USD </span>
                         <span style={{ fontSize: 22, fontWeight: 900, color: "#ffd200", marginLeft: 8 }}>{fmtUsd(totalCapital)}</span>
