@@ -8,6 +8,7 @@ const getToken = () =>
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 const fmtUsd  = (v) => `$${Number(v || 0).toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const fmtArs  = (v) => `$${Number(v || 0).toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 const fmtNum  = (v) => Number(v || 0).toLocaleString("es-AR");
 const fmtDate = (v) => {
   if (!v) return "-";
@@ -431,6 +432,8 @@ export default function Dashboard() {
   const [error, setError]           = useState("");
   const [lastUpdate, setLastUpdate] = useState(null);
   const [showCosts, setShowCosts]   = useState(false);
+  const [monthly, setMonthly]       = useState([]);
+  const [selMonth, setSelMonth]     = useState(new Date().toISOString().slice(0,7));
 
   async function loadDashboard() {
     setLoading(true); setError("");
@@ -444,7 +447,15 @@ export default function Dashboard() {
     finally { setLoading(false); }
   }
 
-  useEffect(() => { loadDashboard(); }, []); // eslint-disable-line
+  async function loadMonthly() {
+    try {
+      const res = await fetch(`${API}/cash/monthly`, { headers: { Authorization: `Bearer ${getToken()}` } });
+      const json = await res.json();
+      if (res.ok) setMonthly(json.rows || []);
+    } catch { /* no-op */ }
+  }
+
+  useEffect(() => { loadDashboard(); loadMonthly(); }, []); // eslint-disable-line
 
   const s = data?.stats;
   const totalProfit  = (data?.by_month || []).reduce((a, d) => a + num(d.profit), 0);
@@ -579,6 +590,127 @@ export default function Dashboard() {
             </ChartShell>
             <ChartShell title="Envíos por servicio">
               <DonutChart data={data.by_service} valueKey="count" labelKey="service" colorMap={SERVICE_COLOR} />
+            </ChartShell>
+          </div>
+
+
+          {/* ══ P&L MENSUAL ══════════════════════════════════════════════ */}
+          <div style={{ marginTop: 12, marginBottom: 8 }}>
+            <ChartShell title="📊 Resultado Financiero Mensual (P&L)">
+
+              {/* Selector de mes */}
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
+                <select
+                  className="input"
+                  value={selMonth}
+                  onChange={e => setSelMonth(e.target.value)}
+                  style={{ width: 160 }}
+                >
+                  {monthly.map(m => (
+                    <option key={m.month} value={m.month}>
+                      {new Date(m.month + "-15").toLocaleString("es-AR", { month: "long", year: "numeric" })}
+                    </option>
+                  ))}
+                  {!monthly.length && <option value={selMonth}>{selMonth}</option>}
+                </select>
+                <span style={{ fontSize: 12, color: "rgba(255,255,255,0.35)" }}>
+                  {monthly.length} mes{monthly.length !== 1 ? "es" : ""} con datos
+                </span>
+              </div>
+
+              {/* KPIs del mes seleccionado */}
+              {(() => {
+                const m = monthly.find(x => x.month === selMonth) || {};
+                return (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(160px,1fr))", gap: 10, marginBottom: 20 }}>
+                    {[
+                      { label: "Cobros paquetes", value: fmtUsd(m.collected),    color: "#22c55e",  icon: "📦" },
+                      { label: "Ingresos adicionales", value: fmtUsd(m.income_usd), color: "#3b82f6", icon: "➕" },
+                      { label: "Total ingresos", value: fmtUsd(m.total_income),  color: "#ffd200",  icon: "💰" },
+                      { label: "Gastos empresa USD", value: fmtUsd(m.empresa_usd), color: "#ef4444", icon: "🏢" },
+                      { label: "Gastos empresa ARS", value: fmtArs(m.empresa_ars), color: "#f97316", icon: "🏢" },
+                      { label: "Gastos personales USD", value: fmtUsd(m.personal_usd), color: "#a78bfa", icon: "👤" },
+                      { label: "Gastos personales ARS", value: fmtArs(m.personal_ars), color: "#c084fc", icon: "👤" },
+                      { label: "Ganancia neta USD", value: fmtUsd(m.net),         color: num(m.net) >= 0 ? "#22c55e" : "#ef4444", icon: "📈" },
+                      { label: "Margen", value: `${m.margin ?? 0}%`,             color: num(m.margin) >= 0 ? "#22c55e" : "#ef4444", icon: "%" },
+                    ].map(kpi => (
+                      <div key={kpi.label} style={{
+                        position: "relative", background: "rgba(255,255,255,0.04)",
+                        border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14, padding: "12px 14px", overflow: "hidden",
+                      }}>
+                        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: kpi.color, borderRadius: "14px 14px 0 0" }} />
+                        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", fontWeight: 700, marginBottom: 4, marginTop: 4 }}>
+                          {kpi.icon} {kpi.label.toUpperCase()}
+                        </div>
+                        <div style={{ fontSize: 20, fontWeight: 900, color: kpi.color }}>{kpi.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+
+              {/* Tabla comparativa mes a mes */}
+              <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.40)", letterSpacing: "0.5px", marginBottom: 10 }}>
+                COMPARATIVA MES A MES
+              </div>
+              <div className="tableWrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>MES</th>
+                      <th>COBROS</th>
+                      <th>+ INGRESOS</th>
+                      <th>TOTAL ING.</th>
+                      <th>GASTOS EMP. USD</th>
+                      <th>GASTOS EMP. ARS</th>
+                      <th>GASTOS PERS. USD</th>
+                      <th>GANANCIA NETA</th>
+                      <th>MARGEN</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {monthly.map(m => {
+                      const isSelected = m.month === selMonth;
+                      return (
+                        <tr key={m.month}
+                          onClick={() => setSelMonth(m.month)}
+                          style={{
+                            cursor: "pointer",
+                            background: isSelected ? "rgba(255,210,0,0.06)" : undefined,
+                            outline: isSelected ? "1px solid rgba(255,210,0,0.20)" : undefined,
+                          }}
+                        >
+                          <td style={{ fontWeight: isSelected ? 800 : 600, color: isSelected ? "#ffd200" : undefined, whiteSpace: "nowrap" }}>
+                            {new Date(m.month + "-15").toLocaleString("es-AR", { month: "short", year: "2-digit" }).toUpperCase()}
+                          </td>
+                          <td style={{ color: "#22c55e", fontWeight: 700 }}>{fmtUsd(m.collected)}</td>
+                          <td style={{ color: "#3b82f6", fontWeight: 700 }}>{fmtUsd(m.income_usd)}</td>
+                          <td style={{ color: "#ffd200", fontWeight: 800 }}>{fmtUsd(m.total_income)}</td>
+                          <td style={{ color: "#ef4444" }}>{fmtUsd(m.empresa_usd)}</td>
+                          <td style={{ color: "#f97316", fontSize: 12 }}>{fmtArs(m.empresa_ars)}</td>
+                          <td style={{ color: "#a78bfa", fontSize: 12 }}>{fmtUsd(m.personal_usd)}</td>
+                          <td>
+                            <span style={{
+                              fontWeight: 900, fontSize: 14,
+                              color: num(m.net) >= 0 ? "#22c55e" : "#ef4444",
+                            }}>{fmtUsd(m.net)}</span>
+                          </td>
+                          <td>
+                            <span style={{
+                              fontSize: 12, fontWeight: 700, padding: "2px 8px", borderRadius: 6,
+                              background: num(m.margin) >= 30 ? "rgba(34,197,94,0.15)" : num(m.margin) >= 0 ? "rgba(255,210,0,0.12)" : "rgba(239,68,68,0.12)",
+                              color: num(m.margin) >= 30 ? "#86efac" : num(m.margin) >= 0 ? "#ffd200" : "#fca5a5",
+                            }}>{m.margin}%</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {!monthly.length && (
+                      <tr><td colSpan={9} style={{ textAlign: "center", padding: 20, color: "rgba(255,255,255,0.30)" }}>Sin datos financieros aún.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </ChartShell>
           </div>
 

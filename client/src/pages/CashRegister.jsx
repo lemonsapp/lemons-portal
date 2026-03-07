@@ -712,6 +712,212 @@ function GastosTab() {
   );
 }
 
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TAB 3 — INGRESOS ADICIONALES
+// ══════════════════════════════════════════════════════════════════════════════
+const INCOME_CATEGORIES = [
+  "Servicios", "Comisiones", "Consultoría", "Venta de activos", "Otros"
+];
+
+function IngresosTab() {
+  const [msg, setMsg]   = useState("");
+  const [form, setForm] = useState({
+    category: INCOME_CATEGORIES[0],
+    description: "", amount: "", currency: "USD",
+    date: new Date().toISOString().slice(0, 10),
+  });
+  const [saving, setSaving]   = useState(false);
+  const [income, setIncome]   = useState([]);
+  const [totals, setTotals]   = useState({});
+  const [loading, setLoading] = useState(false);
+  const [filter, setFilter]   = useState({ from: "", to: "", currency: "" });
+
+  async function loadIncome() {
+    setLoading(true);
+    const qs = new URLSearchParams();
+    if (filter.from)     qs.set("from", filter.from);
+    if (filter.to)       qs.set("to", filter.to);
+    if (filter.currency) qs.set("currency", filter.currency);
+    try {
+      const res = await fetch(`${API}/cash/income?${qs}`, {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      const data = await res.json();
+      if (res.ok) { setIncome(data.rows || []); setTotals(data.totals || {}); }
+    } catch { /* no-op */ }
+    finally { setLoading(false); }
+  }
+
+  async function addIncome() {
+    if (!form.description.trim()) return setMsg("Ingresá una descripción");
+    const amt = Number(String(form.amount).replace(",", "."));
+    if (!amt || amt <= 0) return setMsg("Monto inválido");
+    setSaving(true); setMsg("");
+    try {
+      const res = await fetch(`${API}/cash/income`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, amount: amt }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setMsg(data?.error || "Error"); return; }
+      setMsg("Ingreso registrado ✅");
+      setForm(f => ({ ...f, description: "", amount: "" }));
+      await loadIncome();
+    } catch { setMsg("Error de red"); }
+    finally { setSaving(false); }
+  }
+
+  async function deleteIncome(id) {
+    if (!confirm("¿Eliminar este ingreso?")) return;
+    const res = await fetch(`${API}/cash/income/${id}`, {
+      method: "DELETE", headers: { Authorization: `Bearer ${getToken()}` },
+    });
+    if (res.ok) { setMsg("Ingreso eliminado"); await loadIncome(); }
+    else setMsg("Error eliminando");
+  }
+
+  useEffect(() => { loadIncome(); }, []); // eslint-disable-line
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <MsgBanner msg={msg} onClose={() => setMsg("")} />
+
+      {/* KPIs */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 10 }}>
+        <KpiCard icon="💵" label="Total ingresos USD" value={fmtUsd(totals.USD)} accent="#22c55e" />
+        <KpiCard icon="💴" label="Total ingresos ARS" value={fmtArs(totals.ARS)} accent="#ffd200" />
+        <KpiCard icon="📋" label="Registros" value={income.length} sub="En el período" accent="linear-gradient(90deg,#ffd200,#ff8a00)" />
+      </div>
+
+      {/* Formulario */}
+      <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 18, padding: "16px 18px" }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.40)", letterSpacing: "0.5px", marginBottom: 14 }}>REGISTRAR INGRESO ADICIONAL</div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 10, marginBottom: 10 }}>
+          <div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", fontWeight: 700, marginBottom: 6 }}>CATEGORÍA</div>
+            <select className="input" value={form.category}
+              onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
+              {INCOME_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", fontWeight: 700, marginBottom: 6 }}>MONEDA</div>
+            <div style={{ display: "flex", gap: 6 }}>
+              {[["USD","💵 USD"],["ARS","💴 ARS"]].map(([v,l]) => (
+                <button key={v} onClick={() => setForm(f => ({ ...f, currency: v }))} style={{
+                  flex: 1, height: 40, borderRadius: 10, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 12,
+                  background: form.currency === v ? (v === "USD" ? "#22c55e" : "#ffd200") : "rgba(255,255,255,0.07)",
+                  color: form.currency === v ? "#0b1020" : "rgba(255,255,255,0.60)",
+                  transition: "all 0.15s",
+                }}>{l}</button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", fontWeight: 700, marginBottom: 6 }}>FECHA</div>
+            <input type="date" className="input" value={form.date}
+              onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10, alignItems: "end" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", fontWeight: 700, marginBottom: 6 }}>DESCRIPCIÓN</div>
+              <input className="input" placeholder="Ej: Comisión por asesoramiento" value={form.description}
+                onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                onKeyDown={e => e.key === "Enter" && addIncome()} />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", fontWeight: 700, marginBottom: 6 }}>MONTO ({form.currency})</div>
+              <input className="input" placeholder="0.00" inputMode="decimal" value={form.amount}
+                onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
+                onKeyDown={e => e.key === "Enter" && addIncome()}
+                style={{ maxWidth: 200 }} />
+            </div>
+          </div>
+          <button className="btn btnPrimary" onClick={addIncome} disabled={saving}
+            style={{ height: 46, padding: "0 24px", fontWeight: 800, fontSize: 14, alignSelf: "end" }}>
+            {saving ? "…" : "+ Agregar"}
+          </button>
+        </div>
+      </div>
+
+      {/* Tabla */}
+      <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 18, padding: "16px 18px" }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.40)", letterSpacing: "0.5px", marginBottom: 14 }}>HISTORIAL DE INGRESOS ADICIONALES</div>
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
+          <input type="date" className="input" value={filter.from}
+            onChange={e => setFilter(f => ({ ...f, from: e.target.value }))} style={{ width: 150 }} />
+          <input type="date" className="input" value={filter.to}
+            onChange={e => setFilter(f => ({ ...f, to: e.target.value }))} style={{ width: 150 }} />
+          <select className="input" value={filter.currency}
+            onChange={e => setFilter(f => ({ ...f, currency: e.target.value }))} style={{ width: 130 }}>
+            <option value="">Todas</option>
+            <option value="USD">💵 USD</option>
+            <option value="ARS">💴 ARS</option>
+          </select>
+          <button className="btn" onClick={loadIncome} disabled={loading}
+            style={{ height: 42, padding: "0 16px" }}>
+            {loading ? "…" : "Filtrar"}
+          </button>
+        </div>
+
+        <div className="tableWrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>FECHA</th>
+                <th>CATEGORÍA</th>
+                <th>DESCRIPCIÓN</th>
+                <th>MONTO</th>
+                <th>MONEDA</th>
+                <th>OPERADOR</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {income.map(i => (
+                <tr key={i.id}>
+                  <td style={{ fontSize: 12, whiteSpace: "nowrap" }}>{fmtDateOnly(i.date)}</td>
+                  <td style={{ fontSize: 12 }}>{i.category}</td>
+                  <td style={{ fontSize: 13 }}>{i.description}</td>
+                  <td>
+                    <b style={{ color: i.currency === "USD" ? "#22c55e" : "#ffd200" }}>
+                      {i.currency === "USD" ? fmtUsd(i.amount) : fmtArs(i.amount)}
+                    </b>
+                  </td>
+                  <td>
+                    <span style={{
+                      fontSize: 11, fontWeight: 700, padding: "2px 6px", borderRadius: 5,
+                      background: i.currency === "USD" ? "rgba(34,197,94,0.15)" : "rgba(255,210,0,0.15)",
+                      color: i.currency === "USD" ? "#86efac" : "#ffd200",
+                    }}>{i.currency}</span>
+                  </td>
+                  <td style={{ fontSize: 12, color: "rgba(255,255,255,0.45)" }}>{i.operator_name || "-"}</td>
+                  <td>
+                    <button onClick={() => deleteIncome(i.id)} style={{
+                      background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.25)",
+                      color: "#fca5a5", borderRadius: 7, padding: "3px 9px", cursor: "pointer", fontSize: 12, fontWeight: 700,
+                    }}>✕</button>
+                  </td>
+                </tr>
+              ))}
+              {!income.length && (
+                <tr><td colSpan={7} style={{ textAlign: "center", padding: 24, color: "rgba(255,255,255,0.30)", fontSize: 13 }}>Sin ingresos en el período.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // PÁGINA PRINCIPAL
 // ══════════════════════════════════════════════════════════════════════════════
@@ -740,8 +946,9 @@ export default function CashRegister() {
         {/* Tabs */}
         <div style={{ display: "flex", gap: 6, background: "rgba(255,255,255,0.05)", borderRadius: 12, padding: 4 }}>
           {[
-            { key: "cobros", label: "💵 Cobros" },
-            { key: "gastos", label: "📋 Gastos" },
+            { key: "cobros",   label: "💵 Cobros" },
+            { key: "ingresos", label: "➕ Ingresos" },
+            { key: "gastos",   label: "📋 Gastos" },
           ].map(t => (
             <button key={t.key} onClick={() => setTab(t.key)} style={{
               height: 36, padding: "0 20px", borderRadius: 9, border: "none", cursor: "pointer",
@@ -755,7 +962,9 @@ export default function CashRegister() {
       </div>
 
       <div style={{ marginTop: 14 }}>
-        {tab === "cobros" ? <CobrosTab /> : <GastosTab />}
+        {tab === "cobros"   ? <CobrosTab />   :
+         tab === "ingresos" ? <IngresosTab /> :
+         <GastosTab />}
       </div>
     </div>
   );

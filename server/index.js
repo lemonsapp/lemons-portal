@@ -1753,6 +1753,177 @@ app.delete(
   }
 );
 
+
+// ── POST /cash/income — registrar ingreso adicional ─────────────────
+app.post(
+  "/cash/income",
+  authRequired,
+  requireRole(["operator", "admin"]),
+  async (req, res) => {
+    try {
+      const schema = z.object({
+        category:    z.string().min(1),
+        description: z.string().min(1),
+        amount:      z.number().min(0.01),
+        currency:    z.enum(["USD", "ARS"]),
+        date:        z.string().optional(),
+      });
+      const p = schema.safeParse(req.body);
+      if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
+      const { category, description, amount, currency, date } = p.data;
+      const operator_id = req.user?.id || null;
+      const r = await db.query(
+        `INSERT INTO additional_income (operator_id, category, description, amount, currency, date)
+         VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+        [operator_id, category, description, amount, currency,
+         date || new Date().toISOString().slice(0,10)]
+      );
+      res.json({ ok: true, income: r.rows[0] });
+    } catch (err) {
+      console.error("POST INCOME ERROR:", err);
+      res.status(500).json({ error: "Error registrando ingreso" });
+    }
+  }
+);
+
+// ── GET /cash/income — listar ingresos adicionales ──────────────────
+app.get(
+  "/cash/income",
+  authRequired,
+  requireRole(["operator", "admin"]),
+  async (req, res) => {
+    try {
+      const { from, to, currency } = req.query;
+      const conditions = ["1=1"];
+      const params = [];
+      let pi = 1;
+      if (from)     { conditions.push(`i.date >= $${pi++}`);    params.push(from); }
+      if (to)       { conditions.push(`i.date <= $${pi++}`);    params.push(to); }
+      if (currency) { conditions.push(`i.currency = $${pi++}`); params.push(currency); }
+
+      const q = await db.query(`
+        SELECT i.*, u.name AS operator_name
+        FROM additional_income i
+        LEFT JOIN users u ON u.id = i.operator_id
+        WHERE ${conditions.join(" AND ")}
+        ORDER BY i.date DESC, i.created_at DESC
+        LIMIT 500
+      `, params);
+
+      const totals = q.rows.reduce((acc, r) => {
+        acc[r.currency] = (acc[r.currency] || 0) + Number(r.amount);
+        return acc;
+      }, {});
+
+      res.json({ rows: q.rows, totals });
+    } catch (err) {
+      res.status(500).json({ error: "Error obteniendo ingresos" });
+    }
+  }
+);
+
+// ── DELETE /cash/income/:id ──────────────────────────────────────────
+app.delete(
+  "/cash/income/:id",
+  authRequired,
+  requireRole(["operator", "admin"]),
+  async (req, res) => {
+    try {
+      await db.query("DELETE FROM additional_income WHERE id=$1", [parseInt(req.params.id,10)]);
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: "Error eliminando ingreso" });
+    }
+  }
+);
+
+// ── GET /cash/monthly — P&L mensual histórico ───────────────────────
+app.get(
+  "/cash/monthly",
+  authRequired,
+  requireRole(["operator", "admin"]),
+  async (req, res) => {
+    try {
+      // Cobros por mes
+      const paymentsQ = await db.query(`
+        SELECT TO_CHAR(created_at, 'YYYY-MM') AS month,
+               COALESCE(SUM(amount_usd), 0)   AS collected
+        FROM payments
+        GROUP BY TO_CHAR(created_at, 'YYYY-MM')
+        ORDER BY month DESC
+        LIMIT 24
+      `);
+
+      // Gastos por mes
+      const expensesQ = await db.query(`
+        SELECT TO_CHAR(date, 'YYYY-MM') AS month,
+               COALESCE(SUM(amount) FILTER (WHERE currency='USD' AND type='empresa'), 0) AS empresa_usd,
+               COALESCE(SUM(amount) FILTER (WHERE currency='ARS' AND type='empresa'), 0) AS empresa_ars,
+               COALESCE(SUM(amount) FILTER (WHERE currency='USD' AND type='personal'), 0) AS personal_usd,
+               COALESCE(SUM(amount) FILTER (WHERE currency='ARS' AND type='personal'), 0) AS personal_ars
+        FROM expenses
+        GROUP BY TO_CHAR(date, 'YYYY-MM')
+        ORDER BY month DESC
+        LIMIT 24
+      `);
+
+      // Ingresos adicionales por mes
+      const incomeQ = await db.query(`
+        SELECT TO_CHAR(date, 'YYYY-MM') AS month,
+               COALESCE(SUM(amount) FILTER (WHERE currency='USD'), 0) AS income_usd,
+               COALESCE(SUM(amount) FILTER (WHERE currency='ARS'), 0) AS income_ars
+        FROM additional_income
+        GROUP BY TO_CHAR(date, 'YYYY-MM')
+        ORDER BY month DESC
+        LIMIT 24
+      `);
+
+      // Merge por mes
+      const months = new Set([
+        ...paymentsQ.rows.map(r => r.month),
+        ...expensesQ.rows.map(r => r.month),
+        ...incomeQ.rows.map(r => r.month),
+      ]);
+
+      const result = [...months].sort((a,b) => b.localeCompare(a)).map(month => {
+        const pay = paymentsQ.rows.find(r => r.month === month) || {};
+        const exp = expensesQ.rows.find(r => r.month === month) || {};
+        const inc = incomeQ.rows.find(r => r.month === month) || {};
+
+        const collected    = Number(pay.collected    || 0);
+        const income_usd   = Number(inc.income_usd   || 0);
+        const empresa_usd  = Number(exp.empresa_usd  || 0);
+        const empresa_ars  = Number(exp.empresa_ars  || 0);
+        const personal_usd = Number(exp.personal_usd || 0);
+        const personal_ars = Number(exp.personal_ars || 0);
+
+        const total_income = collected + income_usd;
+        const net          = total_income - empresa_usd;
+        const margin       = total_income > 0 ? (net / total_income * 100) : 0;
+
+        return {
+          month,
+          collected,
+          income_usd,
+          income_ars:   Number(inc.income_ars   || 0),
+          empresa_usd,
+          empresa_ars,
+          personal_usd,
+          personal_ars,
+          total_income,
+          net,
+          margin: Number(margin.toFixed(1)),
+        };
+      });
+
+      res.json({ rows: result });
+    } catch (err) {
+      console.error("MONTHLY ERROR:", err);
+      res.status(500).json({ error: "Error obteniendo P&L mensual" });
+    }
+  }
+);
+
 // ── GET /cash/summary — resumen para dashboard ──────────────────────
 app.get(
   "/cash/summary",
@@ -1811,12 +1982,23 @@ app.get(
           AND s.id NOT IN (SELECT shipment_id FROM payment_items)
       `);
 
+      // Ingresos adicionales del mes
+      const incQ = await db.query(`
+        SELECT
+          COUNT(*)                                             AS income_count,
+          COALESCE(SUM(amount) FILTER (WHERE currency='USD'), 0) AS total_usd,
+          COALESCE(SUM(amount) FILTER (WHERE currency='ARS'), 0) AS total_ars
+        FROM additional_income
+        WHERE date >= $1 AND date <= $2
+      `, [from, to]);
+
       res.json({
         month,
         payments:  payQ.rows[0],
         expenses:  expQ.rows[0],
         by_day:    byDayQ.rows,
         pending:   pendQ.rows[0],
+        income:    incQ.rows[0],
       });
     } catch (err) {
       console.error("CASH SUMMARY ERROR:", err);
