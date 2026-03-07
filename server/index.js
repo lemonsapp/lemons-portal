@@ -690,8 +690,16 @@ app.post(
       res.json({ user: ins.rows[0] });
     } catch (e) {
       console.error("CREATE CLIENT ERROR", e);
-      if (String(e?.message || "").includes("duplicate")) {
-        return res.status(400).json({ error: "Email o client_number ya existe" });
+      // Postgres unique violation = code 23505
+      if (e?.code === "23505") {
+        const detail = String(e?.detail || "");
+        if (detail.includes("email")) {
+          return res.status(400).json({ error: "Ese email ya está registrado en el sistema." });
+        }
+        if (detail.includes("client_number")) {
+          return res.status(400).json({ error: "Ese número de cliente ya está en uso." });
+        }
+        return res.status(400).json({ error: "Email o número de cliente ya existe." });
       }
       res.status(500).json({ error: "Error interno" });
     }
