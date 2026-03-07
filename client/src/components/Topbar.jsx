@@ -13,6 +13,7 @@ const NAV_STAFF = [
 
 const NAV_CLIENT = [
   { path: "/client/shipments", label: "Mis envíos", icon: "📦" },
+  { path: "/client/quote",     label: "Presupuesto",  icon: "🧮" },
 ];
 
 export default function Topbar({ title = "LEMON's" }) {
