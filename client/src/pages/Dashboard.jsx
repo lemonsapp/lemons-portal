@@ -698,7 +698,7 @@ export default function Dashboard() {
                           <td>
                             <span style={{
                               fontSize: 12, fontWeight: 700, padding: "2px 8px", borderRadius: 6,
-                              background: num(m.margin) >= 30 ? "rgba(34,197,94,0.15)" : num(m.margin) >= 0 ? "rgba(255,210,0,0.12)" : "rgba(239,68,68,0.12)",
+                              background: num(m.margin) >= git30 ? "rgba(34,197,94,0.15)" : num(m.margin) >= 0 ? "rgba(255,210,0,0.12)" : "rgba(239,68,68,0.12)",
                               color: num(m.margin) >= 30 ? "#86efac" : num(m.margin) >= 0 ? "#ffd200" : "#fca5a5",
                             }}>{m.margin}%</span>
                           </td>

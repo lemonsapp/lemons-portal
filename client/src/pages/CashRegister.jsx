@@ -740,12 +740,50 @@ function IngresosTab() {
     if (filter.to)       qs.set("to", filter.to);
     if (filter.currency) qs.set("currency", filter.currency);
     try {
-      const res = await fetch(`${API}/cash/income?${qs}`, {
-        headers: { Authorization: `Bearer ${getToken()}` },
+      // Cargar ingresos adicionales y cobros de paquetes en paralelo
+      const [incRes, payRes] = await Promise.all([
+        fetch(`${API}/cash/income?${qs}`, { headers: { Authorization: `Bearer ${getToken()}` } }),
+        fetch(`${API}/cash/payments?${qs}`, { headers: { Authorization: `Bearer ${getToken()}` } }),
+      ]);
+      const incData = await incRes.json();
+      const payData = await payRes.json();
+
+      // Unificar en una lista con tipo
+      const incRows = (incData.rows || []).map(r => ({
+        ...r,
+        _type: "additional",
+        _label: r.category,
+        _detail: r.description,
+        _amount_usd: r.currency === "USD" ? Number(r.amount) : null,
+        _amount_ars: r.currency === "ARS" ? Number(r.amount) : null,
+        _date: r.date,
+      }));
+
+      const payRows = (payData.rows || []).map(r => ({
+        ...r,
+        _type: "payment",
+        _label: `Cobro paquetes — #${r.client_number} ${r.client_name}`,
+        _detail: (r.items || []).map(i => i.code).join(", "),
+        _amount_usd: Number(r.amount_usd),
+        _amount_ars: r.amount_ars ? Number(r.amount_ars) : null,
+        _date: r.created_at ? r.created_at.slice(0,10) : null,
+      }));
+
+      // Ordenar por fecha desc
+      const all = [...incRows, ...payRows].sort((a, b) => {
+        const da = a._date || ""; const db = b._date || "";
+        return db.localeCompare(da);
       });
-      const data = await res.json();
-      if (res.ok) { setIncome(data.rows || []); setTotals(data.totals || {}); }
-    } catch { /* no-op */ }
+
+      setIncome(all);
+
+      // Totales
+      const totalUsd = all.reduce((s, r) => s + (r._amount_usd || 0), 0);
+      const totalArs = all.reduce((s, r) => s + (r._amount_ars || 0), 0);
+      const fromPkg  = payRows.reduce((s, r) => s + (r._amount_usd || 0), 0);
+      const fromAdd  = incRows.filter(r => r.currency === "USD").reduce((s, r) => s + Number(r.amount), 0);
+      setTotals({ USD: totalUsd, ARS: totalArs, fromPkg, fromAdd });
+    } catch (e) { console.error(e); }
     finally { setLoading(false); }
   }
 
@@ -786,8 +824,10 @@ function IngresosTab() {
 
       {/* KPIs */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 10 }}>
-        <KpiCard icon="💵" label="Total ingresos USD" value={fmtUsd(totals.USD)} accent="#22c55e" />
+        <KpiCard icon="💰" label="Total ingresos USD" value={fmtUsd(totals.USD)} accent="#22c55e" sub="Paquetes + adicionales" />
         <KpiCard icon="💴" label="Total ingresos ARS" value={fmtArs(totals.ARS)} accent="#ffd200" />
+        <KpiCard icon="📦" label="Por cobros paquetes" value={fmtUsd(totals.fromPkg)} accent="#3b82f6" sub="USD cobrado" />
+        <KpiCard icon="➕" label="Ingresos adicionales" value={fmtUsd(totals.fromAdd)} accent="#a78bfa" sub="Servicios / otros" />
         <KpiCard icon="📋" label="Registros" value={income.length} sub="En el período" accent="linear-gradient(90deg,#ffd200,#ff8a00)" />
       </div>
 
@@ -872,38 +912,47 @@ function IngresosTab() {
             <thead>
               <tr>
                 <th>FECHA</th>
-                <th>CATEGORÍA</th>
-                <th>DESCRIPCIÓN</th>
-                <th>MONTO</th>
-                <th>MONEDA</th>
-                <th>OPERADOR</th>
+                <th>TIPO</th>
+                <th>CONCEPTO</th>
+                <th>DETALLE</th>
+                <th>MONTO USD</th>
+                <th>MONTO ARS</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {income.map(i => (
-                <tr key={i.id}>
-                  <td style={{ fontSize: 12, whiteSpace: "nowrap" }}>{fmtDateOnly(i.date)}</td>
-                  <td style={{ fontSize: 12 }}>{i.category}</td>
-                  <td style={{ fontSize: 13 }}>{i.description}</td>
-                  <td>
-                    <b style={{ color: i.currency === "USD" ? "#22c55e" : "#ffd200" }}>
-                      {i.currency === "USD" ? fmtUsd(i.amount) : fmtArs(i.amount)}
-                    </b>
-                  </td>
+              {income.map((i, idx) => (
+                <tr key={`${i._type}-${i.id}-${idx}`}>
+                  <td style={{ fontSize: 12, whiteSpace: "nowrap" }}>{fmtDateOnly(i._date)}</td>
                   <td>
                     <span style={{
-                      fontSize: 11, fontWeight: 700, padding: "2px 6px", borderRadius: 5,
-                      background: i.currency === "USD" ? "rgba(34,197,94,0.15)" : "rgba(255,210,0,0.15)",
-                      color: i.currency === "USD" ? "#86efac" : "#ffd200",
-                    }}>{i.currency}</span>
+                      fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 6,
+                      background: i._type === "payment" ? "rgba(59,130,246,0.15)" : "rgba(167,139,250,0.15)",
+                      border: `1px solid ${i._type === "payment" ? "rgba(59,130,246,0.35)" : "rgba(167,139,250,0.35)"}`,
+                      color: i._type === "payment" ? "#93c5fd" : "#c4b5fd",
+                    }}>
+                      {i._type === "payment" ? "📦 Paquetes" : "➕ Adicional"}
+                    </span>
                   </td>
-                  <td style={{ fontSize: 12, color: "rgba(255,255,255,0.45)" }}>{i.operator_name || "-"}</td>
+                  <td style={{ fontSize: 13, fontWeight: 600 }}>{i._label}</td>
+                  <td style={{ fontSize: 12, color: "rgba(255,255,255,0.50)" }}>{i._detail}</td>
                   <td>
-                    <button onClick={() => deleteIncome(i.id)} style={{
-                      background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.25)",
-                      color: "#fca5a5", borderRadius: 7, padding: "3px 9px", cursor: "pointer", fontSize: 12, fontWeight: 700,
-                    }}>✕</button>
+                    {i._amount_usd != null
+                      ? <b style={{ color: "#22c55e" }}>{fmtUsd(i._amount_usd)}</b>
+                      : <span className="muted">-</span>}
+                  </td>
+                  <td>
+                    {i._amount_ars != null
+                      ? <b style={{ color: "#ffd200" }}>{fmtArs(i._amount_ars)}</b>
+                      : <span className="muted">-</span>}
+                  </td>
+                  <td>
+                    {i._type === "additional" && (
+                      <button onClick={() => deleteIncome(i.id)} style={{
+                        background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.25)",
+                        color: "#fca5a5", borderRadius: 7, padding: "3px 9px", cursor: "pointer", fontSize: 12, fontWeight: 700,
+                      }}>✕</button>
+                    )}
                   </td>
                 </tr>
               ))}
