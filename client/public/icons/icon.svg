@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Background circle navy -->
+  <circle cx="256" cy="256" r="256" fill="#0f1b2d"/>
+  
+  <!-- Lemon shape -->
+  <ellipse cx="256" cy="256" rx="130" ry="105" fill="#f5e642" transform="rotate(-20, 256, 256)"/>
+  
+  <!-- Lemon tip left -->
+  <ellipse cx="148" cy="220" rx="28" ry="16" fill="#f5e642" transform="rotate(-35, 148, 220)"/>
+  
+  <!-- Lemon tip right -->
+  <ellipse cx="364" cy="292" rx="28" ry="16" fill="#f5e642" transform="rotate(-35, 364, 292)"/>
+  
+  <!-- Lemon highlight -->
+  <ellipse cx="225" cy="225" rx="55" ry="38" fill="#fdf07a" opacity="0.55" transform="rotate(-20, 225, 225)"/>
+  
+  <!-- Lemon small shine dot -->
+  <ellipse cx="210" cy="210" rx="18" ry="12" fill="#fffde0" opacity="0.7" transform="rotate(-20, 210, 210)"/>
+  
+  <!-- Leaf -->
+  <ellipse cx="330" cy="168" rx="42" ry="18" fill="#2ecc71" transform="rotate(30, 330, 168)"/>
+  <line x1="310" y1="178" x2="350" y2="158" stroke="#27ae60" stroke-width="2.5" stroke-linecap="round"/>
+  
+  <!-- Stem -->
+  <path d="M298 193 Q310 172 325 162" stroke="#27ae60" stroke-width="4" fill="none" stroke-linecap="round"/>
+</svg>

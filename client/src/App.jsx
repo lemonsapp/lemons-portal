@@ -10,6 +10,8 @@ import Dashboard from "./pages/Dashboard.jsx";
 import CashRegister from "./pages/CashRegister.jsx";
 import QuotePublic from "./pages/QuotePublic.jsx";
 import QuoteClient from "./pages/QuoteClient.jsx";
+import PWAManager from "./components/PWAManager.jsx";
+import PWAManager from "./components/PWAManager.jsx";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
@@ -58,6 +60,8 @@ function AuthGate({ children, allowRoles }) {
 export default function App() {
   return (
     <BrowserRouter>
+      <PWAManager />
+      <PWAManager />
       <Routes>
 
         <Route path="/quote" element={<QuotePublic />} />

@@ -85,29 +85,20 @@ function MethodBadge({ method }) {
 // ══════════════════════════════════════════════════════════════════════════════
 function CobrosTab() {
   const [msg, setMsg] = useState("");
-
-  // Búsqueda cliente
   const [clientNum, setClientNum] = useState("");
-  const [clientData, setClientData] = useState(null); // { user, shipments }
+  const [clientData, setClientData] = useState(null);
   const [loadingClient, setLoadingClient] = useState(false);
-
-  // Selección de paquetes
   const [selected, setSelected] = useState(new Set());
-
-  // Formulario cobro
   const [method, setMethod] = useState("USD_CASH");
   const [exchangeRate, setExchangeRate] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [accounts, setAccounts] = useState([]);
   const [payAccount, setPayAccount] = useState("");
-
-  // Historial
   const [history, setHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [histFilter, setHistFilter] = useState({ from: "", to: "", method: "", client_number: "" });
 
-  // ── Cálculos
   const selectedShipments = useMemo(() =>
     (clientData?.shipments || []).filter(s => selected.has(s.id)),
     [clientData, selected]
@@ -117,11 +108,8 @@ function CobrosTab() {
     [selectedShipments]
   );
   const needsArs = method === "ARS_TRANSFER" || method === "ARS_CASH";
-  const arsEquiv = needsArs && num(exchangeRate) > 0
-    ? totalUsd * num(exchangeRate)
-    : null;
+  const arsEquiv = needsArs && num(exchangeRate) > 0 ? totalUsd * num(exchangeRate) : null;
 
-  // ── API
   async function findClient() {
     setMsg(""); setClientData(null); setSelected(new Set());
     if (!clientNum.trim()) return;
@@ -207,9 +195,12 @@ function CobrosTab() {
     finally { setLoadingHistory(false); }
   }
 
-  useEffect(() => { loadHistory(); }, []); // eslint-disable-line
+  useEffect(() => {
+    loadHistory();
+    fetch(`${API}/accounts`, { headers: { Authorization: `Bearer ${getToken()}` } })
+      .then(r => r.json()).then(d => setAccounts(d.accounts || [])).catch(() => {});
+  }, []); // eslint-disable-line
 
-  // ── Totales del historial visible
   const histTotals = useMemo(() => {
     return METHODS.reduce((acc, m) => {
       acc[m.value] = history.filter(h => h.method === m.value).reduce((a, h) => a + num(h.amount_usd), 0);
@@ -221,23 +212,19 @@ function CobrosTab() {
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <MsgBanner msg={msg} onClose={() => setMsg("")} />
 
-      {/* ── KPIs historial ── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(160px,1fr))", gap: 10 }}>
         {METHODS.map(m => (
           <KpiCard key={m.value} icon={m.label.split(" ")[0]} label={m.label.slice(2)}
-            value={fmtUsd(histTotals[m.value])} sub="En el período"
-            accent={m.color} />
+            value={fmtUsd(histTotals[m.value])} sub="En el período" accent={m.color} />
         ))}
         <KpiCard icon="💰" label="Total cobrado"
           value={fmtUsd(Object.values(histTotals).reduce((a, b) => a + b, 0))}
           sub="Todos los métodos" accent="linear-gradient(90deg,#ffd200,#ff8a00)" />
       </div>
 
-      {/* ── Nuevo cobro ── */}
       <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 18, padding: "16px 18px" }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.40)", letterSpacing: "0.5px", marginBottom: 14 }}>REGISTRAR COBRO</div>
 
-        {/* Buscar cliente */}
         <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
           <input className="input" placeholder="Nº de cliente" value={clientNum}
             onChange={e => setClientNum(e.target.value)}
@@ -251,7 +238,6 @@ function CobrosTab() {
 
         {clientData && (
           <>
-            {/* Info cliente */}
             <div style={{
               display: "flex", alignItems: "center", gap: 10, marginBottom: 14,
               padding: "10px 14px", background: "rgba(34,197,94,0.08)",
@@ -272,7 +258,6 @@ function CobrosTab() {
               </div>
             </div>
 
-            {/* Tabla de paquetes */}
             {clientData.shipments.length > 0 ? (
               <>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
@@ -297,7 +282,6 @@ function CobrosTab() {
                         fontSize: 12, color: selected.has(s.id) ? "#0b1020" : "transparent",
                         fontWeight: 900,
                       }}>✓</div>
-
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <span style={{ fontSize: 13, fontWeight: 700 }}>{s.code}</span>
@@ -307,7 +291,6 @@ function CobrosTab() {
                         </div>
                         <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", marginTop: 2 }}>{s.description}</div>
                       </div>
-
                       <div style={{ textAlign: "right", flexShrink: 0 }}>
                         <div style={{ fontSize: 15, fontWeight: 800, color: "#ffd200" }}>{fmtUsd(s.estimated_usd)}</div>
                         <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)" }}>{Number(s.weight_kg).toFixed(2)} kg</div>
@@ -316,7 +299,6 @@ function CobrosTab() {
                   ))}
                 </div>
 
-                {/* Resumen selección + forma de pago */}
                 {selected.size > 0 && (
                   <div style={{
                     background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.09)",
@@ -337,7 +319,6 @@ function CobrosTab() {
                       )}
                     </div>
 
-                    {/* Método de pago */}
                     <div style={{ marginBottom: 12 }}>
                       <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", fontWeight: 700, marginBottom: 8 }}>MÉTODO DE PAGO</div>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -354,7 +335,6 @@ function CobrosTab() {
                       </div>
                     </div>
 
-                    {/* Tipo de cambio si ARS */}
                     {needsArs && (
                       <div style={{ marginBottom: 12 }}>
                         <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", fontWeight: 700, marginBottom: 6 }}>TIPO DE CAMBIO (ARS por USD)</div>
@@ -364,14 +344,12 @@ function CobrosTab() {
                       </div>
                     )}
 
-                    {/* Notas */}
                     <div style={{ marginBottom: 14 }}>
                       <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", fontWeight: 700, marginBottom: 6 }}>NOTAS (opcional)</div>
                       <input className="input" placeholder="Observaciones del cobro..." value={notes}
                         onChange={e => setNotes(e.target.value)} />
                     </div>
 
-                    {/* Cuenta destino */}
                     <div style={{ marginBottom: 14 }}>
                       <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", fontWeight: 700, marginBottom: 6 }}>ACREDITAR EN CUENTA (opcional)</div>
                       <select className="input" value={payAccount} onChange={e => setPayAccount(e.target.value)}>
@@ -396,11 +374,9 @@ function CobrosTab() {
         )}
       </div>
 
-      {/* ── Historial de cobros ── */}
       <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 18, padding: "16px 18px" }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.40)", letterSpacing: "0.5px", marginBottom: 14 }}>HISTORIAL DE COBROS</div>
 
-        {/* Filtros */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
           <input type="date" className="input" value={histFilter.from}
             onChange={e => setHistFilter(f => ({ ...f, from: e.target.value }))} style={{ width: 150 }} />
@@ -419,19 +395,12 @@ function CobrosTab() {
           </button>
         </div>
 
-        {/* Tabla */}
         <div className="tableWrap">
           <table className="table">
             <thead>
               <tr>
-                <th>FECHA</th>
-                <th>CLIENTE</th>
-                <th>PAQUETES</th>
-                <th>MÉTODO</th>
-                <th>MONTO USD</th>
-                <th>EQUIV. PESOS</th>
-                <th>NOTAS</th>
-                <th>ANULAR</th>
+                <th>FECHA</th><th>CLIENTE</th><th>PAQUETES</th><th>MÉTODO</th>
+                <th>MONTO USD</th><th>EQUIV. PESOS</th><th>NOTAS</th><th>ANULAR</th>
               </tr>
             </thead>
             <tbody>
@@ -490,7 +459,6 @@ function GastosTab() {
   });
   const [saving, setSaving] = useState(false);
   const [accounts, setAccounts] = useState([]);
-
   const [expenses, setExpenses] = useState([]);
   const [totals, setTotals]     = useState({});
   const [loading, setLoading]   = useState(false);
@@ -504,9 +472,7 @@ function GastosTab() {
     if (filter.type) qs.set("type", filter.type);
     if (filter.currency) qs.set("currency", filter.currency);
     try {
-      const res = await fetch(`${API}/cash/expenses?${qs}`, {
-        headers: { Authorization: `Bearer ${getToken()}` },
-      });
+      const res = await fetch(`${API}/cash/expenses?${qs}`, { headers: { Authorization: `Bearer ${getToken()}` } });
       const data = await res.json();
       if (res.ok) { setExpenses(data.rows || []); setTotals(data.totals || {}); }
     } catch { /* no-op */ }
@@ -552,7 +518,6 @@ function GastosTab() {
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <MsgBanner msg={msg} onClose={() => setMsg("")} />
 
-      {/* ── KPIs ── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(170px,1fr))", gap: 10 }}>
         <KpiCard icon="🏢" label="Gastos empresa USD" value={fmtUsd(totals.empresa_USD)} accent="#3b82f6" />
         <KpiCard icon="🏢" label="Gastos empresa ARS" value={fmtArs(totals.empresa_ARS)} accent="#3b82f6" />
@@ -562,12 +527,10 @@ function GastosTab() {
         <KpiCard icon="📊" label="Total ARS" value={fmtArs(totals.ARS)} accent="linear-gradient(90deg,#ffd200,#ff8a00)" />
       </div>
 
-      {/* ── Formulario nuevo gasto ── */}
       <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 18, padding: "16px 18px" }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.40)", letterSpacing: "0.5px", marginBottom: 14 }}>REGISTRAR GASTO</div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 10, marginBottom: 10 }}>
-          {/* Tipo */}
           <div>
             <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", fontWeight: 700, marginBottom: 6 }}>TIPO</div>
             <div style={{ display: "flex", gap: 6 }}>
@@ -581,17 +544,12 @@ function GastosTab() {
               ))}
             </div>
           </div>
-
-          {/* Categoría */}
           <div>
             <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", fontWeight: 700, marginBottom: 6 }}>CATEGORÍA</div>
-            <select className="input" value={form.category}
-              onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
+            <select className="input" value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
               {EXPENSE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
-
-          {/* Moneda */}
           <div>
             <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", fontWeight: 700, marginBottom: 6 }}>MONEDA</div>
             <div style={{ display: "flex", gap: 6 }}>
@@ -605,12 +563,9 @@ function GastosTab() {
               ))}
             </div>
           </div>
-
-          {/* Fecha */}
           <div>
             <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", fontWeight: 700, marginBottom: 6 }}>FECHA</div>
-            <input type="date" className="input" value={form.date}
-              onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+            <input type="date" className="input" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
           </div>
         </div>
 
@@ -631,13 +586,10 @@ function GastosTab() {
                 onKeyDown={e => e.key === "Enter" && addExpense()} />
             </div>
             <div>
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", fontWeight: 700, marginBottom: 6 }}>
-                MONTO ({form.currency})
-              </div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", fontWeight: 700, marginBottom: 6 }}>MONTO ({form.currency})</div>
               <input className="input" placeholder="0.00" inputMode="decimal" value={form.amount}
                 onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
-                onKeyDown={e => e.key === "Enter" && addExpense()}
-                style={{ maxWidth: 200 }} />
+                onKeyDown={e => e.key === "Enter" && addExpense()} style={{ maxWidth: 200 }} />
             </div>
           </div>
           <button className="btn btnPrimary" onClick={addExpense} disabled={saving}
@@ -647,30 +599,23 @@ function GastosTab() {
         </div>
       </div>
 
-      {/* ── Tabla de gastos ── */}
       <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 18, padding: "16px 18px" }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.40)", letterSpacing: "0.5px", marginBottom: 14 }}>HISTORIAL DE GASTOS</div>
 
-        {/* Filtros */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
-          <input type="date" className="input" value={filter.from}
-            onChange={e => setFilter(f => ({ ...f, from: e.target.value }))} style={{ width: 150 }} />
-          <input type="date" className="input" value={filter.to}
-            onChange={e => setFilter(f => ({ ...f, to: e.target.value }))} style={{ width: 150 }} />
-          <select className="input" value={filter.type}
-            onChange={e => setFilter(f => ({ ...f, type: e.target.value }))} style={{ width: 160 }}>
+          <input type="date" className="input" value={filter.from} onChange={e => setFilter(f => ({ ...f, from: e.target.value }))} style={{ width: 150 }} />
+          <input type="date" className="input" value={filter.to} onChange={e => setFilter(f => ({ ...f, to: e.target.value }))} style={{ width: 150 }} />
+          <select className="input" value={filter.type} onChange={e => setFilter(f => ({ ...f, type: e.target.value }))} style={{ width: 160 }}>
             <option value="">Todos los tipos</option>
             <option value="empresa">🏢 Empresa</option>
             <option value="personal">👤 Personal</option>
           </select>
-          <select className="input" value={filter.currency}
-            onChange={e => setFilter(f => ({ ...f, currency: e.target.value }))} style={{ width: 130 }}>
+          <select className="input" value={filter.currency} onChange={e => setFilter(f => ({ ...f, currency: e.target.value }))} style={{ width: 130 }}>
             <option value="">Todas las monedas</option>
             <option value="USD">💵 USD</option>
             <option value="ARS">💴 ARS</option>
           </select>
-          <button className="btn" onClick={loadExpenses} disabled={loading}
-            style={{ height: 42, padding: "0 16px" }}>
+          <button className="btn" onClick={loadExpenses} disabled={loading} style={{ height: 42, padding: "0 16px" }}>
             {loading ? "…" : "Filtrar"}
           </button>
         </div>
@@ -678,16 +623,7 @@ function GastosTab() {
         <div className="tableWrap">
           <table className="table">
             <thead>
-              <tr>
-                <th>FECHA</th>
-                <th>TIPO</th>
-                <th>CATEGORÍA</th>
-                <th>DESCRIPCIÓN</th>
-                <th>MONTO</th>
-                <th>MONEDA</th>
-                <th>OPERADOR</th>
-                <th></th>
-              </tr>
+              <tr><th>FECHA</th><th>TIPO</th><th>CATEGORÍA</th><th>DESCRIPCIÓN</th><th>MONTO</th><th>MONEDA</th><th>OPERADOR</th><th></th></tr>
             </thead>
             <tbody>
               {expenses.map(e => (
@@ -699,17 +635,11 @@ function GastosTab() {
                       background: e.type === "empresa" ? "rgba(59,130,246,0.15)" : "rgba(167,139,250,0.15)",
                       border: `1px solid ${e.type === "empresa" ? "rgba(59,130,246,0.35)" : "rgba(167,139,250,0.35)"}`,
                       color: e.type === "empresa" ? "#93c5fd" : "#c4b5fd",
-                    }}>
-                      {e.type === "empresa" ? "🏢 Empresa" : "👤 Personal"}
-                    </span>
+                    }}>{e.type === "empresa" ? "🏢 Empresa" : "👤 Personal"}</span>
                   </td>
                   <td style={{ fontSize: 12 }}>{e.category}</td>
                   <td style={{ fontSize: 13 }}>{e.description}</td>
-                  <td>
-                    <b style={{ color: e.currency === "USD" ? "#22c55e" : "#ffd200" }}>
-                      {e.currency === "USD" ? fmtUsd(e.amount) : fmtArs(e.amount)}
-                    </b>
-                  </td>
+                  <td><b style={{ color: e.currency === "USD" ? "#22c55e" : "#ffd200" }}>{e.currency === "USD" ? fmtUsd(e.amount) : fmtArs(e.amount)}</b></td>
                   <td>
                     <span style={{
                       fontSize: 11, fontWeight: 700, padding: "2px 6px", borderRadius: 5,
@@ -737,19 +667,15 @@ function GastosTab() {
   );
 }
 
-
 // ══════════════════════════════════════════════════════════════════════════════
 // TAB 3 — INGRESOS ADICIONALES
 // ══════════════════════════════════════════════════════════════════════════════
-const INCOME_CATEGORIES = [
-  "Servicios", "Comisiones", "Consultoría", "Venta de activos", "Otros"
-];
+const INCOME_CATEGORIES = ["Servicios", "Comisiones", "Consultoría", "Venta de activos", "Otros"];
 
 function IngresosTab() {
   const [msg, setMsg]   = useState("");
   const [form, setForm] = useState({
-    category: INCOME_CATEGORIES[0],
-    description: "", amount: "", currency: "USD",
+    category: INCOME_CATEGORIES[0], description: "", amount: "", currency: "USD",
     date: new Date().toISOString().slice(0, 10),
   });
   const [saving, setSaving]   = useState(false);
@@ -761,11 +687,10 @@ function IngresosTab() {
   async function loadIncome() {
     setLoading(true);
     const qs = new URLSearchParams();
-    if (filter.from)     qs.set("from", filter.from);
-    if (filter.to)       qs.set("to", filter.to);
+    if (filter.from) qs.set("from", filter.from);
+    if (filter.to) qs.set("to", filter.to);
     if (filter.currency) qs.set("currency", filter.currency);
     try {
-      // Cargar ingresos adicionales y cobros de paquetes en paralelo
       const [incRes, payRes] = await Promise.all([
         fetch(`${API}/cash/income?${qs}`, { headers: { Authorization: `Bearer ${getToken()}` } }),
         fetch(`${API}/cash/payments?${qs}`, { headers: { Authorization: `Bearer ${getToken()}` } }),
@@ -773,20 +698,15 @@ function IngresosTab() {
       const incData = await incRes.json();
       const payData = await payRes.json();
 
-      // Unificar en una lista con tipo
       const incRows = (incData.rows || []).map(r => ({
-        ...r,
-        _type: "additional",
-        _label: r.category,
-        _detail: r.description,
+        ...r, _type: "additional", _label: r.category, _detail: r.description,
         _amount_usd: r.currency === "USD" ? Number(r.amount) : null,
         _amount_ars: r.currency === "ARS" ? Number(r.amount) : null,
         _date: r.date,
       }));
 
       const payRows = (payData.rows || []).map(r => ({
-        ...r,
-        _type: "payment",
+        ...r, _type: "payment",
         _label: `Cobro paquetes — #${r.client_number} ${r.client_name}`,
         _detail: (r.items || []).map(i => i.code).join(", "),
         _amount_usd: Number(r.amount_usd),
@@ -794,15 +714,9 @@ function IngresosTab() {
         _date: r.created_at ? r.created_at.slice(0,10) : null,
       }));
 
-      // Ordenar por fecha desc
-      const all = [...incRows, ...payRows].sort((a, b) => {
-        const da = a._date || ""; const db = b._date || "";
-        return db.localeCompare(da);
-      });
-
+      const all = [...incRows, ...payRows].sort((a, b) => (b._date||"").localeCompare(a._date||""));
       setIncome(all);
 
-      // Totales
       const totalUsd = all.reduce((s, r) => s + (r._amount_usd || 0), 0);
       const totalArs = all.reduce((s, r) => s + (r._amount_ars || 0), 0);
       const fromPkg  = payRows.reduce((s, r) => s + (r._amount_usd || 0), 0);
@@ -847,7 +761,6 @@ function IngresosTab() {
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <MsgBanner msg={msg} onClose={() => setMsg("")} />
 
-      {/* KPIs */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 10 }}>
         <KpiCard icon="💰" label="Total ingresos USD" value={fmtUsd(totals.USD)} accent="#22c55e" sub="Paquetes + adicionales" />
         <KpiCard icon="💴" label="Total ingresos ARS" value={fmtArs(totals.ARS)} accent="#ffd200" />
@@ -856,15 +769,13 @@ function IngresosTab() {
         <KpiCard icon="📋" label="Registros" value={income.length} sub="En el período" accent="linear-gradient(90deg,#ffd200,#ff8a00)" />
       </div>
 
-      {/* Formulario */}
       <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 18, padding: "16px 18px" }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.40)", letterSpacing: "0.5px", marginBottom: 14 }}>REGISTRAR INGRESO ADICIONAL</div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 10, marginBottom: 10 }}>
           <div>
             <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", fontWeight: 700, marginBottom: 6 }}>CATEGORÍA</div>
-            <select className="input" value={form.category}
-              onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
+            <select className="input" value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
               {INCOME_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
@@ -883,8 +794,7 @@ function IngresosTab() {
           </div>
           <div>
             <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", fontWeight: 700, marginBottom: 6 }}>FECHA</div>
-            <input type="date" className="input" value={form.date}
-              onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+            <input type="date" className="input" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
           </div>
         </div>
 
@@ -900,8 +810,7 @@ function IngresosTab() {
               <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", fontWeight: 700, marginBottom: 6 }}>MONTO ({form.currency})</div>
               <input className="input" placeholder="0.00" inputMode="decimal" value={form.amount}
                 onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
-                onKeyDown={e => e.key === "Enter" && addIncome()}
-                style={{ maxWidth: 200 }} />
+                onKeyDown={e => e.key === "Enter" && addIncome()} style={{ maxWidth: 200 }} />
             </div>
           </div>
           <button className="btn btnPrimary" onClick={addIncome} disabled={saving}
@@ -911,23 +820,18 @@ function IngresosTab() {
         </div>
       </div>
 
-      {/* Tabla */}
       <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 18, padding: "16px 18px" }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.40)", letterSpacing: "0.5px", marginBottom: 14 }}>HISTORIAL DE INGRESOS ADICIONALES</div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.40)", letterSpacing: "0.5px", marginBottom: 14 }}>HISTORIAL DE INGRESOS</div>
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
-          <input type="date" className="input" value={filter.from}
-            onChange={e => setFilter(f => ({ ...f, from: e.target.value }))} style={{ width: 150 }} />
-          <input type="date" className="input" value={filter.to}
-            onChange={e => setFilter(f => ({ ...f, to: e.target.value }))} style={{ width: 150 }} />
-          <select className="input" value={filter.currency}
-            onChange={e => setFilter(f => ({ ...f, currency: e.target.value }))} style={{ width: 130 }}>
+          <input type="date" className="input" value={filter.from} onChange={e => setFilter(f => ({ ...f, from: e.target.value }))} style={{ width: 150 }} />
+          <input type="date" className="input" value={filter.to} onChange={e => setFilter(f => ({ ...f, to: e.target.value }))} style={{ width: 150 }} />
+          <select className="input" value={filter.currency} onChange={e => setFilter(f => ({ ...f, currency: e.target.value }))} style={{ width: 130 }}>
             <option value="">Todas</option>
             <option value="USD">💵 USD</option>
             <option value="ARS">💴 ARS</option>
           </select>
-          <button className="btn" onClick={loadIncome} disabled={loading}
-            style={{ height: 42, padding: "0 16px" }}>
+          <button className="btn" onClick={loadIncome} disabled={loading} style={{ height: 42, padding: "0 16px" }}>
             {loading ? "…" : "Filtrar"}
           </button>
         </div>
@@ -935,15 +839,7 @@ function IngresosTab() {
         <div className="tableWrap">
           <table className="table">
             <thead>
-              <tr>
-                <th>FECHA</th>
-                <th>TIPO</th>
-                <th>CONCEPTO</th>
-                <th>DETALLE</th>
-                <th>MONTO USD</th>
-                <th>MONTO ARS</th>
-                <th></th>
-              </tr>
+              <tr><th>FECHA</th><th>TIPO</th><th>CONCEPTO</th><th>DETALLE</th><th>MONTO USD</th><th>MONTO ARS</th><th></th></tr>
             </thead>
             <tbody>
               {income.map((i, idx) => (
@@ -955,22 +851,12 @@ function IngresosTab() {
                       background: i._type === "payment" ? "rgba(59,130,246,0.15)" : "rgba(167,139,250,0.15)",
                       border: `1px solid ${i._type === "payment" ? "rgba(59,130,246,0.35)" : "rgba(167,139,250,0.35)"}`,
                       color: i._type === "payment" ? "#93c5fd" : "#c4b5fd",
-                    }}>
-                      {i._type === "payment" ? "📦 Paquetes" : "➕ Adicional"}
-                    </span>
+                    }}>{i._type === "payment" ? "📦 Paquetes" : "➕ Adicional"}</span>
                   </td>
                   <td style={{ fontSize: 13, fontWeight: 600 }}>{i._label}</td>
                   <td style={{ fontSize: 12, color: "rgba(255,255,255,0.50)" }}>{i._detail}</td>
-                  <td>
-                    {i._amount_usd != null
-                      ? <b style={{ color: "#22c55e" }}>{fmtUsd(i._amount_usd)}</b>
-                      : <span className="muted">-</span>}
-                  </td>
-                  <td>
-                    {i._amount_ars != null
-                      ? <b style={{ color: "#ffd200" }}>{fmtArs(i._amount_ars)}</b>
-                      : <span className="muted">-</span>}
-                  </td>
+                  <td>{i._amount_usd != null ? <b style={{ color: "#22c55e" }}>{fmtUsd(i._amount_usd)}</b> : <span style={{color:"rgba(255,255,255,0.3)"}}>-</span>}</td>
+                  <td>{i._amount_ars != null ? <b style={{ color: "#ffd200" }}>{fmtArs(i._amount_ars)}</b> : <span style={{color:"rgba(255,255,255,0.3)"}}>-</span>}</td>
                   <td>
                     {i._type === "additional" && (
                       <button onClick={() => deleteIncome(i.id)} style={{
@@ -992,37 +878,30 @@ function IngresosTab() {
   );
 }
 
-
 // ══════════════════════════════════════════════════════════════════════════════
 // TAB 4 — FONDOS / CUENTAS
 // ══════════════════════════════════════════════════════════════════════════════
 const ACCOUNT_TYPE_LABELS = {
-  usd_cash: { label: "💵 USD Efectivo",       color: "#22c55e" },
-  usdt:     { label: "🔷 USDT",               color: "#3b82f6" },
-  bank_ars: { label: "🏦 Banco ARS",          color: "#a78bfa" },
-  bank_usd: { label: "🏦 Banco USD",          color: "#34d399" },
-  prepaid:  { label: "💳 Prepaga",            color: "#fbbf24" },
-  other:    { label: "📁 Otra",               color: "#94a3b8" },
+  usd_cash: { label: "💵 USD Efectivo", color: "#22c55e" },
+  usdt:     { label: "🔷 USDT",         color: "#3b82f6" },
+  bank_ars: { label: "🏦 Banco ARS",    color: "#a78bfa" },
+  bank_usd: { label: "🏦 Banco USD",    color: "#34d399" },
+  prepaid:  { label: "💳 Prepaga",      color: "#fbbf24" },
+  other:    { label: "📁 Otra",         color: "#94a3b8" },
 };
 
-function FondosTab() {
+function FondosTab({ fxRate }) {
   const [msg, setMsg]           = useState("");
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading]   = useState(false);
-
-  // Nuevo movimiento manual
   const [selAccount, setSelAccount] = useState(null);
   const [movements, setMovements]   = useState([]);
   const [loadingMov, setLoadingMov] = useState(false);
   const [movForm, setMovForm]       = useState({ direction: "in", amount: "", description: "" });
   const [savingMov, setSavingMov]   = useState(false);
-
-  // Nuevo saldo manual
   const [editBalId, setEditBalId]   = useState(null);
   const [editBal, setEditBal]       = useState("");
   const [savingBal, setSavingBal]   = useState(false);
-
-  // Nueva cuenta
   const [showNew, setShowNew]       = useState(false);
   const [newAcc, setNewAcc]         = useState({ name: "", type: "usd_cash", currency: "USD", balance: "0", notes: "" });
   const [savingNew, setSavingNew]   = useState(false);
@@ -1117,11 +996,17 @@ function FondosTab() {
     if (selAccount) loadMovements(selAccount.id);
   }, [selAccount]); // eslint-disable-line
 
-  // Totales por moneda
   const totals = accounts.reduce((acc, a) => {
     acc[a.currency] = (acc[a.currency]||0) + Number(a.balance);
     return acc;
   }, {});
+
+  // Capital total en USD usando fxRate
+  const capitalUsd = accounts.reduce((sum, a) => {
+    const bal = Number(a.balance);
+    if (a.currency === "ARS" && fxRate && fxRate > 0) return sum + (bal / fxRate);
+    return sum + bal; // USD y USDT suman directo
+  }, 0);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -1132,8 +1017,13 @@ function FondosTab() {
         {Object.entries(totals).map(([cur, bal]) => (
           <KpiCard key={cur} icon={cur==="USD"?"💵":cur==="USDT"?"🔷":"💴"}
             label={`Total ${cur}`} value={cur==="ARS"?fmtArs(bal):fmtUsd(bal)}
+            sub={cur==="ARS" && fxRate ? `≈ ${fmtUsd(bal/fxRate)} USD` : undefined}
             accent={cur==="USD"?"#22c55e":cur==="USDT"?"#3b82f6":"#ffd200"} />
         ))}
+        <KpiCard icon="🏦" label="Capital total USD"
+          value={fmtUsd(capitalUsd)}
+          sub={fxRate ? `TC: $${Number(fxRate).toLocaleString("es-AR")}` : "Configurá el TC"}
+          accent="linear-gradient(90deg,#ffd200,#ff8a00)" />
       </div>
 
       {/* Cards de cuentas */}
@@ -1142,6 +1032,9 @@ function FondosTab() {
           const typeInfo = ACCOUNT_TYPE_LABELS[a.type] || ACCOUNT_TYPE_LABELS.other;
           const isSelected = selAccount?.id === a.id;
           const isEditing  = editBalId === a.id;
+          const balNum = Number(a.balance);
+          const usdEquiv = a.currency === "ARS" && fxRate && fxRate > 0 ? balNum / fxRate : null;
+
           return (
             <div key={a.id} style={{
               background: isSelected ? "rgba(255,210,0,0.06)" : "rgba(255,255,255,0.04)",
@@ -1163,7 +1056,7 @@ function FondosTab() {
                 }}>✕</button>
               </div>
 
-              <div style={{ marginBottom: 10 }}>
+              <div style={{ marginBottom: 6 }}>
                 {isEditing ? (
                   <div style={{ display: "flex", gap: 6 }} onClick={e => e.stopPropagation()}>
                     <input className="input" value={editBal} onChange={e => setEditBal(e.target.value)}
@@ -1174,15 +1067,24 @@ function FondosTab() {
                       style={{ height: 40, padding: "0 10px" }}>✕</button>
                   </div>
                 ) : (
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                    <span style={{ fontSize: 26, fontWeight: 900, color: Number(a.balance) >= 0 ? typeInfo.color : "#ef4444" }}>
-                      {a.currency === "ARS" ? fmtArs(a.balance) : fmtUsd(a.balance)}
-                    </span>
-                    <span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>{a.currency}</span>
-                    <button onClick={e => { e.stopPropagation(); setEditBalId(a.id); setEditBal(String(a.balance)); }}
-                      style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", background: "none", border: "none", cursor: "pointer", marginLeft: 4 }}>
-                      ✏
-                    </button>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                      <span style={{ fontSize: 26, fontWeight: 900, color: balNum >= 0 ? typeInfo.color : "#ef4444" }}>
+                        {a.currency === "ARS" ? fmtArs(balNum) : fmtUsd(balNum)}
+                      </span>
+                      <span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>{a.currency}</span>
+                      <button onClick={e => { e.stopPropagation(); setEditBalId(a.id); setEditBal(String(a.balance)); }}
+                        style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", background: "none", border: "none", cursor: "pointer", marginLeft: 4 }}>
+                        ✏
+                      </button>
+                    </div>
+                    {/* ── Equivalente USD para cuentas ARS ── */}
+                    {usdEquiv !== null && (
+                      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.40)", marginTop: 2 }}>
+                        ≈ <span style={{ color: "#22c55e", fontWeight: 700 }}>{fmtUsd(usdEquiv)}</span>
+                        <span style={{ fontSize: 11, marginLeft: 4 }}>@ ${Number(fxRate).toLocaleString("es-AR")}</span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1192,7 +1094,6 @@ function FondosTab() {
           );
         })}
 
-        {/* Nueva cuenta */}
         {!showNew ? (
           <div onClick={() => setShowNew(true)} style={{
             background: "rgba(255,255,255,0.02)", border: "1px dashed rgba(255,255,255,0.15)",
@@ -1208,12 +1109,10 @@ function FondosTab() {
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <input className="input" placeholder="Nombre (ej: Efectivo caja)" value={newAcc.name}
                 onChange={e => setNewAcc(a => ({ ...a, name: e.target.value }))} />
-              <select className="input" value={newAcc.type}
-                onChange={e => setNewAcc(a => ({ ...a, type: e.target.value }))}>
+              <select className="input" value={newAcc.type} onChange={e => setNewAcc(a => ({ ...a, type: e.target.value }))}>
                 {Object.entries(ACCOUNT_TYPE_LABELS).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
               </select>
-              <select className="input" value={newAcc.currency}
-                onChange={e => setNewAcc(a => ({ ...a, currency: e.target.value }))}>
+              <select className="input" value={newAcc.currency} onChange={e => setNewAcc(a => ({ ...a, currency: e.target.value }))}>
                 <option value="USD">USD</option>
                 <option value="ARS">ARS</option>
                 <option value="USDT">USDT</option>
@@ -1232,14 +1131,12 @@ function FondosTab() {
         )}
       </div>
 
-      {/* Panel de movimientos de cuenta seleccionada */}
       {selAccount && (
         <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,210,0,0.20)", borderRadius: 18, padding: "16px 18px" }}>
           <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 14, color: "#ffd200" }}>
             📋 Movimientos — {selAccount.name}
           </div>
 
-          {/* Form movimiento manual */}
           <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
             <div style={{ display: "flex", gap: 6 }}>
               {[["in","⬆ Ingreso","#22c55e"],["out","⬇ Egreso","#ef4444"]].map(([v,l,c]) => (
@@ -1259,7 +1156,6 @@ function FondosTab() {
               style={{ height: 42, padding: "0 18px" }}>{savingMov ? "…" : "Registrar"}</button>
           </div>
 
-          {/* Tabla movimientos */}
           <div className="tableWrap">
             <table className="table">
               <thead>
@@ -1328,7 +1224,7 @@ export default function CashRegister() {
         headers: { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" },
         body: JSON.stringify({ rate: n }),
       });
-      if (res.ok) setFxMsg("✅ Guardado");
+      if (res.ok) { setFxMsg("✅ Guardado"); setFxRate(n); }
       else setFxMsg("Error");
     } catch { setFxMsg("Error de red"); }
     finally { setSavingFx(false); setTimeout(() => setFxMsg(""), 2500); }
@@ -1338,7 +1234,6 @@ export default function CashRegister() {
     <div className="screen" style={{ maxWidth: 1400, margin: "0 auto" }}>
       <Topbar title="Caja" />
 
-      {/* Header */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         flexWrap: "wrap", gap: 12, margin: "14px 0 0",
@@ -1353,7 +1248,6 @@ export default function CashRegister() {
           </div>
         </div>
 
-        {/* Tabs */}
         <div style={{ display: "flex", gap: 6, background: "rgba(255,255,255,0.05)", borderRadius: 12, padding: 4 }}>
           {[
             { key: "cobros",   label: "💵 Cobros" },
@@ -1397,10 +1291,10 @@ export default function CashRegister() {
       </div>
 
       <div style={{ marginTop: 14 }}>
-        {tab === "cobros"   ? <CobrosTab />   :
-         tab === "ingresos" ? <IngresosTab /> :
-         tab === "gastos"   ? <GastosTab />   :
-         <FondosTab />}
+        {tab === "cobros"   ? <CobrosTab />          :
+         tab === "ingresos" ? <IngresosTab />         :
+         tab === "gastos"   ? <GastosTab />           :
+         <FondosTab fxRate={fxRate} />}
       </div>
     </div>
   );
