@@ -12,10 +12,10 @@ const LEVEL_CONFIG = {
   gold:   { label: "Oro",    icon: "🥇", color: "#FFD700" },
 };
 const REWARD_CONFIG = {
-  free_shipment: { icon: "✈️", label: "Envío Gratis",     coins: 1000 },
-  free_5kg:      { icon: "📦", label: "5kg Gratis",       coins: 500  },
-  discount_15:   { icon: "💸", label: "USD 15 Descuento", coins: 100  },
-  discount_8:    { icon: "💰", label: "USD 8 Descuento",  coins: 50   },
+  free_shipment: { icon: "✈️", label: "Envío Gratis",     coins: 10000 },
+  free_5kg:      { icon: "📦", label: "5kg Gratis",       coins: 5000  },
+  discount_15:   { icon: "💸", label: "USD 15 Descuento", coins: 1000  },
+  discount_8:    { icon: "💰", label: "USD 8 Descuento",  coins: 500   },
 };
 const fmtDate = (v) => {
   if (!v) return "-";

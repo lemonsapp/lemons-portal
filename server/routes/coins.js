@@ -11,10 +11,10 @@ const BIG_SHIPMENT_USD   = 500;
 const COINS_FIRST_BONUS  = 15;
 
 const REWARDS = {
-  free_shipment: { coins: 1000, label: "Envío gratis a elección",  type: "service" },
-  free_5kg:      { coins: 500,  label: "5kg gratis",               type: "service" },
-  discount_15:   { coins: 100,  label: "USD 15 de descuento",      type: "discount", value: 15 },
-  discount_8:    { coins: 50,   label: "USD 8 de descuento",       type: "discount", value: 8  },
+  free_shipment: { coins: 10000, label: "Envío gratis a elección",  type: "service" },
+  free_5kg:      { coins: 5000,  label: "5kg gratis",               type: "service" },
+  discount_15:   { coins: 1000,  label: "USD 15 de descuento",      type: "discount", value: 15 },
+  discount_8:    { coins: 500,   label: "USD 8 de descuento",       type: "discount", value: 8  },
 };
 
 const LEVELS = [

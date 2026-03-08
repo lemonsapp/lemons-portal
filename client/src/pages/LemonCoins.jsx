@@ -12,10 +12,10 @@ const LEVEL_CONFIG = {
 };
 
 const REWARD_CONFIG = {
-  free_shipment: { icon: "✈️", label: "Envío Gratis",      desc: "1 envío a elección sin costo", coins: 1000, color: "#f5e642" },
-  free_5kg:      { icon: "📦", label: "5kg Gratis",        desc: "5 kilogramos sin cargo",       coins: 500,  color: "#22c55e" },
-  discount_15:   { icon: "💸", label: "USD 15 Descuento",  desc: "Descuento en tu próximo envío", coins: 100,  color: "#3b82f6" },
-  discount_8:    { icon: "💰", label: "USD 8 Descuento",   desc: "Descuento en tu próximo envío", coins: 50,   color: "#a78bfa" },
+  free_shipment: { icon: "✈️", label: "Envío Gratis",      desc: "1 envío a elección sin costo", coins: 10000, color: "#f5e642" },
+  free_5kg:      { icon: "📦", label: "5kg Gratis",        desc: "5 kilogramos sin cargo",       coins: 5000,  color: "#22c55e" },
+  discount_15:   { icon: "💸", label: "USD 15 Descuento",  desc: "Descuento en tu próximo envío", coins: 1000,  color: "#3b82f6" },
+  discount_8:    { icon: "💰", label: "USD 8 Descuento",   desc: "Descuento en tu próximo envío", coins: 500,  color: "#a78bfa" },
 };
 
 const fmtDate = (v) => {
