@@ -932,14 +932,20 @@ app.post(
   }
 );
 
+// ✅ GET /operator/shipments — con filtros avanzados (fecha, estado, origen, servicio)
 app.get(
   "/operator/shipments",
   authRequired,
   requireRole(["operator", "admin"]),
   async (req, res) => {
     try {
-      const search = (req.query.search || "").trim();
-      const clientNumber = (req.query.client_number || "").trim();
+      const search        = (req.query.search        || "").trim();
+      const clientNumber  = (req.query.client_number || "").trim();
+      const dateFrom      = (req.query.date_from     || "").trim();
+      const dateTo        = (req.query.date_to       || "").trim();
+      const statusFilter  = (req.query.status        || "").trim();
+      const originFilter  = (req.query.origin        || "").trim();
+      const serviceFilter = (req.query.service       || "").trim();
 
       const params = [];
       let where = "WHERE 1=1";
@@ -957,7 +963,30 @@ app.get(
         const p1 = params.length;
         params.push(`%${search}%`);
         const p2 = params.length;
-        where += ` AND (sh.code ILIKE $${p1} OR sh.description ILIKE $${p2})`;
+        params.push(`%${search}%`);
+        const p3 = params.length;
+        where += ` AND (sh.code ILIKE $${p1} OR sh.description ILIKE $${p2} OR sh.tracking ILIKE $${p3})`;
+      }
+
+      if (dateFrom) {
+        params.push(dateFrom);
+        where += ` AND sh.date_in >= $${params.length}`;
+      }
+      if (dateTo) {
+        params.push(dateTo);
+        where += ` AND sh.date_in <= $${params.length}::date + INTERVAL '1 day'`;
+      }
+      if (statusFilter) {
+        params.push(statusFilter);
+        where += ` AND sh.status = $${params.length}`;
+      }
+      if (originFilter) {
+        params.push(originFilter);
+        where += ` AND sh.origin = $${params.length}`;
+      }
+      if (serviceFilter) {
+        params.push(serviceFilter);
+        where += ` AND sh.service = $${params.length}`;
       }
 
       const q = await db.query(

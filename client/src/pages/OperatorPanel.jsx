@@ -242,6 +242,16 @@ export default function OperatorPanel() {
   // Tabla operador
   const [opSearch, setOpSearch] = useState("");
   const [opClientNumber, setOpClientNumber] = useState("");
+
+  // Filtros avanzados
+  const [filterOpen, setFilterOpen]     = useState(false);
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo]     = useState("");
+  const [filterStatus, setFilterStatus]     = useState("");
+  const [filterOrigin, setFilterOrigin]     = useState("");
+  const [filterService, setFilterService]   = useState("");
+
+  const hasActiveFilters = filterDateFrom || filterDateTo || filterStatus || filterOrigin || filterService;
   const [rows, setRows] = useState([]);
   const [savingId, setSavingId] = useState(null);
   const [statusDraft, setStatusDraft] = useState({});
@@ -304,29 +314,10 @@ export default function OperatorPanel() {
 
   useEffect(() => {
     const allowed = SERVICES_BY_ORIGIN[origin] || ["NORMAL"];
-    const nextService = allowed.includes(service) ? service : allowed[0];
-    if (!allowed.includes(service)) setService(nextService);
-    fetchNextCode(origin, nextService);
+    if (!allowed.includes(service)) setService(allowed[0]);
   }, [origin]); // eslint-disable-line
 
-  useEffect(() => {
-    fetchNextCode(origin, service);
-  }, [service]); // eslint-disable-line
-
   // ── API calls ─────────────────────────────────────────────────────────────
-  async function fetchNextCode(originVal, serviceVal) {
-    try {
-      const o = normalizeOrigin(originVal);
-      const s = normalizeService(originVal, serviceVal);
-      const res = await fetch(
-        `${API}/operator/next-code?origin=${o}&service=${s}`,
-        { headers: { Authorization: `Bearer ${getToken()}` } }
-      );
-      const data = await res.json();
-      if (res.ok && data.code) setPackageCode(data.code);
-    } catch { /* no-op */ }
-  }
-
   async function loadDashboard() {
     setLoadingStats(true);
     try {
@@ -457,17 +448,26 @@ export default function OperatorPanel() {
     setPackageCode(""); setDescription(""); setBoxCode(""); setTracking(""); setWeightKg("");
     setStatus("Recibido en depósito"); setOrigin("USA"); setService("NORMAL");
     setOverrideEnabled(false); setOverrideRate("");
-    fetchNextCode("USA", "NORMAL");
     await loadOperatorShipments();
     await loadDashboard();
+  }
+
+  function clearFilters() {
+    setFilterDateFrom(""); setFilterDateTo("");
+    setFilterStatus(""); setFilterOrigin(""); setFilterService("");
   }
 
   async function loadOperatorShipments(overrideSearch) {
     setMsg("");
     const qs = new URLSearchParams();
     const searchVal = overrideSearch !== undefined ? overrideSearch : opSearch;
-    if (searchVal.trim()) qs.set("search", searchVal.trim());
+    if (searchVal.trim())           qs.set("search",       searchVal.trim());
     if (opClientNumber.trim() !== "") qs.set("client_number", opClientNumber.trim());
+    if (filterDateFrom)             qs.set("date_from",    filterDateFrom);
+    if (filterDateTo)               qs.set("date_to",      filterDateTo);
+    if (filterStatus)               qs.set("status",       filterStatus);
+    if (filterOrigin)               qs.set("origin",       filterOrigin);
+    if (filterService)              qs.set("service",      filterService);
     const res = await fetch(`${API}/operator/shipments?${qs.toString()}`, {
       headers: { Authorization: `Bearer ${getToken()}` },
     });
@@ -648,10 +648,7 @@ export default function OperatorPanel() {
     await loadDashboard();
   }
 
-  useEffect(() => {
-    refreshAll();
-    fetchNextCode("USA", "NORMAL");
-  }, []); // eslint-disable-line
+  useEffect(() => { refreshAll(); }, []); // eslint-disable-line
 
   // ── RENDER ────────────────────────────────────────────────────────────────
   return (
@@ -956,6 +953,153 @@ export default function OperatorPanel() {
       {/* ── GESTIÓN DE ENVÍOS ── */}
       <Panel title="Gestión de envíos" icon="🗂" defaultOpen={true}>
         {/* Filtros con botón scanner en búsqueda */}
+        {/* ── Overlay ── */}
+        {filterOpen && (
+          <div
+            onClick={() => setFilterOpen(false)}
+            style={{
+              position: "fixed", inset: 0, zIndex: 998,
+              background: "rgba(0,0,0,0.45)",
+            }}
+          />
+        )}
+
+        {/* ── Panel lateral deslizable ── */}
+        <div style={{
+          position: "fixed", top: 0, right: 0, bottom: 0, zIndex: 999,
+          width: 300,
+          background: "rgba(11,16,32,0.98)",
+          borderLeft: "1px solid rgba(255,255,255,0.10)",
+          boxShadow: "-8px 0 40px rgba(0,0,0,0.5)",
+          transform: filterOpen ? "translateX(0)" : "translateX(100%)",
+          transition: "transform 0.25s cubic-bezier(.4,0,.2,1)",
+          display: "flex", flexDirection: "column",
+          overflowY: "auto",
+        }}>
+          {/* Header del panel */}
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "18px 16px 14px",
+            borderBottom: "1px solid rgba(255,255,255,0.08)",
+          }}>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 15 }}>🔎 Filtros avanzados</div>
+              {hasActiveFilters && (
+                <div style={{ fontSize: 11, color: "#ffd200", marginTop: 3 }}>
+                  Filtros activos
+                </div>
+              )}
+            </div>
+            <button onClick={() => setFilterOpen(false)} style={{
+              background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)",
+              borderRadius: 8, width: 32, height: 32, cursor: "pointer",
+              color: "#fff", fontSize: 14, display: "grid", placeItems: "center",
+            }}>✕</button>
+          </div>
+
+          {/* Cuerpo del panel */}
+          <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: 18, flex: 1 }}>
+
+            {/* Fecha */}
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.5px", marginBottom: 8 }}>
+                FECHA DE INGRESO
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <div>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginBottom: 4 }}>Desde</div>
+                  <input type="date" className="input" value={filterDateFrom}
+                    onChange={(e) => setFilterDateFrom(e.target.value)}
+                    style={{ width: "100%", colorScheme: "dark" }} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginBottom: 4 }}>Hasta</div>
+                  <input type="date" className="input" value={filterDateTo}
+                    onChange={(e) => setFilterDateTo(e.target.value)}
+                    style={{ width: "100%", colorScheme: "dark" }} />
+                </div>
+              </div>
+            </div>
+
+            <div style={{ height: 1, background: "rgba(255,255,255,0.07)" }} />
+
+            {/* Estado */}
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.5px", marginBottom: 8 }}>
+                ESTADO
+              </div>
+              <select className="input" value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                style={{ width: "100%" }}>
+                <option value="">Todos los estados</option>
+                {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+
+            <div style={{ height: 1, background: "rgba(255,255,255,0.07)" }} />
+
+            {/* Origen */}
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.5px", marginBottom: 8 }}>
+                ORIGEN
+              </div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {["", "USA", "CHINA", "EUROPA"].map((o) => (
+                  <button key={o} onClick={() => setFilterOrigin(o)}
+                    style={{
+                      height: 34, padding: "0 14px", borderRadius: 8, fontSize: 12,
+                      fontWeight: filterOrigin === o ? 800 : 600, cursor: "pointer",
+                      border: filterOrigin === o ? "1px solid rgba(255,210,0,0.5)" : "1px solid rgba(255,255,255,0.12)",
+                      background: filterOrigin === o ? "rgba(255,210,0,0.12)" : "rgba(255,255,255,0.04)",
+                      color: filterOrigin === o ? "#ffd200" : "rgba(255,255,255,0.65)",
+                    }}>
+                    {o || "Todos"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Servicio */}
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.5px", marginBottom: 8 }}>
+                SERVICIO
+              </div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {[
+                  { val: "",              label: "Todos" },
+                  { val: "NORMAL",        label: "Normal" },
+                  { val: "EXPRESS",       label: "Express" },
+                  { val: "TECH_PREMIUM",  label: "Tech Premium" },
+                ].map(({ val, label }) => (
+                  <button key={val} onClick={() => setFilterService(val)}
+                    style={{
+                      height: 34, padding: "0 14px", borderRadius: 8, fontSize: 12,
+                      fontWeight: filterService === val ? 800 : 600, cursor: "pointer",
+                      border: filterService === val ? "1px solid rgba(255,210,0,0.5)" : "1px solid rgba(255,255,255,0.12)",
+                      background: filterService === val ? "rgba(255,210,0,0.12)" : "rgba(255,255,255,0.04)",
+                      color: filterService === val ? "#ffd200" : "rgba(255,255,255,0.65)",
+                    }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Footer del panel */}
+          <div style={{ padding: "14px 16px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", gap: 8 }}>
+            <button className="btn" onClick={() => { clearFilters(); loadOperatorShipments(); }}
+              style={{ flex: 1, height: 40, fontSize: 13 }}>
+              Limpiar
+            </button>
+            <button className="btn btnPrimary" onClick={() => { loadOperatorShipments(); setFilterOpen(false); }}
+              style={{ flex: 2, height: 40, fontSize: 13, fontWeight: 800 }}>
+              Aplicar filtros
+            </button>
+          </div>
+        </div>
+
+        {/* ── Barra de búsqueda ── */}
         <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
           <input className="input"
             placeholder="🔍 Buscar: código, tracking, descripción, caja..."
@@ -964,7 +1108,6 @@ export default function OperatorPanel() {
             onKeyDown={(e) => e.key === "Enter" && loadOperatorShipments()}
             style={{ flex: 1, minWidth: 200 }}
           />
-          {/* 📷 Botón scanner para buscar */}
           <ScanBtn onClick={() => { setScannerMode("search"); setShowScanner(true); }}
             title="Buscar envío escaneando código de barras" />
           <input className="input" placeholder="Filtrar por cliente #"
@@ -973,6 +1116,20 @@ export default function OperatorPanel() {
             style={{ width: 150 }} />
           <button className="btn" onClick={() => loadOperatorShipments()} style={{ height: 42, padding: "0 18px" }}>
             Buscar
+          </button>
+          {/* Botón filtros avanzados */}
+          <button
+            onClick={() => setFilterOpen(true)}
+            style={{
+              height: 42, padding: "0 16px", borderRadius: 10, fontSize: 13,
+              fontWeight: hasActiveFilters ? 800 : 600, cursor: "pointer",
+              border: hasActiveFilters ? "1px solid rgba(255,210,0,0.5)" : "1px solid rgba(255,255,255,0.15)",
+              background: hasActiveFilters ? "rgba(255,210,0,0.10)" : "rgba(255,255,255,0.04)",
+              color: hasActiveFilters ? "#ffd200" : "rgba(255,255,255,0.70)",
+              display: "flex", alignItems: "center", gap: 6,
+            }}
+          >
+            ⚙ Filtros{hasActiveFilters ? " ●" : ""}
           </button>
           <button className="btn" onClick={refreshAll} style={{ height: 42, padding: "0 14px" }}>↻</button>
           <div style={{ display: "flex", alignItems: "center", fontSize: 12, color: "rgba(255,255,255,0.45)", whiteSpace: "nowrap" }}>
