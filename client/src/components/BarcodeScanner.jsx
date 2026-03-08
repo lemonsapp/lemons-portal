@@ -5,45 +5,49 @@ export default function BarcodeScanner({ onScan, onClose }) {
   const videoRef = useRef(null);
   const readerRef = useRef(null);
   const [error, setError] = useState(null);
-  const [scanning, setScanning] = useState(true);
   const [lastScan, setLastScan] = useState(null);
-  const [cameras, setCameras] = useState([]);
-  const [selectedCamera, setSelectedCamera] = useState(null);
 
   useEffect(() => {
+    let active = true;
     const reader = new BrowserMultiFormatReader();
     readerRef.current = reader;
-    BrowserMultiFormatReader.listVideoInputDevices()
-      .then((devices) => {
-        setCameras(devices);
-        const back = devices.find(d =>
-          d.label.toLowerCase().includes("back") ||
-          d.label.toLowerCase().includes("trasera") ||
-          d.label.toLowerCase().includes("environment")
-        );
-        const chosen = back || devices[0];
-        if (chosen) setSelectedCamera(chosen.deviceId);
-      })
-      .catch(() => setError("No se pudo acceder a la cámara"));
-    return () => { try { readerRef.current?.reset(); } catch {} };
-  }, []);
 
-  useEffect(() => {
-    if (!selectedCamera || !videoRef.current) return;
-    const reader = readerRef.current;
-    let active = true;
-    reader.decodeFromVideoDevice(selectedCamera, videoRef.current, (result, err) => {
-      if (!active) return;
-      if (result) {
-        const text = result.getText();
-        setLastScan(text);
-        setScanning(false);
-        if (navigator.vibrate) navigator.vibrate(100);
-        onScan(text);
+    async function start() {
+      try {
+        // Pedir permiso y obtener stream directamente
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" } }
+        });
+        if (!active) { stream.getTracks().forEach(t => t.stop()); return; }
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+        }
+        // Escanear desde el video
+        reader.decodeFromVideoElement(videoRef.current, (result, err) => {
+          if (!active) return;
+          if (result) {
+            const text = result.getText();
+            setLastScan(text);
+            if (navigator.vibrate) navigator.vibrate(100);
+            onScan(text);
+          }
+        });
+      } catch (e) {
+        if (active) setError("No se pudo acceder a la cámara: " + e.message);
       }
-    }).catch((e) => { if (active) setError("Error al iniciar cámara: " + e.message); });
-    return () => { active = false; try { reader.reset(); } catch {} };
-  }, [selectedCamera]);
+    }
+
+    start();
+
+    return () => {
+      active = false;
+      try { readerRef.current?.reset(); } catch {}
+      if (videoRef.current?.srcObject) {
+        videoRef.current.srcObject.getTracks().forEach(t => t.stop());
+      }
+    };
+  }, []);
 
   return (
     <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:10000,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }}>
@@ -52,40 +56,27 @@ export default function BarcodeScanner({ onScan, onClose }) {
           <span style={{ color:"#f5e642",fontWeight:700,fontSize:15 }}>📷 Escanear código</span>
           <button onClick={onClose} style={{ background:"transparent",border:"none",color:"rgba(255,255,255,0.5)",fontSize:18,cursor:"pointer",padding:"2px 6px" }}>✕</button>
         </div>
-        {cameras.length > 1 && (
-          <select style={{ display:"block",width:"calc(100% - 32px)",margin:"12px 16px 0",background:"#1a2d45",color:"#fff",border:"1px solid rgba(255,255,255,0.15)",borderRadius:8,padding:"8px 12px",fontSize:13 }}
-            value={selectedCamera || ""} onChange={(e) => setSelectedCamera(e.target.value)}>
-            {cameras.map((c) => <option key={c.deviceId} value={c.deviceId}>{c.label || `Cámara ${c.deviceId.slice(0,8)}`}</option>)}
-          </select>
-        )}
-        {error && (
+
+        {error ? (
           <div style={{ margin:16,background:"rgba(231,76,60,0.15)",border:"1px solid rgba(231,76,60,0.3)",borderRadius:10,padding:14,color:"#e74c3c",fontSize:13 }}>
-            ⚠️ {error}<br/><small>Verificá que el navegador tenga permiso para usar la cámara.</small>
+            ⚠️ {error}
           </div>
-        )}
-        {!error && (
+        ) : (
           <div style={{ position:"relative",width:"100%",aspectRatio:"4/3",background:"#000",overflow:"hidden" }}>
-            <video ref={videoRef} style={{ width:"100%",height:"100%",objectFit:"cover" }} />
-            {scanning && (
-              <div style={{ position:"absolute",bottom:12,left:0,right:0,textAlign:"center",color:"rgba(255,255,255,0.7)",fontSize:12,background:"rgba(0,0,0,0.5)",padding:"4px 0" }}>
-                Apuntá al código de barras o QR
-              </div>
-            )}
+            <video ref={videoRef} muted playsInline style={{ width:"100%",height:"100%",objectFit:"cover" }} />
+            <div style={{ position:"absolute",bottom:12,left:0,right:0,textAlign:"center",color:"rgba(255,255,255,0.7)",fontSize:12,background:"rgba(0,0,0,0.5)",padding:"4px 0" }}>
+              Apuntá al código de barras o QR
+            </div>
           </div>
         )}
+
         {lastScan && (
           <div style={{ padding:16,borderTop:"1px solid rgba(255,255,255,0.08)" }}>
-            <div style={{ color:"rgba(255,255,255,0.6)",fontSize:12,marginBottom:6 }}>✅ Código escaneado:</div>
-            <div style={{ color:"#f5e642",fontWeight:700,fontSize:16,wordBreak:"break-all",marginBottom:12,fontFamily:"monospace" }}>{lastScan}</div>
+            <div style={{ color:"rgba(255,255,255,0.6)",fontSize:12,marginBottom:6 }}>✅ Escaneado:</div>
+            <div style={{ color:"#f5e642",fontWeight:700,fontSize:15,wordBreak:"break-all",marginBottom:12,fontFamily:"monospace" }}>{lastScan}</div>
             <div style={{ display:"flex",gap:10 }}>
-              <button onClick={() => { setLastScan(null); setScanning(true); }}
-                style={{ flex:1,background:"transparent",border:"1px solid rgba(255,255,255,0.2)",color:"#fff",borderRadius:8,padding:"9px 0",fontSize:13,cursor:"pointer" }}>
-                Escanear otro
-              </button>
-              <button onClick={() => { onScan(lastScan); onClose(); }}
-                style={{ flex:1,background:"#f5e642",border:"none",color:"#0f1b2d",borderRadius:8,padding:"9px 0",fontSize:13,fontWeight:700,cursor:"pointer" }}>
-                Usar este
-              </button>
+              <button onClick={() => setLastScan(null)} style={{ flex:1,background:"transparent",border:"1px solid rgba(255,255,255,0.2)",color:"#fff",borderRadius:8,padding:"9px 0",fontSize:13,cursor:"pointer" }}>Escanear otro</button>
+              <button onClick={() => { onScan(lastScan); onClose(); }} style={{ flex:1,background:"#f5e642",border:"none",color:"#0f1b2d",borderRadius:8,padding:"9px 0",fontSize:13,fontWeight:700,cursor:"pointer" }}>Usar este</button>
             </div>
           </div>
         )}
