@@ -11,6 +11,8 @@ import CashRegister from "./pages/CashRegister.jsx";
 import QuotePublic from "./pages/QuotePublic.jsx";
 import QuoteClient from "./pages/QuoteClient.jsx";
 import PWAManager from "./components/PWAManager.jsx";
+import LemonCoins from "./pages/LemonCoins.jsx";
+import CoinsOperator from "./pages/CoinsOperator.jsx";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
@@ -80,6 +82,16 @@ export default function App() {
           }
         />
 
+        {/* Lemon Coins — cliente */}
+        <Route
+          path="/coins"
+          element={
+            <AuthGate>
+              <LemonCoins />
+            </AuthGate>
+          }
+        />
+
         {/* Operador/Admin */}
         <Route
           path="/operator"
@@ -106,6 +118,16 @@ export default function App() {
           element={
             <AuthGate allowRoles={["operator", "admin"]}>
               <CashRegister />
+            </AuthGate>
+          }
+        />
+
+        {/* Lemon Coins — operador */}
+        <Route
+          path="/coins/operator"
+          element={
+            <AuthGate allowRoles={["operator", "admin"]}>
+              <CoinsOperator />
             </AuthGate>
           }
         />

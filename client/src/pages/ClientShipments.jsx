@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Topbar from "../components/Topbar.jsx";
 import StatusBadge from "../components/StatusBadge.jsx";
 
@@ -389,6 +390,7 @@ function SummaryCard({ icon, label, value, accent }) {
 
 // ── Componente principal ──────────────────────────────────────────────────────
 export default function ClientShipments() {
+  const navigate = useNavigate();
   const [msg, setMsg] = useState("");
   const [me, setMe] = useState(null);
   const [rows, setRows] = useState([]);
@@ -496,14 +498,27 @@ export default function ClientShipments() {
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.35)", marginTop: 3 }}>Cargando…</div>
           )}
         </div>
-        <button
-          className="btn btnPrimary"
-          onClick={refreshAll}
-          disabled={loading}
-          style={{ height: 38, padding: "0 18px", fontSize: 13 }}
-        >
-          {loading ? "Actualizando…" : "↻ Actualizar"}
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => navigate("/coins")}
+            style={{
+              height: 38, padding: "0 16px", fontSize: 13, fontWeight: 800,
+              background: "linear-gradient(135deg,#ffd200,#ff8a00)",
+              color: "#0b1020", border: "none", borderRadius: 10, cursor: "pointer",
+              display: "flex", alignItems: "center", gap: 6,
+            }}
+          >
+            🍋 Lemon Coins
+          </button>
+          <button
+            className="btn btnPrimary"
+            onClick={refreshAll}
+            disabled={loading}
+            style={{ height: 38, padding: "0 18px", fontSize: 13 }}
+          >
+            {loading ? "Actualizando…" : "↻ Actualizar"}
+          </button>
+        </div>
       </div>
 
       {msg && (

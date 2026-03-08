@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Topbar from "../components/Topbar.jsx";
 import StatusBadge from "../components/StatusBadge.jsx";
 import BarcodeScanner from "../components/BarcodeScanner.jsx";
@@ -199,6 +200,7 @@ function ScanBtn({ onClick, title = "Escanear código de barras" }) {
 }
 
 export default function OperatorPanel() {
+  const navigate = useNavigate();
   const [msg, setMsg] = useState("");
 
   // Scanner state
@@ -658,10 +660,23 @@ export default function OperatorPanel() {
             LEMON&apos;S — carga y control de paquetes
           </div>
         </div>
-        <button className="btn btnPrimary" onClick={refreshAll} disabled={loadingStats}
-          style={{ height: 38, padding: "0 18px", fontSize: 13 }}>
-          {loadingStats ? "Actualizando…" : "↻ Actualizar"}
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => navigate("/coins/operator")}
+            style={{
+              height: 38, padding: "0 16px", fontSize: 13, fontWeight: 800,
+              background: "linear-gradient(135deg,#ffd200,#ff8a00)",
+              color: "#0b1020", border: "none", borderRadius: 10, cursor: "pointer",
+              display: "flex", alignItems: "center", gap: 6,
+            }}
+          >
+            🍋 Lemon Coins
+          </button>
+          <button className="btn btnPrimary" onClick={refreshAll} disabled={loadingStats}
+            style={{ height: 38, padding: "0 18px", fontSize: 13 }}>
+            {loadingStats ? "Actualizando…" : "↻ Actualizar"}
+          </button>
+        </div>
       </div>
 
       <MsgBanner msg={msg} />

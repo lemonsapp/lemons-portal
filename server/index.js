@@ -8,6 +8,7 @@ const { z } = require("zod");
 const db = require("./db");
 const { authRequired, requireRole } = require("./auth");
 const { sendEmail } = require("./mailer"); // ✅ mails
+const coinsRouter = require("./routes/coins"); // ✅ Lemon Coins
 
 const app = express();
 app.use(express.json());
@@ -140,11 +141,6 @@ function computeEstimated(weightKg, rateUsdPerKg) {
   return Number((w * r).toFixed(2));
 }
 
-/**
- * Regla server-side (fuente de verdad):
- * - Si rateOverride != null => override manual; estimated = weight * rateOverride
- * - Si rateOverride == null => rate = tarifa cliente/default; estimated = weight * rate
- */
 async function computeRateAndEstimatedServer({
   userId,
   originRaw,
@@ -164,7 +160,7 @@ async function computeRateAndEstimatedServer({
 
   let service = normalizeService(serviceRaw) || "NORMAL";
   if (origin === "EUROPA") service = "NORMAL";
-  if (origin !== "USA" && service === "TECH_PREMIUM") service = "NORMAL"; // TECH_PREMIUM solo USA
+  if (origin !== "USA" && service === "TECH_PREMIUM") service = "NORMAL";
 
   const override = toNumOrNull(rateOverride);
   if (override !== null) {
@@ -233,29 +229,14 @@ function statusPillColor(status) {
   return "#6366f1";
 }
 
-// ==================== ✅ TRACKING CLICKABLE ====================
-
 function guessTrackingUrl(trackingRaw) {
   const t = safeStr(trackingRaw).trim();
   if (!t) return "";
-
-  // Si ya es link, lo devolvemos tal cual (con o sin http)
   if (/^https?:\/\//i.test(t)) return t;
   if (/^www\./i.test(t)) return `https://${t}`;
-
-  // Patrones comunes
-  // DHL: suele empezar con 3S... / JVGL... etc (varía). Igual mandamos a búsqueda.
-  // UPS: 1Z...
   if (/^1Z[A-Z0-9]{16}$/i.test(t)) return `https://www.ups.com/track?loc=en_US&tracknum=${encodeURIComponent(t)}`;
-
-  // FedEx: 12-15 dígitos (aprox)
   if (/^\d{12,15}$/.test(t)) return `https://www.fedex.com/fedextrack/?trknbr=${encodeURIComponent(t)}`;
-
-  // USPS: 20-22 dígitos o prefijos (aprox)
   if (/^\d{20,22}$/.test(t)) return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${encodeURIComponent(t)}`;
-
-  // China Post / Ali / genérico -> mejor ir a 17track
-  // También sirve como fallback universal
   return `https://www.17track.net/en/track?nums=${encodeURIComponent(t)}`;
 }
 
@@ -271,12 +252,9 @@ function escapeHtml(str) {
 function trackingHtml(trackingRaw) {
   const t = safeStr(trackingRaw).trim();
   if (!t) return "-";
-
   const url = guessTrackingUrl(t);
   const label = escapeHtml(t);
-
   if (!url) return label;
-
   return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer"
     style="color:#c7d2fe; font-weight:800; text-decoration:underline;">${label}</a>`;
 }
@@ -300,7 +278,6 @@ function shipmentUpdateEmailHtml({
   const pill = statusPillColor(newStatus);
   const preview = `Tu envío #${code} pasó a "${newStatus}".`;
   const showCta = Boolean(ctaUrl && String(ctaUrl).trim().length > 0);
-
   const trackingBlock = trackingHtml(tracking);
 
   return `
@@ -534,15 +511,13 @@ app.get("/auth/me", authRequired, async (req, res) => {
   }
 });
 
-// ==================== PASSWORD RESET (RESTABLECER CONTRASEÑA) ====================
+// ==================== PASSWORD RESET ====================
 
-// Helpers
 function isEmail(x) {
   return typeof x === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x);
 }
 
 function makeResetToken() {
-  // token simple (no requiere libs). Suficiente si lo guardás hasheado.
   return (
     Date.now().toString(36) +
     Math.random().toString(36).slice(2) +
@@ -551,7 +526,6 @@ function makeResetToken() {
 }
 
 async function hashToken(token) {
-  // usamos bcrypt para hashear el token (así si te roban DB no pueden usarlo)
   return bcrypt.hash(token, 10);
 }
 
@@ -559,7 +533,6 @@ async function compareToken(token, hash) {
   return bcrypt.compare(token, hash);
 }
 
-// 1) Solicitar reset: genera token + guarda hash + manda mail con link
 app.post("/auth/forgot-password", async (req, res) => {
   try {
     const schema = z.object({ email: z.string().email() });
@@ -567,24 +540,16 @@ app.post("/auth/forgot-password", async (req, res) => {
     if (!p.success) return res.status(400).json({ error: "Email inválido" });
 
     const email = p.data.email.toLowerCase();
-
-    // respondemos SIEMPRE OK para no filtrar si existe o no
     const okResponse = { ok: true, message: "Si el email existe, te enviamos un link." };
 
-    const u = await db.query(
-      "SELECT id, email, name FROM users WHERE email=$1",
-      [email]
-    );
+    const u = await db.query("SELECT id, email, name FROM users WHERE email=$1", [email]);
     const user = u.rows[0];
     if (!user) return res.json(okResponse);
 
     const rawToken = makeResetToken();
     const tokenHash = await hashToken(rawToken);
-
-    // 30 min de validez (cambiable)
     const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
 
-    // Necesitás esta tabla: password_resets (ver SQL más abajo)
     await db.query(
       `INSERT INTO password_resets (user_id, token_hash, expires_at, used_at, created_at)
        VALUES ($1,$2,$3,NULL,NOW())`,
@@ -598,7 +563,6 @@ app.post("/auth/forgot-password", async (req, res) => {
 
     const resetUrl = `${base}/reset-password?token=${encodeURIComponent(rawToken)}&email=${encodeURIComponent(email)}`;
 
-    // Mail pro (simple pero lindo)
     try {
       await sendEmail({
         to: user.email,
@@ -635,7 +599,6 @@ app.post("/auth/forgot-password", async (req, res) => {
   }
 });
 
-// 2) Confirmar reset: valida token + actualiza contraseña + marca usado
 app.post("/auth/reset-password", async (req, res) => {
   try {
     const schema = z.object({
@@ -653,7 +616,6 @@ app.post("/auth/reset-password", async (req, res) => {
     const user = u.rows[0];
     if (!user) return res.status(400).json({ error: "Token inválido o vencido" });
 
-    // Traemos resets vigentes no usados (último primero)
     const r = await db.query(
       `SELECT id, token_hash, expires_at, used_at
        FROM password_resets
@@ -679,7 +641,6 @@ app.post("/auth/reset-password", async (req, res) => {
     if (!match) return res.status(400).json({ error: "Token inválido o vencido" });
 
     const password_hash = await bcrypt.hash(new_password, 10);
-
     await db.query("UPDATE users SET password_hash=$1 WHERE id=$2", [password_hash, user.id]);
     await db.query("UPDATE password_resets SET used_at=NOW() WHERE id=$1", [match.id]);
 
@@ -754,8 +715,7 @@ app.get(
       } catch (e) {
         console.error("GET CLIENT RATES ERROR", e);
         return res.status(500).json({
-          error:
-            "No se pudieron leer tarifas. Verificá que exista la tabla client_rates (migración pendiente).",
+          error: "No se pudieron leer tarifas. Verificá que exista la tabla client_rates (migración pendiente).",
         });
       }
 
@@ -777,6 +737,21 @@ app.get(
     }
   }
 );
+
+// ── GET /users — buscar usuario por client_number (para CoinsOperator) ──
+app.get("/users", authRequired, requireRole(["operator", "admin"]), async (req, res) => {
+  try {
+    const { client_number } = req.query;
+    if (!client_number) return res.status(400).json({ error: "client_number requerido" });
+    const q = await db.query(
+      "SELECT id, client_number, name, email, role FROM users WHERE client_number=$1",
+      [parseInt(client_number, 10)]
+    );
+    res.json({ users: q.rows });
+  } catch (e) {
+    res.status(500).json({ error: "Error interno" });
+  }
+});
 
 app.put(
   "/operator/clients/:id/rates",
@@ -831,8 +806,7 @@ app.put(
       } catch (e) {
         console.error("UPSERT CLIENT RATES ERROR", e);
         return res.status(500).json({
-          error:
-            "No se pudieron guardar tarifas. Verificá que exista la tabla client_rates (migración pendiente).",
+          error: "No se pudieron guardar tarifas. Verificá que exista la tabla client_rates (migración pendiente).",
         });
       }
 
@@ -855,11 +829,6 @@ app.put(
   }
 );
 
-/**
- * ✅ CREATE SHIPMENT
- * - calcula SIEMPRE estimated
- * - manda mail PRO al crear (NO rompe flujo)
- */
 app.post(
   "/operator/shipments",
   authRequired,
@@ -874,12 +843,10 @@ app.post(
         tracking: z.string().nullable().optional(),
         weight_kg: z.number().min(0),
         status: z.string().min(1),
-
         origin: z.enum(["USA", "CHINA", "EUROPA"]).optional(),
         service: z.enum(["NORMAL", "EXPRESS", "TECH_PREMIUM"]).optional(),
-
         rate_usd_per_kg: z.number().min(0).nullable().optional(),
-        estimated_usd: z.number().min(0).nullable().optional(), // (ignorado: server recalcula)
+        estimated_usd: z.number().min(0).nullable().optional(),
       });
 
       const p = schema.safeParse(req.body);
@@ -887,7 +854,6 @@ app.post(
 
       const d = p.data;
 
-      // ✅ traigo también email/nombre porque lo necesito para el mail
       const u = await db.query(
         "SELECT id, email, name, client_number FROM users WHERE client_number=$1",
         [d.client_number]
@@ -924,16 +890,13 @@ app.post(
       );
 
       await db.query(
-        `INSERT INTO shipment_events (shipment_id, old_status, new_status)
-         VALUES ($1,$2,$3)`,
+        `INSERT INTO shipment_events (shipment_id, old_status, new_status) VALUES ($1,$2,$3)`,
         [ins.rows[0].id, null, d.status]
       );
 
-      // ==================== ✅ MAIL PRO (CREACIÓN) ====================
       try {
         const created = ins.rows[0];
         const code = created?.code || d.package_code || created?.id;
-
         const ctaUrl =
           process.env.APP_URL && String(process.env.APP_URL).trim()
             ? `${String(process.env.APP_URL).replace(/\/$/, "")}/client/shipments`
@@ -956,15 +919,10 @@ app.post(
           ctaUrl,
         });
 
-        await sendEmail({
-          to: user.email,
-          subject: `Envío creado #${code}`,
-          html,
-        });
+        await sendEmail({ to: user.email, subject: `Envío creado #${code}`, html });
       } catch (e) {
         console.log("[MAIL] Falló envío creación (no rompemos flujo):", e?.message || e);
       }
-      // ===============================================================
 
       res.json({ shipment: ins.rows[0] });
     } catch (e) {
@@ -973,8 +931,6 @@ app.post(
     }
   }
 );
-
-// ----------- (el resto sigue igual: operator/shipments GET, PATCH, status PATCH, etc) -----------
 
 app.get(
   "/operator/shipments",
@@ -1034,12 +990,10 @@ app.patch(
         box_code: z.string().nullable().optional(),
         tracking: z.string().nullable().optional(),
         weight_kg: z.number().min(0),
-
         origin: z.string().nullable().optional(),
         service: z.string().nullable().optional(),
-
         rate_usd_per_kg: z.number().nullable().optional(),
-        estimated_usd: z.number().nullable().optional(), // ignorado
+        estimated_usd: z.number().nullable().optional(),
       });
 
       const p = schema.safeParse(req.body);
@@ -1062,16 +1016,8 @@ app.patch(
 
       const upd = await db.query(
         `UPDATE shipments
-         SET code=$1,
-             description=$2,
-             box_code=$3,
-             tracking=$4,
-             weight_kg=$5,
-             origin=$6,
-             service=$7,
-             rate_usd_per_kg=$8,
-             estimated_usd=$9,
-             updated_at=NOW()
+         SET code=$1, description=$2, box_code=$3, tracking=$4, weight_kg=$5,
+             origin=$6, service=$7, rate_usd_per_kg=$8, estimated_usd=$9, updated_at=NOW()
          WHERE id=$10
          RETURNING *`,
         [
@@ -1137,8 +1083,7 @@ app.patch(
       );
 
       await db.query(
-        `INSERT INTO shipment_events (shipment_id, old_status, new_status)
-         VALUES ($1,$2,$3)`,
+        `INSERT INTO shipment_events (shipment_id, old_status, new_status) VALUES ($1,$2,$3)`,
         [shipmentId, oldStatus, newStatus]
       );
 
@@ -1146,7 +1091,6 @@ app.patch(
       try {
         const updated = upd.rows[0] || current;
         const code = updated?.code || current.code || shipmentId;
-
         const ctaUrl =
           process.env.APP_URL && String(process.env.APP_URL).trim()
             ? `${String(process.env.APP_URL).replace(/\/$/, "")}/client/shipments`
@@ -1169,14 +1113,70 @@ app.patch(
           ctaUrl,
         });
 
-        await sendEmail({
-          to: current.email,
-          subject: `Actualización de envío #${code}`,
-          html,
-        });
+        await sendEmail({ to: current.email, subject: `Actualización de envío #${code}`, html });
       } catch (e) {
         console.log("[MAIL] Falló envío (no rompemos flujo):", e?.message || e);
       }
+
+      // ══ AUTO LEMON COINS al entregar ══════════════════════════════
+      if (newStatus === "Entregado") {
+        try {
+          const existQ = await db.query(
+            `SELECT id FROM coin_transactions WHERE shipment_id=$1 AND type='earn' LIMIT 1`,
+            [shipmentId]
+          );
+          if (!existQ.rows[0]) {
+            const shipFull = (await db.query(
+              `SELECT s.*, u.first_shipment_bonus_given
+               FROM shipments s JOIN users u ON u.id = s.user_id
+               WHERE s.id=$1`, [shipmentId]
+            )).rows[0];
+
+            if (shipFull) {
+              const kg         = parseFloat(shipFull.weight_kg     || 0);
+              const usd        = parseFloat(shipFull.estimated_usd || 0);
+              const coinsByKg  = Math.floor(kg * 3);
+              const coinsBig   = usd >= 500 ? 10 : 0;
+              const coinsFirst = !shipFull.first_shipment_bonus_given ? 15 : 0;
+              const total      = coinsByKg + coinsBig + coinsFirst;
+
+              if (total > 0) {
+                const breakdown = [];
+                if (coinsByKg  > 0) breakdown.push(`${coinsByKg} por ${kg.toFixed(2)}kg`);
+                if (coinsBig   > 0) breakdown.push(`${coinsBig} bonus envío grande`);
+                if (coinsFirst > 0) breakdown.push(`${coinsFirst} bonus primer envío`);
+
+                await db.query(
+                  `INSERT INTO lemon_coins (user_id, balance, total_earned)
+                   VALUES ($1,0,0) ON CONFLICT (user_id) DO NOTHING`,
+                  [shipFull.user_id]
+                );
+                await db.query(
+                  `INSERT INTO coin_transactions (user_id, type, amount, reason, shipment_id)
+                   VALUES ($1,'earn',$2,$3,$4)`,
+                  [shipFull.user_id, total, `Envío completado — ${breakdown.join(", ")}`, shipmentId]
+                );
+                await db.query(
+                  `UPDATE lemon_coins
+                   SET balance=balance+$1, total_earned=total_earned+$1, updated_at=NOW()
+                   WHERE user_id=$2`,
+                  [total, shipFull.user_id]
+                );
+                if (coinsFirst > 0) {
+                  await db.query(
+                    `UPDATE users SET first_shipment_bonus_given=TRUE WHERE id=$1`,
+                    [shipFull.user_id]
+                  );
+                }
+                console.log(`[COINS] +${total} coins → user ${shipFull.user_id} (envío ${shipmentId})`);
+              }
+            }
+          }
+        } catch (coinErr) {
+          console.error("[COINS] Error otorgando coins:", coinErr.message);
+        }
+      }
+      // ═════════════════════════════════════════════════════════════
 
       res.json({ shipment: upd.rows[0] });
     } catch (e) {
@@ -1198,7 +1198,6 @@ app.get("/client/shipments", authRequired, async (req, res) => {
        ORDER BY id DESC`,
       [req.user.id]
     );
-
     res.json({ rows: q.rows });
   } catch (e) {
     console.error("CLIENT SHIPMENTS ERROR", e);
@@ -1235,238 +1234,170 @@ app.get("/shipments/:id/events", authRequired, async (req, res) => {
   }
 });
 
-
-// ── GET /operator/costs ─────────────────────────────────────────────────────
-app.get(
-  "/operator/costs",
-  authRequired,
-  requireRole(["operator", "admin"]),
-  async (req, res) => {
-    try {
-      const costs = await getOperatorCosts();
-      res.json({ costs, defaults: DEFAULT_OPERATOR_COSTS });
-    } catch (err) {
-      console.error("GET COSTS ERROR:", err);
-      res.status(500).json({ error: "Error leyendo costos" });
-    }
+// ── GET /operator/costs ──────────────────────────────────────────────────────
+app.get("/operator/costs", authRequired, requireRole(["operator", "admin"]), async (req, res) => {
+  try {
+    const costs = await getOperatorCosts();
+    res.json({ costs, defaults: DEFAULT_OPERATOR_COSTS });
+  } catch (err) {
+    console.error("GET COSTS ERROR:", err);
+    res.status(500).json({ error: "Error leyendo costos" });
   }
-);
+});
 
 // ── PUT /operator/costs ──────────────────────────────────────────────────────
-app.put(
-  "/operator/costs",
-  authRequired,
-  requireRole(["operator", "admin"]),
-  async (req, res) => {
-    try {
-      const schema = z.object({
-        usa_normal:       z.number().min(0),
-        usa_express:      z.number().min(0),
-        usa_tech_premium: z.number().min(0),
-        china_normal:     z.number().min(0),
-        china_express:    z.number().min(0),
-        europa_normal:    z.number().min(0),
-      });
-      const p = schema.safeParse(req.body);
-      if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
+app.put("/operator/costs", authRequired, requireRole(["operator", "admin"]), async (req, res) => {
+  try {
+    const schema = z.object({
+      usa_normal:       z.number().min(0),
+      usa_express:      z.number().min(0),
+      usa_tech_premium: z.number().min(0),
+      china_normal:     z.number().min(0),
+      china_express:    z.number().min(0),
+      europa_normal:    z.number().min(0),
+    });
+    const p = schema.safeParse(req.body);
+    if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
 
-      const d = p.data;
-      await db.query(
-        `INSERT INTO operator_costs (id, usa_normal, usa_express, usa_tech_premium, china_normal, china_express, europa_normal, updated_at)
-         VALUES (1, $1, $2, $3, $4, $5, $6, NOW())
-         ON CONFLICT (id) DO UPDATE SET
-           usa_normal       = EXCLUDED.usa_normal,
-           usa_express      = EXCLUDED.usa_express,
-           usa_tech_premium = EXCLUDED.usa_tech_premium,
-           china_normal     = EXCLUDED.china_normal,
-           china_express    = EXCLUDED.china_express,
-           europa_normal    = EXCLUDED.europa_normal,
-           updated_at       = NOW()`,
-        [d.usa_normal, d.usa_express, d.usa_tech_premium, d.china_normal, d.china_express, d.europa_normal]
-      );
-      res.json({ ok: true, costs: d });
-    } catch (err) {
-      console.error("PUT COSTS ERROR:", err);
-      res.status(500).json({ error: "Error guardando costos" });
-    }
+    const d = p.data;
+    await db.query(
+      `INSERT INTO operator_costs (id, usa_normal, usa_express, usa_tech_premium, china_normal, china_express, europa_normal, updated_at)
+       VALUES (1, $1, $2, $3, $4, $5, $6, NOW())
+       ON CONFLICT (id) DO UPDATE SET
+         usa_normal       = EXCLUDED.usa_normal,
+         usa_express      = EXCLUDED.usa_express,
+         usa_tech_premium = EXCLUDED.usa_tech_premium,
+         china_normal     = EXCLUDED.china_normal,
+         china_express    = EXCLUDED.china_express,
+         europa_normal    = EXCLUDED.europa_normal,
+         updated_at       = NOW()`,
+      [d.usa_normal, d.usa_express, d.usa_tech_premium, d.china_normal, d.china_express, d.europa_normal]
+    );
+    res.json({ ok: true, costs: d });
+  } catch (err) {
+    console.error("PUT COSTS ERROR:", err);
+    res.status(500).json({ error: "Error guardando costos" });
   }
-);
+});
 
 // ── GET /operator/dashboard ──────────────────────────────────────────────────
-app.get(
-  "/operator/dashboard",
-  authRequired,
-  requireRole(["operator", "admin"]),
-  async (req, res) => {
-    try {
-      // 1. Stats generales
-      const statsQ = await db.query(`
-        SELECT
-          COUNT(*)                                                          AS total,
-          COUNT(*) FILTER (WHERE status='Recibido en depósito')            AS received,
-          COUNT(*) FILTER (WHERE status='En preparación')                  AS prep,
-          COUNT(*) FILTER (WHERE status='Despachado')                      AS sent,
-          COUNT(*) FILTER (WHERE status='En tránsito')                     AS transit,
-          COUNT(*) FILTER (WHERE status='Listo para entrega')              AS ready,
-          COUNT(*) FILTER (WHERE status='Entregado')                       AS delivered,
-          COALESCE(SUM(weight_kg), 0)                                      AS total_weight,
-          COALESCE(SUM(estimated_usd), 0)                                  AS total_revenue,
-          COALESCE(SUM(estimated_usd) FILTER (WHERE status='Entregado'),0) AS delivered_revenue,
-          COUNT(DISTINCT user_id)                                           AS active_clients
-        FROM shipments
-      `);
+app.get("/operator/dashboard", authRequired, requireRole(["operator", "admin"]), async (req, res) => {
+  try {
+    const statsQ = await db.query(`
+      SELECT
+        COUNT(*)                                                          AS total,
+        COUNT(*) FILTER (WHERE status='Recibido en depósito')            AS received,
+        COUNT(*) FILTER (WHERE status='En preparación')                  AS prep,
+        COUNT(*) FILTER (WHERE status='Despachado')                      AS sent,
+        COUNT(*) FILTER (WHERE status='En tránsito')                     AS transit,
+        COUNT(*) FILTER (WHERE status='Listo para entrega')              AS ready,
+        COUNT(*) FILTER (WHERE status='Entregado')                       AS delivered,
+        COALESCE(SUM(weight_kg), 0)                                      AS total_weight,
+        COALESCE(SUM(estimated_usd), 0)                                  AS total_revenue,
+        COALESCE(SUM(estimated_usd) FILTER (WHERE status='Entregado'),0) AS delivered_revenue,
+        COUNT(DISTINCT user_id)                                           AS active_clients
+      FROM shipments
+    `);
 
-      // 2. Por origen
-      const byOriginQ = await db.query(`
-        SELECT
-          COALESCE(origin, 'Sin origen') AS origin,
-          COUNT(*)                        AS count,
-          COALESCE(SUM(weight_kg), 0)     AS weight
-        FROM shipments
-        GROUP BY origin ORDER BY count DESC
-      `);
+    const byOriginQ = await db.query(`
+      SELECT COALESCE(origin, 'Sin origen') AS origin, COUNT(*) AS count, COALESCE(SUM(weight_kg), 0) AS weight
+      FROM shipments GROUP BY origin ORDER BY count DESC
+    `);
 
-      // 3. Por servicio
-      const byServiceQ = await db.query(`
-        SELECT
-          COALESCE(service, 'NORMAL') AS service,
-          COUNT(*)                     AS count
-        FROM shipments
-        GROUP BY service ORDER BY count DESC
-      `);
+    const byServiceQ = await db.query(`
+      SELECT COALESCE(service, 'NORMAL') AS service, COUNT(*) AS count
+      FROM shipments GROUP BY service ORDER BY count DESC
+    `);
 
-      // 4. Costos del operador
-      const operatorCosts = await getOperatorCosts();
-      const costsParams = [
-        Number(operatorCosts.usa_normal)       || 0,
-        Number(operatorCosts.usa_express)      || 0,
-        Number(operatorCosts.usa_tech_premium) || 0,
-        Number(operatorCosts.china_normal)     || 0,
-        Number(operatorCosts.china_express)    || 0,
-        Number(operatorCosts.europa_normal)    || 0,
-      ];
+    const operatorCosts = await getOperatorCosts();
+    const costsParams = [
+      Number(operatorCosts.usa_normal)       || 0,
+      Number(operatorCosts.usa_express)      || 0,
+      Number(operatorCosts.usa_tech_premium) || 0,
+      Number(operatorCosts.china_normal)     || 0,
+      Number(operatorCosts.china_express)    || 0,
+      Number(operatorCosts.europa_normal)    || 0,
+    ];
 
-      // Expresión de costo por lane — parámetros casteados a NUMERIC para evitar errores de tipo
-      const [c1, c2, c3, c4, c5] = costsParams;
-      const laneCost = (p) => `
-        weight_kg * CASE
-          WHEN origin='USA'   AND service='NORMAL'  THEN ${p}::numeric
-          WHEN origin='USA'   AND service='EXPRESS' THEN ${p+1}::numeric
-          WHEN origin='CHINA' AND service='NORMAL'  THEN ${p+2}::numeric
-          WHEN origin='CHINA' AND service='EXPRESS' THEN ${p+3}::numeric
-          WHEN origin='EUROPA'                       THEN ${p+4}::numeric
-          ELSE 0
-        END`;
+    const byMonthQ = await db.query(`
+      SELECT
+        TO_CHAR(DATE_TRUNC('month', date_in), 'YYYY-MM') AS month,
+        COUNT(*) AS count,
+        COALESCE(SUM(estimated_usd), 0) AS revenue,
+        COALESCE(SUM(weight_kg * CASE
+          WHEN origin='USA'   AND service='NORMAL'       THEN $1::numeric
+          WHEN origin='USA'   AND service='EXPRESS'      THEN $2::numeric
+          WHEN origin='USA'   AND service='TECH_PREMIUM' THEN $3::numeric
+          WHEN origin='CHINA' AND service='NORMAL'       THEN $4::numeric
+          WHEN origin='CHINA' AND service='EXPRESS'      THEN $5::numeric
+          WHEN origin='EUROPA'                            THEN $6::numeric
+          ELSE 0 END), 0) AS cost,
+        COALESCE(SUM(estimated_usd), 0) - COALESCE(SUM(weight_kg * CASE
+          WHEN origin='USA'   AND service='NORMAL'       THEN $1::numeric
+          WHEN origin='USA'   AND service='EXPRESS'      THEN $2::numeric
+          WHEN origin='USA'   AND service='TECH_PREMIUM' THEN $3::numeric
+          WHEN origin='CHINA' AND service='NORMAL'       THEN $4::numeric
+          WHEN origin='CHINA' AND service='EXPRESS'      THEN $5::numeric
+          WHEN origin='EUROPA'                            THEN $6::numeric
+          ELSE 0 END), 0) AS profit
+      FROM shipments
+      WHERE date_in >= NOW() - INTERVAL '8 months'
+      GROUP BY DATE_TRUNC('month', date_in)
+      ORDER BY DATE_TRUNC('month', date_in)
+    `, costsParams);
 
-      // 5. Por mes: revenue + costo + ganancia
-      const byMonthQ = await db.query(`
-        SELECT
-          TO_CHAR(DATE_TRUNC('month', date_in), 'YYYY-MM') AS month,
-          COUNT(*)                                           AS count,
-          COALESCE(SUM(estimated_usd), 0)                   AS revenue,
-          COALESCE(SUM(
-            weight_kg * CASE
-              WHEN origin='USA'   AND service='NORMAL'       THEN $1::numeric
-              WHEN origin='USA'   AND service='EXPRESS'      THEN $2::numeric
-              WHEN origin='USA'   AND service='TECH_PREMIUM' THEN $3::numeric
-              WHEN origin='CHINA' AND service='NORMAL'       THEN $4::numeric
-              WHEN origin='CHINA' AND service='EXPRESS'      THEN $5::numeric
-              WHEN origin='EUROPA'                            THEN $6::numeric
-              ELSE 0
-            END
-          ), 0)                                              AS cost,
-          COALESCE(SUM(estimated_usd), 0) - COALESCE(SUM(
-            weight_kg * CASE
-              WHEN origin='USA'   AND service='NORMAL'       THEN $1::numeric
-              WHEN origin='USA'   AND service='EXPRESS'      THEN $2::numeric
-              WHEN origin='USA'   AND service='TECH_PREMIUM' THEN $3::numeric
-              WHEN origin='CHINA' AND service='NORMAL'       THEN $4::numeric
-              WHEN origin='CHINA' AND service='EXPRESS'      THEN $5::numeric
-              WHEN origin='EUROPA'                            THEN $6::numeric
-              ELSE 0
-            END
-          ), 0)                                              AS profit
-        FROM shipments
-        WHERE date_in >= NOW() - INTERVAL '8 months'
-        GROUP BY DATE_TRUNC('month', date_in)
-        ORDER BY DATE_TRUNC('month', date_in)
-      `, costsParams);
+    const byLaneQ = await db.query(`
+      SELECT
+        COALESCE(origin, '-') AS origin, COALESCE(service, '-') AS service,
+        COUNT(*) AS count,
+        COALESCE(SUM(estimated_usd), 0) AS revenue,
+        COALESCE(SUM(weight_kg * CASE
+          WHEN origin='USA'   AND service='NORMAL'       THEN $1::numeric
+          WHEN origin='USA'   AND service='EXPRESS'      THEN $2::numeric
+          WHEN origin='USA'   AND service='TECH_PREMIUM' THEN $3::numeric
+          WHEN origin='CHINA' AND service='NORMAL'       THEN $4::numeric
+          WHEN origin='CHINA' AND service='EXPRESS'      THEN $5::numeric
+          WHEN origin='EUROPA'                            THEN $6::numeric
+          ELSE 0 END), 0) AS cost,
+        COALESCE(SUM(estimated_usd), 0) - COALESCE(SUM(weight_kg * CASE
+          WHEN origin='USA'   AND service='NORMAL'       THEN $1::numeric
+          WHEN origin='USA'   AND service='EXPRESS'      THEN $2::numeric
+          WHEN origin='USA'   AND service='TECH_PREMIUM' THEN $3::numeric
+          WHEN origin='CHINA' AND service='NORMAL'       THEN $4::numeric
+          WHEN origin='CHINA' AND service='EXPRESS'      THEN $5::numeric
+          WHEN origin='EUROPA'                            THEN $6::numeric
+          ELSE 0 END), 0) AS profit
+      FROM shipments GROUP BY origin, service ORDER BY revenue DESC
+    `, costsParams);
 
-      // 6. Por lane: ganancia histórica
-      const byLaneQ = await db.query(`
-        SELECT
-          COALESCE(origin, '-')  AS origin,
-          COALESCE(service, '-') AS service,
-          COUNT(*)               AS count,
-          COALESCE(SUM(estimated_usd), 0) AS revenue,
-          COALESCE(SUM(
-            weight_kg * CASE
-              WHEN origin='USA'   AND service='NORMAL'       THEN $1::numeric
-              WHEN origin='USA'   AND service='EXPRESS'      THEN $2::numeric
-              WHEN origin='USA'   AND service='TECH_PREMIUM' THEN $3::numeric
-              WHEN origin='CHINA' AND service='NORMAL'       THEN $4::numeric
-              WHEN origin='CHINA' AND service='EXPRESS'      THEN $5::numeric
-              WHEN origin='EUROPA'                            THEN $6::numeric
-              ELSE 0
-            END
-          ), 0) AS cost,
-          COALESCE(SUM(estimated_usd), 0) - COALESCE(SUM(
-            weight_kg * CASE
-              WHEN origin='USA'   AND service='NORMAL'       THEN $1::numeric
-              WHEN origin='USA'   AND service='EXPRESS'      THEN $2::numeric
-              WHEN origin='USA'   AND service='TECH_PREMIUM' THEN $3::numeric
-              WHEN origin='CHINA' AND service='NORMAL'       THEN $4::numeric
-              WHEN origin='CHINA' AND service='EXPRESS'      THEN $5::numeric
-              WHEN origin='EUROPA'                            THEN $6::numeric
-              ELSE 0
-            END
-          ), 0) AS profit
-        FROM shipments
-        GROUP BY origin, service
-        ORDER BY revenue DESC
-      `, costsParams);
+    const topClientsQ = await db.query(`
+      SELECT u.client_number, u.name, COUNT(s.id) AS shipments, COALESCE(SUM(s.estimated_usd),0) AS revenue
+      FROM shipments s JOIN users u ON u.id = s.user_id
+      GROUP BY u.id, u.client_number, u.name ORDER BY shipments DESC LIMIT 5
+    `);
 
-      // 7. Top 5 clientes
-      const topClientsQ = await db.query(`
-        SELECT
-          u.client_number, u.name,
-          COUNT(s.id)                      AS shipments,
-          COALESCE(SUM(s.estimated_usd),0) AS revenue
-        FROM shipments s
-        JOIN users u ON u.id = s.user_id
-        GROUP BY u.id, u.client_number, u.name
-        ORDER BY shipments DESC
-        LIMIT 5
-      `);
+    const recentQ = await db.query(`
+      SELECT s.id, s.code, s.description, s.status, s.date_in, s.origin, s.estimated_usd,
+             u.client_number, u.name AS client_name
+      FROM shipments s JOIN users u ON u.id = s.user_id
+      ORDER BY s.date_in DESC LIMIT 5
+    `);
 
-      // 8. Últimos 5 envíos
-      const recentQ = await db.query(`
-        SELECT s.id, s.code, s.description, s.status, s.date_in,
-               s.origin, s.estimated_usd,
-               u.client_number, u.name AS client_name
-        FROM shipments s
-        JOIN users u ON u.id = s.user_id
-        ORDER BY s.date_in DESC
-        LIMIT 5
-      `);
-
-      res.json({
-        stats:          statsQ.rows[0],
-        by_origin:      byOriginQ.rows,
-        by_service:     byServiceQ.rows,
-        by_month:       byMonthQ.rows,
-        by_lane:        byLaneQ.rows,
-        top_clients:    topClientsQ.rows,
-        recent:         recentQ.rows,
-        operator_costs: operatorCosts,
-      });
-    } catch (err) {
-      console.error("DASHBOARD ERROR:", err);
-      res.status(500).json({ error: "Error dashboard" });
-    }
+    res.json({
+      stats:          statsQ.rows[0],
+      by_origin:      byOriginQ.rows,
+      by_service:     byServiceQ.rows,
+      by_month:       byMonthQ.rows,
+      by_lane:        byLaneQ.rows,
+      top_clients:    topClientsQ.rows,
+      recent:         recentQ.rows,
+      operator_costs: operatorCosts,
+    });
+  } catch (err) {
+    console.error("DASHBOARD ERROR:", err);
+    res.status(500).json({ error: "Error dashboard" });
   }
-);
-
+});
 
 // ════════════════════════════════════════════════════════════════════
 // MÓDULO CAJA — pagos y gastos
@@ -1478,319 +1409,290 @@ const EXPENSE_CATEGORIES = [
   "Marketing", "Servicios", "Otros"
 ];
 
-// ── GET /cash/pending/:clientNumber — paquetes pendientes de cobro ──
-app.get(
-  "/cash/pending/:clientNumber",
-  authRequired,
-  requireRole(["operator", "admin"]),
-  async (req, res) => {
-    try {
-      const cn = parseInt(req.params.clientNumber, 10);
-      if (!Number.isFinite(cn)) return res.status(400).json({ error: "Número de cliente inválido" });
+app.get("/cash/pending/:clientNumber", authRequired, requireRole(["operator", "admin"]), async (req, res) => {
+  try {
+    const cn = parseInt(req.params.clientNumber, 10);
+    if (!Number.isFinite(cn)) return res.status(400).json({ error: "Número de cliente inválido" });
 
-      // Buscar usuario
-      const uq = await db.query(
-        "SELECT id, client_number, name, email FROM users WHERE client_number=$1", [cn]
-      );
-      if (!uq.rows[0]) return res.status(404).json({ error: "Cliente no encontrado" });
-      const user = uq.rows[0];
+    const uq = await db.query(
+      "SELECT id, client_number, name, email FROM users WHERE client_number=$1", [cn]
+    );
+    if (!uq.rows[0]) return res.status(404).json({ error: "Cliente no encontrado" });
+    const user = uq.rows[0];
 
-      // Paquetes no cobrados (no aparecen en ningún payment_item)
-      const sq = await db.query(`
-        SELECT s.id, s.code, s.description, s.weight_kg, s.origin, s.service,
-               s.status, s.estimated_usd, s.date_in
-        FROM shipments s
-        WHERE s.user_id = $1
-          AND s.estimated_usd IS NOT NULL
-          AND s.id NOT IN (SELECT shipment_id FROM payment_items)
-        ORDER BY s.date_in DESC
-      `, [user.id]);
+    const sq = await db.query(`
+      SELECT s.id, s.code, s.description, s.weight_kg, s.origin, s.service,
+             s.status, s.estimated_usd, s.date_in
+      FROM shipments s
+      WHERE s.user_id = $1
+        AND s.estimated_usd IS NOT NULL
+        AND s.id NOT IN (SELECT shipment_id FROM payment_items)
+      ORDER BY s.date_in DESC
+    `, [user.id]);
 
-      res.json({ user, shipments: sq.rows });
-    } catch (err) {
-      console.error("GET PENDING ERROR:", err);
-      res.status(500).json({ error: "Error obteniendo pendientes" });
-    }
+    res.json({ user, shipments: sq.rows });
+  } catch (err) {
+    console.error("GET PENDING ERROR:", err);
+    res.status(500).json({ error: "Error obteniendo pendientes" });
   }
-);
+});
 
-// ── POST /cash/payments — registrar cobro ───────────────────────────
-app.post(
-  "/cash/payments",
-  authRequired,
-  requireRole(["operator", "admin"]),
-  async (req, res) => {
+app.post("/cash/payments", authRequired, requireRole(["operator", "admin"]), async (req, res) => {
+  try {
+    const schema = z.object({
+      user_id:       z.number().int().positive(),
+      shipment_ids:  z.array(z.number().int().positive()).min(1),
+      method:        z.enum(["USD_CASH", "USDT", "ARS_TRANSFER", "ARS_CASH"]),
+      exchange_rate: z.number().min(0).nullable().optional(),
+      amount_ars:    z.number().min(0).nullable().optional(),
+      notes:         z.string().nullable().optional(),
+    });
+    const p = schema.safeParse(req.body);
+    if (!p.success) return res.status(400).json({ error: "Datos inválidos", details: p.error.issues });
+
+    const { user_id, shipment_ids, method, exchange_rate, amount_ars, notes } = p.data;
+    const operator_id = req.user?.id || null;
+
+    const sq = await db.query(
+      `SELECT id, estimated_usd FROM shipments WHERE id = ANY($1::int[]) AND user_id = $2`,
+      [shipment_ids, user_id]
+    );
+    if (sq.rows.length !== shipment_ids.length) {
+      return res.status(400).json({ error: "Algunos paquetes no pertenecen al cliente o no existen" });
+    }
+    const total_usd = sq.rows.reduce((a, r) => a + Number(r.estimated_usd || 0), 0);
+
+    const client = await db.pool ? db.pool.connect() : null;
     try {
-      const schema = z.object({
-        user_id:       z.number().int().positive(),
-        shipment_ids:  z.array(z.number().int().positive()).min(1),
-        method:        z.enum(["USD_CASH", "USDT", "ARS_TRANSFER", "ARS_CASH"]),
-        exchange_rate: z.number().min(0).nullable().optional(),
-        amount_ars:    z.number().min(0).nullable().optional(),
-        notes:         z.string().nullable().optional(),
-      });
-      const p = schema.safeParse(req.body);
-      if (!p.success) return res.status(400).json({ error: "Datos inválidos", details: p.error.issues });
-
-      const { user_id, shipment_ids, method, exchange_rate, amount_ars, notes } = p.data;
-      const operator_id = req.user?.id || null;
-
-      // Calcular total USD de los paquetes seleccionados
-      const sq = await db.query(
-        `SELECT id, estimated_usd FROM shipments
-         WHERE id = ANY($1::int[]) AND user_id = $2`,
-        [shipment_ids, user_id]
+      const payRes = await db.query(
+        `INSERT INTO payments (user_id, operator_id, amount_usd, method, exchange_rate, amount_ars, notes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+        [user_id, operator_id, total_usd, method, exchange_rate ?? null, amount_ars ?? null, notes ?? null]
       );
-      if (sq.rows.length !== shipment_ids.length) {
-        return res.status(400).json({ error: "Algunos paquetes no pertenecen al cliente o no existen" });
-      }
-      const total_usd = sq.rows.reduce((a, r) => a + Number(r.estimated_usd || 0), 0);
+      const payment = payRes.rows[0];
 
-      // Insertar pago en transacción
-      const client = await db.pool ? db.pool.connect() : null;
-      try {
-        const payRes = await db.query(
-          `INSERT INTO payments (user_id, operator_id, amount_usd, method, exchange_rate, amount_ars, notes)
-           VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-          [user_id, operator_id, total_usd, method,
-           exchange_rate ?? null, amount_ars ?? null, notes ?? null]
+      for (const sid of shipment_ids) {
+        const shipAmt = sq.rows.find(r => r.id === sid)?.estimated_usd || 0;
+        await db.query(
+          `INSERT INTO payment_items (payment_id, shipment_id, amount_usd) VALUES ($1, $2, $3)`,
+          [payment.id, sid, shipAmt]
         );
-        const payment = payRes.rows[0];
-
-        // Insertar items + marcar paquetes como Entregado
-        for (const sid of shipment_ids) {
-          const shipAmt = sq.rows.find(r => r.id === sid)?.estimated_usd || 0;
+        const prevQ = await db.query(`SELECT status FROM shipments WHERE id=$1`, [sid]);
+        const prevStatus = prevQ.rows[0]?.status || null;
+        if (prevStatus !== "Entregado") {
+          await db.query(`UPDATE shipments SET status='Entregado', updated_at=NOW() WHERE id=$1`, [sid]);
           await db.query(
-            `INSERT INTO payment_items (payment_id, shipment_id, amount_usd) VALUES ($1, $2, $3)`,
-            [payment.id, sid, shipAmt]
+            `INSERT INTO shipment_events (shipment_id, old_status, new_status) VALUES ($1, $2, $3)`,
+            [sid, prevStatus, "Entregado"]
           );
-          // Registrar evento de cambio de estado
-          const prevQ = await db.query(`SELECT status FROM shipments WHERE id=$1`, [sid]);
-          const prevStatus = prevQ.rows[0]?.status || null;
-          if (prevStatus !== "Entregado") {
-            await db.query(
-              `UPDATE shipments SET status='Entregado', updated_at=NOW() WHERE id=$1`, [sid]
-            );
-            await db.query(
-              `INSERT INTO shipment_events (shipment_id, old_status, new_status) VALUES ($1, $2, $3)`,
-              [sid, prevStatus, "Entregado"]
-            );
-          }
-        }
 
-        // Mover saldo de cuenta si se especificó
-        if (req.body.account_id) {
-          const aid = parseInt(req.body.account_id, 10);
-          if (Number.isFinite(aid)) {
-            const accQ = await db.query(`SELECT balance FROM accounts WHERE id=$1`, [aid]);
-            if (accQ.rows[0]) {
-              const newBal = Number(accQ.rows[0].balance) + total_usd;
-              await db.query(`UPDATE accounts SET balance=$1, updated_at=NOW() WHERE id=$2`, [newBal, aid]);
-              await db.query(
-                `INSERT INTO account_movements (account_id, operator_id, direction, amount, description, ref_type, ref_id, balance_after)
-                 VALUES ($1,$2,'in',$3,$4,'payment',$5,$6)`,
-                [aid, operator_id, total_usd, `Cobro paquetes — cliente #${user_id}`, payment.id, newBal]
-              );
-              await db.query(`UPDATE payments SET account_id=$1 WHERE id=$2`, [aid, payment.id]);
+          // ── Auto Lemon Coins al cobrar (también marca entregado) ──
+          try {
+            const existQ = await db.query(
+              `SELECT id FROM coin_transactions WHERE shipment_id=$1 AND type='earn' LIMIT 1`, [sid]
+            );
+            if (!existQ.rows[0]) {
+              const shipFull = (await db.query(
+                `SELECT s.*, u.first_shipment_bonus_given FROM shipments s JOIN users u ON u.id=s.user_id WHERE s.id=$1`, [sid]
+              )).rows[0];
+              if (shipFull) {
+                const kg = parseFloat(shipFull.weight_kg || 0);
+                const usd = parseFloat(shipFull.estimated_usd || 0);
+                const coinsByKg = Math.floor(kg * 3);
+                const coinsBig = usd >= 500 ? 10 : 0;
+                const coinsFirst = !shipFull.first_shipment_bonus_given ? 15 : 0;
+                const total = coinsByKg + coinsBig + coinsFirst;
+                if (total > 0) {
+                  const bd = [];
+                  if (coinsByKg  > 0) bd.push(`${coinsByKg} por ${kg.toFixed(2)}kg`);
+                  if (coinsBig   > 0) bd.push(`${coinsBig} bonus envío grande`);
+                  if (coinsFirst > 0) bd.push(`${coinsFirst} bonus primer envío`);
+                  await db.query(`INSERT INTO lemon_coins (user_id,balance,total_earned) VALUES ($1,0,0) ON CONFLICT (user_id) DO NOTHING`, [shipFull.user_id]);
+                  await db.query(`INSERT INTO coin_transactions (user_id,type,amount,reason,shipment_id) VALUES ($1,'earn',$2,$3,$4)`, [shipFull.user_id, total, `Envío completado — ${bd.join(", ")}`, sid]);
+                  await db.query(`UPDATE lemon_coins SET balance=balance+$1,total_earned=total_earned+$1,updated_at=NOW() WHERE user_id=$2`, [total, shipFull.user_id]);
+                  if (coinsFirst > 0) await db.query(`UPDATE users SET first_shipment_bonus_given=TRUE WHERE id=$1`, [shipFull.user_id]);
+                }
+              }
             }
-          }
+          } catch (coinErr) { console.error("[COINS] Error en cash/payments:", coinErr.message); }
         }
-
-        res.json({ ok: true, payment });
-      } finally {
-        if (client) client.release();
-      }
-    } catch (err) {
-      console.error("POST PAYMENT ERROR:", err);
-      res.status(500).json({ error: "Error registrando pago" });
-    }
-  }
-);
-
-// ── GET /cash/payments — historial de cobros ────────────────────────
-app.get(
-  "/cash/payments",
-  authRequired,
-  requireRole(["operator", "admin"]),
-  async (req, res) => {
-    try {
-      const { from, to, method, client_number } = req.query;
-      const conditions = ["1=1"];
-      const params = [];
-      let pi = 1;
-
-      if (from)   { conditions.push(`p.created_at >= $${pi++}`); params.push(from); }
-      if (to)     { conditions.push(`p.created_at <  $${pi++}`); params.push(to + "T23:59:59"); }
-      if (method) { conditions.push(`p.method = $${pi++}`);      params.push(method); }
-      if (client_number) {
-        conditions.push(`u.client_number = $${pi++}`);
-        params.push(parseInt(client_number, 10));
       }
 
-      const q = await db.query(`
-        SELECT
-          p.id, p.amount_usd, p.method, p.exchange_rate, p.amount_ars,
-          p.notes, p.created_at,
-          u.client_number, u.name AS client_name,
-          op.name AS operator_name,
-          (
-            SELECT json_agg(json_build_object(
-              'shipment_id', pi2.shipment_id,
-              'amount_usd',  pi2.amount_usd,
-              'code',        s.code,
-              'description', s.description
-            ))
-            FROM payment_items pi2
-            JOIN shipments s ON s.id = pi2.shipment_id
-            WHERE pi2.payment_id = p.id
-          ) AS items
-        FROM payments p
-        JOIN users u  ON u.id = p.user_id
-        LEFT JOIN users op ON op.id = p.operator_id
-        WHERE ${conditions.join(" AND ")}
-        ORDER BY p.created_at DESC
-        LIMIT 200
-      `, params);
-
-      res.json({ rows: q.rows });
-    } catch (err) {
-      console.error("GET PAYMENTS ERROR:", err);
-      res.status(500).json({ error: "Error obteniendo pagos" });
-    }
-  }
-);
-
-// ── DELETE /cash/payments/:id — anular cobro ────────────────────────
-app.delete(
-  "/cash/payments/:id",
-  authRequired,
-  requireRole(["operator", "admin"]),
-  async (req, res) => {
-    try {
-      const id = parseInt(req.params.id, 10);
-      await db.query("DELETE FROM payment_items WHERE payment_id=$1", [id]);
-      await db.query("DELETE FROM payments WHERE id=$1", [id]);
-      res.json({ ok: true });
-    } catch (err) {
-      console.error("DELETE PAYMENT ERROR:", err);
-      res.status(500).json({ error: "Error anulando pago" });
-    }
-  }
-);
-
-// ── POST /cash/expenses — registrar gasto ───────────────────────────
-app.post(
-  "/cash/expenses",
-  authRequired,
-  requireRole(["operator", "admin"]),
-  async (req, res) => {
-    try {
-      const schema = z.object({
-        type:        z.enum(["empresa", "personal"]),
-        category:    z.string().min(1),
-        description: z.string().min(1),
-        amount:      z.number().min(0.01),
-        currency:    z.enum(["USD", "ARS"]),
-        date:        z.string().optional(),
-      });
-      const p = schema.safeParse(req.body);
-      if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
-
-      const { type, category, description, amount, currency, date } = p.data;
-      const operator_id = req.user?.id || null;
-
-      const r = await db.query(
-        `INSERT INTO expenses (operator_id, type, category, description, amount, currency, date, account_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-        [operator_id, type, category, description, amount, currency,
-         date || new Date().toISOString().slice(0, 10),
-         req.body.account_id || null]
-      );
-      // Mover saldo de cuenta si se especificó
       if (req.body.account_id) {
         const aid = parseInt(req.body.account_id, 10);
         if (Number.isFinite(aid)) {
           const accQ = await db.query(`SELECT balance FROM accounts WHERE id=$1`, [aid]);
           if (accQ.rows[0]) {
-            const newBal = Number(accQ.rows[0].balance) - amount;
+            const newBal = Number(accQ.rows[0].balance) + total_usd;
             await db.query(`UPDATE accounts SET balance=$1, updated_at=NOW() WHERE id=$2`, [newBal, aid]);
             await db.query(
               `INSERT INTO account_movements (account_id, operator_id, direction, amount, description, ref_type, ref_id, balance_after)
-               VALUES ($1,$2,'out',$3,$4,'expense',$5,$6)`,
-              [aid, operator_id, amount, `${type} — ${category}: ${description}`, r.rows[0].id, newBal]
+               VALUES ($1,$2,'in',$3,$4,'payment',$5,$6)`,
+              [aid, operator_id, total_usd, `Cobro paquetes — cliente #${user_id}`, payment.id, newBal]
             );
+            await db.query(`UPDATE payments SET account_id=$1 WHERE id=$2`, [aid, payment.id]);
           }
         }
       }
-      res.json({ ok: true, expense: r.rows[0] });
-    } catch (err) {
-      console.error("POST EXPENSE ERROR:", err);
-      res.status(500).json({ error: "Error registrando gasto" });
+
+      res.json({ ok: true, payment });
+    } finally {
+      if (client) client.release();
     }
+  } catch (err) {
+    console.error("POST PAYMENT ERROR:", err);
+    res.status(500).json({ error: "Error registrando pago" });
   }
-);
+});
 
-// ── GET /cash/expenses — listar gastos ─────────────────────────────
-app.get(
-  "/cash/expenses",
-  authRequired,
-  requireRole(["operator", "admin"]),
-  async (req, res) => {
-    try {
-      const { from, to, type, currency } = req.query;
-      const conditions = ["1=1"];
-      const params = [];
-      let pi = 1;
+app.get("/cash/payments", authRequired, requireRole(["operator", "admin"]), async (req, res) => {
+  try {
+    const { from, to, method, client_number } = req.query;
+    const conditions = ["1=1"];
+    const params = [];
+    let pi = 1;
 
-      if (from)     { conditions.push(`e.date >= $${pi++}`);     params.push(from); }
-      if (to)       { conditions.push(`e.date <= $${pi++}`);     params.push(to); }
-      if (type)     { conditions.push(`e.type = $${pi++}`);      params.push(type); }
-      if (currency) { conditions.push(`e.currency = $${pi++}`);  params.push(currency); }
-
-      const q = await db.query(`
-        SELECT e.*, u.name AS operator_name
-        FROM expenses e
-        LEFT JOIN users u ON u.id = e.operator_id
-        WHERE ${conditions.join(" AND ")}
-        ORDER BY e.date DESC, e.created_at DESC
-        LIMIT 500
-      `, params);
-
-      // Totales
-      const totals = q.rows.reduce((acc, r) => {
-        const k = r.currency;
-        acc[k] = (acc[k] || 0) + Number(r.amount);
-        if (r.type === "empresa") acc[`empresa_${k}`] = (acc[`empresa_${k}`] || 0) + Number(r.amount);
-        if (r.type === "personal") acc[`personal_${k}`] = (acc[`personal_${k}`] || 0) + Number(r.amount);
-        return acc;
-      }, {});
-
-      res.json({ rows: q.rows, totals });
-    } catch (err) {
-      console.error("GET EXPENSES ERROR:", err);
-      res.status(500).json({ error: "Error obteniendo gastos" });
+    if (from)   { conditions.push(`p.created_at >= $${pi++}`); params.push(from); }
+    if (to)     { conditions.push(`p.created_at <  $${pi++}`); params.push(to + "T23:59:59"); }
+    if (method) { conditions.push(`p.method = $${pi++}`);      params.push(method); }
+    if (client_number) {
+      conditions.push(`u.client_number = $${pi++}`);
+      params.push(parseInt(client_number, 10));
     }
-  }
-);
 
-// ── DELETE /cash/expenses/:id ───────────────────────────────────────
-app.delete(
-  "/cash/expenses/:id",
-  authRequired,
-  requireRole(["operator", "admin"]),
-  async (req, res) => {
-    try {
-      await db.query("DELETE FROM expenses WHERE id=$1", [parseInt(req.params.id, 10)]);
-      res.json({ ok: true });
-    } catch (err) {
-      res.status(500).json({ error: "Error eliminando gasto" });
+    const q = await db.query(`
+      SELECT
+        p.id, p.amount_usd, p.method, p.exchange_rate, p.amount_ars,
+        p.notes, p.created_at,
+        u.client_number, u.name AS client_name,
+        op.name AS operator_name,
+        (
+          SELECT json_agg(json_build_object(
+            'shipment_id', pi2.shipment_id,
+            'amount_usd',  pi2.amount_usd,
+            'code',        s.code,
+            'description', s.description
+          ))
+          FROM payment_items pi2
+          JOIN shipments s ON s.id = pi2.shipment_id
+          WHERE pi2.payment_id = p.id
+        ) AS items
+      FROM payments p
+      JOIN users u  ON u.id = p.user_id
+      LEFT JOIN users op ON op.id = p.operator_id
+      WHERE ${conditions.join(" AND ")}
+      ORDER BY p.created_at DESC
+      LIMIT 200
+    `, params);
+
+    res.json({ rows: q.rows });
+  } catch (err) {
+    console.error("GET PAYMENTS ERROR:", err);
+    res.status(500).json({ error: "Error obteniendo pagos" });
+  }
+});
+
+app.delete("/cash/payments/:id", authRequired, requireRole(["operator", "admin"]), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    await db.query("DELETE FROM payment_items WHERE payment_id=$1", [id]);
+    await db.query("DELETE FROM payments WHERE id=$1", [id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("DELETE PAYMENT ERROR:", err);
+    res.status(500).json({ error: "Error anulando pago" });
+  }
+});
+
+app.post("/cash/expenses", authRequired, requireRole(["operator", "admin"]), async (req, res) => {
+  try {
+    const schema = z.object({
+      type:        z.enum(["empresa", "personal"]),
+      category:    z.string().min(1),
+      description: z.string().min(1),
+      amount:      z.number().min(0.01),
+      currency:    z.enum(["USD", "ARS"]),
+      date:        z.string().optional(),
+    });
+    const p = schema.safeParse(req.body);
+    if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
+
+    const { type, category, description, amount, currency, date } = p.data;
+    const operator_id = req.user?.id || null;
+
+    const r = await db.query(
+      `INSERT INTO expenses (operator_id, type, category, description, amount, currency, date, account_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [operator_id, type, category, description, amount, currency,
+       date || new Date().toISOString().slice(0, 10), req.body.account_id || null]
+    );
+
+    if (req.body.account_id) {
+      const aid = parseInt(req.body.account_id, 10);
+      if (Number.isFinite(aid)) {
+        const accQ = await db.query(`SELECT balance FROM accounts WHERE id=$1`, [aid]);
+        if (accQ.rows[0]) {
+          const newBal = Number(accQ.rows[0].balance) - amount;
+          await db.query(`UPDATE accounts SET balance=$1, updated_at=NOW() WHERE id=$2`, [newBal, aid]);
+          await db.query(
+            `INSERT INTO account_movements (account_id, operator_id, direction, amount, description, ref_type, ref_id, balance_after)
+             VALUES ($1,$2,'out',$3,$4,'expense',$5,$6)`,
+            [aid, operator_id, amount, `${type} — ${category}: ${description}`, r.rows[0].id, newBal]
+          );
+        }
+      }
     }
+    res.json({ ok: true, expense: r.rows[0] });
+  } catch (err) {
+    console.error("POST EXPENSE ERROR:", err);
+    res.status(500).json({ error: "Error registrando gasto" });
   }
-);
+});
 
+app.get("/cash/expenses", authRequired, requireRole(["operator", "admin"]), async (req, res) => {
+  try {
+    const { from, to, type, currency } = req.query;
+    const conditions = ["1=1"];
+    const params = [];
+    let pi = 1;
 
+    if (from)     { conditions.push(`e.date >= $${pi++}`);    params.push(from); }
+    if (to)       { conditions.push(`e.date <= $${pi++}`);    params.push(to); }
+    if (type)     { conditions.push(`e.type = $${pi++}`);     params.push(type); }
+    if (currency) { conditions.push(`e.currency = $${pi++}`); params.push(currency); }
 
+    const q = await db.query(`
+      SELECT e.*, u.name AS operator_name
+      FROM expenses e
+      LEFT JOIN users u ON u.id = e.operator_id
+      WHERE ${conditions.join(" AND ")}
+      ORDER BY e.date DESC, e.created_at DESC
+      LIMIT 500
+    `, params);
 
+    const totals = q.rows.reduce((acc, r) => {
+      const k = r.currency;
+      acc[k] = (acc[k] || 0) + Number(r.amount);
+      if (r.type === "empresa")  acc[`empresa_${k}`]  = (acc[`empresa_${k}`]  || 0) + Number(r.amount);
+      if (r.type === "personal") acc[`personal_${k}`] = (acc[`personal_${k}`] || 0) + Number(r.amount);
+      return acc;
+    }, {});
+
+    res.json({ rows: q.rows, totals });
+  } catch (err) {
+    console.error("GET EXPENSES ERROR:", err);
+    res.status(500).json({ error: "Error obteniendo gastos" });
+  }
+});
+
+app.delete("/cash/expenses/:id", authRequired, requireRole(["operator", "admin"]), async (req, res) => {
+  try {
+    await db.query("DELETE FROM expenses WHERE id=$1", [parseInt(req.params.id, 10)]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: "Error eliminando gasto" });
+  }
+});
 
 // ════════════════════════════════════════════════════════════════════
 // PRESUPUESTADOR
@@ -1801,7 +1703,6 @@ const DEFAULT_RATES_FALLBACK = {
   china_normal: 58, china_express: 68, europa_normal: 58,
 };
 
-// ── GET /quote/rates — tarifas públicas + TC ──────────────────────
 app.get("/quote/rates", async (req, res) => {
   try {
     const [costsQ, fxQ] = await Promise.all([
@@ -1814,7 +1715,6 @@ app.get("/quote/rates", async (req, res) => {
   } catch(err) { res.status(500).json({ error: "Error obteniendo tarifas" }); }
 });
 
-// ── GET /quote/my-rates — tarifas personalizadas del cliente logueado ─
 app.get("/quote/my-rates", authRequired, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -1837,14 +1737,13 @@ app.get("/quote/my-rates", authRequired, async (req, res) => {
   } catch(err) { res.status(500).json({ error: "Error obteniendo tarifas" }); }
 });
 
-// ── POST /quote/request — solicitar envío desde presupuestador (cliente logueado) ─
 app.post("/quote/request", authRequired, async (req, res) => {
   try {
     const schema = z.object({
-      origin:      z.enum(["usa","china","europa"]),
-      service:     z.enum(["NORMAL","EXPRESS","TECH_PREMIUM"]),
-      weight_kg:   z.number().min(0.01),
-      description: z.string().min(1),
+      origin:        z.enum(["usa","china","europa"]),
+      service:       z.enum(["NORMAL","EXPRESS","TECH_PREMIUM"]),
+      weight_kg:     z.number().min(0.01),
+      description:   z.string().min(1),
       estimated_usd: z.number().min(0),
     });
     const p = schema.safeParse(req.body);
@@ -1852,9 +1751,7 @@ app.post("/quote/request", authRequired, async (req, res) => {
 
     const userId = req.user.id;
     const { origin, service, weight_kg, description, estimated_usd } = p.data;
-    const billable = Math.max(weight_kg, MIN_BILLABLE_KG);
 
-    // Crear envío en estado "Recibido en depósito" con nota de solicitud
     const code = `SOL-${Date.now().toString(36).toUpperCase()}`;
     const r = await db.query(`
       INSERT INTO shipments
@@ -1881,10 +1778,9 @@ app.post("/quote/request", authRequired, async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════════════
-// TIPO DE CAMBIO DIARIO
+// TIPO DE CAMBIO
 // ════════════════════════════════════════════════════════════════════
 
-// ── GET /settings/fx ─────────────────────────────────────────────────
 app.get("/settings/fx", authRequired, requireRole(["operator","admin"]), async (req, res) => {
   try {
     const q = await db.query(`SELECT value, updated_at FROM app_settings WHERE key='fx_usd_ars'`);
@@ -1893,7 +1789,6 @@ app.get("/settings/fx", authRequired, requireRole(["operator","admin"]), async (
   } catch(err) { res.status(500).json({ error: "Error leyendo tipo de cambio" }); }
 });
 
-// ── PUT /settings/fx ─────────────────────────────────────────────────
 app.put("/settings/fx", authRequired, requireRole(["operator","admin"]), async (req, res) => {
   try {
     const { rate } = req.body;
@@ -1911,7 +1806,6 @@ app.put("/settings/fx", authRequired, requireRole(["operator","admin"]), async (
 // MÓDULO CUENTAS / FONDOS
 // ════════════════════════════════════════════════════════════════════
 
-// ── GET /accounts ────────────────────────────────────────────────────
 app.get("/accounts", authRequired, requireRole(["operator","admin"]), async (req, res) => {
   try {
     const q = await db.query(`
@@ -1924,7 +1818,6 @@ app.get("/accounts", authRequired, requireRole(["operator","admin"]), async (req
   } catch(err) { res.status(500).json({ error: "Error obteniendo cuentas" }); }
 });
 
-// ── POST /accounts ───────────────────────────────────────────────────
 app.post("/accounts", authRequired, requireRole(["operator","admin"]), async (req, res) => {
   try {
     const schema = z.object({
@@ -1944,7 +1837,6 @@ app.post("/accounts", authRequired, requireRole(["operator","admin"]), async (re
   } catch(err) { res.status(500).json({ error: "Error creando cuenta" }); }
 });
 
-// ── PUT /accounts/:id — actualizar saldo manual ──────────────────────
 app.put("/accounts/:id", authRequired, requireRole(["operator","admin"]), async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
@@ -1965,11 +1857,8 @@ app.put("/accounts/:id", authRequired, requireRole(["operator","admin"]), async 
     fields.push(`updated_at=NOW()`);
     vals.push(id);
 
-    const r = await db.query(
-      `UPDATE accounts SET ${fields.join(",")} WHERE id=$${pi} RETURNING *`, vals
-    );
+    const r = await db.query(`UPDATE accounts SET ${fields.join(",")} WHERE id=$${pi} RETURNING *`, vals);
     if (p.data.balance !== undefined) {
-      // Registrar como ajuste manual
       await db.query(
         `INSERT INTO account_movements (account_id, operator_id, direction, amount, description, ref_type, balance_after)
          VALUES ($1,$2,'in',$3,'Ajuste manual de saldo','manual',$4)`,
@@ -1980,7 +1869,6 @@ app.put("/accounts/:id", authRequired, requireRole(["operator","admin"]), async 
   } catch(err) { res.status(500).json({ error: "Error actualizando cuenta" }); }
 });
 
-// ── DELETE /accounts/:id ─────────────────────────────────────────────
 app.delete("/accounts/:id", authRequired, requireRole(["operator","admin"]), async (req, res) => {
   try {
     await db.query(`UPDATE accounts SET active=false WHERE id=$1`, [parseInt(req.params.id,10)]);
@@ -1988,7 +1876,6 @@ app.delete("/accounts/:id", authRequired, requireRole(["operator","admin"]), asy
   } catch(err) { res.status(500).json({ error: "Error eliminando cuenta" }); }
 });
 
-// ── POST /accounts/:id/movements — movimiento manual ─────────────────
 app.post("/accounts/:id/movements", authRequired, requireRole(["operator","admin"]), async (req, res) => {
   try {
     const account_id = parseInt(req.params.id, 10);
@@ -2000,7 +1887,6 @@ app.post("/accounts/:id/movements", authRequired, requireRole(["operator","admin
     const p = schema.safeParse(req.body);
     if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
 
-    // Get current balance
     const accQ = await db.query(`SELECT balance FROM accounts WHERE id=$1`, [account_id]);
     if (!accQ.rows[0]) return res.status(404).json({ error: "Cuenta no encontrada" });
     const current = Number(accQ.rows[0].balance);
@@ -2017,7 +1903,6 @@ app.post("/accounts/:id/movements", authRequired, requireRole(["operator","admin
   } catch(err) { res.status(500).json({ error: "Error registrando movimiento" }); }
 });
 
-// ── GET /accounts/:id/movements ──────────────────────────────────────
 app.get("/accounts/:id/movements", authRequired, requireRole(["operator","admin"]), async (req, res) => {
   try {
     const q = await db.query(`
@@ -2031,25 +1916,20 @@ app.get("/accounts/:id/movements", authRequired, requireRole(["operator","admin"
   } catch(err) { res.status(500).json({ error: "Error obteniendo movimientos" }); }
 });
 
-// ── GET /accounts/summary — resumen de fondos para dashboard ─────────
 app.get("/accounts/summary", authRequired, requireRole(["operator","admin"]), async (req, res) => {
   try {
     const q = await db.query(`
-      SELECT a.*,
-        (SELECT COUNT(*) FROM account_movements WHERE account_id=a.id) AS movement_count
+      SELECT a.*, (SELECT COUNT(*) FROM account_movements WHERE account_id=a.id) AS movement_count
       FROM accounts a WHERE a.active=true ORDER BY a.id
     `);
-    // Tipo de cambio
     const fxQ = await db.query(`SELECT value FROM app_settings WHERE key='fx_usd_ars'`);
     const fxRate = fxQ.rows[0] ? Number(fxQ.rows[0].value) : null;
 
-    // Totales por moneda
     const totals = q.rows.reduce((acc, r) => {
       acc[r.currency] = (acc[r.currency]||0) + Number(r.balance);
       return acc;
     }, {});
 
-    // Total capital en USD (ARS / fx, USDT = USD)
     let totalCapitalUsd = 0;
     q.rows.forEach(a => {
       if (a.currency === 'USD')  totalCapitalUsd += Number(a.balance);
@@ -2061,262 +1941,191 @@ app.get("/accounts/summary", authRequired, requireRole(["operator","admin"]), as
   } catch(err) { res.status(500).json({ error: "Error summary fondos" }); }
 });
 
-// ── POST /cash/income — registrar ingreso adicional ─────────────────
-app.post(
-  "/cash/income",
-  authRequired,
-  requireRole(["operator", "admin"]),
-  async (req, res) => {
-    try {
-      const schema = z.object({
-        category:    z.string().min(1),
-        description: z.string().min(1),
-        amount:      z.number().min(0.01),
-        currency:    z.enum(["USD", "ARS"]),
-        date:        z.string().optional(),
-      });
-      const p = schema.safeParse(req.body);
-      if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
-      const { category, description, amount, currency, date } = p.data;
-      const operator_id = req.user?.id || null;
-      const r = await db.query(
-        `INSERT INTO additional_income (operator_id, category, description, amount, currency, date)
-         VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-        [operator_id, category, description, amount, currency,
-         date || new Date().toISOString().slice(0,10)]
-      );
-      res.json({ ok: true, income: r.rows[0] });
-    } catch (err) {
-      console.error("POST INCOME ERROR:", err);
-      res.status(500).json({ error: "Error registrando ingreso" });
-    }
+app.post("/cash/income", authRequired, requireRole(["operator", "admin"]), async (req, res) => {
+  try {
+    const schema = z.object({
+      category:    z.string().min(1),
+      description: z.string().min(1),
+      amount:      z.number().min(0.01),
+      currency:    z.enum(["USD", "ARS"]),
+      date:        z.string().optional(),
+    });
+    const p = schema.safeParse(req.body);
+    if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
+    const { category, description, amount, currency, date } = p.data;
+    const operator_id = req.user?.id || null;
+    const r = await db.query(
+      `INSERT INTO additional_income (operator_id, category, description, amount, currency, date)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [operator_id, category, description, amount, currency, date || new Date().toISOString().slice(0,10)]
+    );
+    res.json({ ok: true, income: r.rows[0] });
+  } catch (err) {
+    console.error("POST INCOME ERROR:", err);
+    res.status(500).json({ error: "Error registrando ingreso" });
   }
-);
+});
 
-// ── GET /cash/income — listar ingresos adicionales ──────────────────
-app.get(
-  "/cash/income",
-  authRequired,
-  requireRole(["operator", "admin"]),
-  async (req, res) => {
-    try {
-      const { from, to, currency } = req.query;
-      const conditions = ["1=1"];
-      const params = [];
-      let pi = 1;
-      if (from)     { conditions.push(`i.date >= $${pi++}`);    params.push(from); }
-      if (to)       { conditions.push(`i.date <= $${pi++}`);    params.push(to); }
-      if (currency) { conditions.push(`i.currency = $${pi++}`); params.push(currency); }
+app.get("/cash/income", authRequired, requireRole(["operator", "admin"]), async (req, res) => {
+  try {
+    const { from, to, currency } = req.query;
+    const conditions = ["1=1"];
+    const params = [];
+    let pi = 1;
+    if (from)     { conditions.push(`i.date >= $${pi++}`);    params.push(from); }
+    if (to)       { conditions.push(`i.date <= $${pi++}`);    params.push(to); }
+    if (currency) { conditions.push(`i.currency = $${pi++}`); params.push(currency); }
 
-      const q = await db.query(`
-        SELECT i.*, u.name AS operator_name
-        FROM additional_income i
-        LEFT JOIN users u ON u.id = i.operator_id
-        WHERE ${conditions.join(" AND ")}
-        ORDER BY i.date DESC, i.created_at DESC
-        LIMIT 500
-      `, params);
+    const q = await db.query(`
+      SELECT i.*, u.name AS operator_name
+      FROM additional_income i
+      LEFT JOIN users u ON u.id = i.operator_id
+      WHERE ${conditions.join(" AND ")}
+      ORDER BY i.date DESC, i.created_at DESC
+      LIMIT 500
+    `, params);
 
-      const totals = q.rows.reduce((acc, r) => {
-        acc[r.currency] = (acc[r.currency] || 0) + Number(r.amount);
-        return acc;
-      }, {});
+    const totals = q.rows.reduce((acc, r) => {
+      acc[r.currency] = (acc[r.currency] || 0) + Number(r.amount);
+      return acc;
+    }, {});
 
-      res.json({ rows: q.rows, totals });
-    } catch (err) {
-      res.status(500).json({ error: "Error obteniendo ingresos" });
-    }
+    res.json({ rows: q.rows, totals });
+  } catch (err) {
+    res.status(500).json({ error: "Error obteniendo ingresos" });
   }
-);
+});
 
-// ── DELETE /cash/income/:id ──────────────────────────────────────────
-app.delete(
-  "/cash/income/:id",
-  authRequired,
-  requireRole(["operator", "admin"]),
-  async (req, res) => {
-    try {
-      await db.query("DELETE FROM additional_income WHERE id=$1", [parseInt(req.params.id,10)]);
-      res.json({ ok: true });
-    } catch (err) {
-      res.status(500).json({ error: "Error eliminando ingreso" });
-    }
+app.delete("/cash/income/:id", authRequired, requireRole(["operator", "admin"]), async (req, res) => {
+  try {
+    await db.query("DELETE FROM additional_income WHERE id=$1", [parseInt(req.params.id,10)]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: "Error eliminando ingreso" });
   }
-);
+});
 
-// ── GET /cash/monthly — P&L mensual histórico ───────────────────────
-app.get(
-  "/cash/monthly",
-  authRequired,
-  requireRole(["operator", "admin"]),
-  async (req, res) => {
-    try {
-      // Cobros por mes
-      const paymentsQ = await db.query(`
-        SELECT TO_CHAR(created_at, 'YYYY-MM') AS month,
-               COALESCE(SUM(amount_usd), 0)   AS collected
-        FROM payments
-        GROUP BY TO_CHAR(created_at, 'YYYY-MM')
-        ORDER BY month DESC
-        LIMIT 24
-      `);
+app.get("/cash/monthly", authRequired, requireRole(["operator", "admin"]), async (req, res) => {
+  try {
+    const paymentsQ = await db.query(`
+      SELECT TO_CHAR(created_at, 'YYYY-MM') AS month, COALESCE(SUM(amount_usd), 0) AS collected
+      FROM payments GROUP BY TO_CHAR(created_at, 'YYYY-MM') ORDER BY month DESC LIMIT 24
+    `);
 
-      // Gastos por mes
-      const expensesQ = await db.query(`
-        SELECT TO_CHAR(date, 'YYYY-MM') AS month,
-               COALESCE(SUM(amount) FILTER (WHERE currency='USD' AND type='empresa'), 0) AS empresa_usd,
-               COALESCE(SUM(amount) FILTER (WHERE currency='ARS' AND type='empresa'), 0) AS empresa_ars,
-               COALESCE(SUM(amount) FILTER (WHERE currency='USD' AND type='personal'), 0) AS personal_usd,
-               COALESCE(SUM(amount) FILTER (WHERE currency='ARS' AND type='personal'), 0) AS personal_ars
-        FROM expenses
-        GROUP BY TO_CHAR(date, 'YYYY-MM')
-        ORDER BY month DESC
-        LIMIT 24
-      `);
+    const expensesQ = await db.query(`
+      SELECT TO_CHAR(date, 'YYYY-MM') AS month,
+             COALESCE(SUM(amount) FILTER (WHERE currency='USD' AND type='empresa'), 0) AS empresa_usd,
+             COALESCE(SUM(amount) FILTER (WHERE currency='ARS' AND type='empresa'), 0) AS empresa_ars,
+             COALESCE(SUM(amount) FILTER (WHERE currency='USD' AND type='personal'), 0) AS personal_usd,
+             COALESCE(SUM(amount) FILTER (WHERE currency='ARS' AND type='personal'), 0) AS personal_ars
+      FROM expenses GROUP BY TO_CHAR(date, 'YYYY-MM') ORDER BY month DESC LIMIT 24
+    `);
 
-      // Ingresos adicionales por mes
-      const incomeQ = await db.query(`
-        SELECT TO_CHAR(date, 'YYYY-MM') AS month,
-               COALESCE(SUM(amount) FILTER (WHERE currency='USD'), 0) AS income_usd,
-               COALESCE(SUM(amount) FILTER (WHERE currency='ARS'), 0) AS income_ars
-        FROM additional_income
-        GROUP BY TO_CHAR(date, 'YYYY-MM')
-        ORDER BY month DESC
-        LIMIT 24
-      `);
+    const incomeQ = await db.query(`
+      SELECT TO_CHAR(date, 'YYYY-MM') AS month,
+             COALESCE(SUM(amount) FILTER (WHERE currency='USD'), 0) AS income_usd,
+             COALESCE(SUM(amount) FILTER (WHERE currency='ARS'), 0) AS income_ars
+      FROM additional_income GROUP BY TO_CHAR(date, 'YYYY-MM') ORDER BY month DESC LIMIT 24
+    `);
 
-      // Merge por mes
-      const months = new Set([
-        ...paymentsQ.rows.map(r => r.month),
-        ...expensesQ.rows.map(r => r.month),
-        ...incomeQ.rows.map(r => r.month),
-      ]);
+    const months = new Set([
+      ...paymentsQ.rows.map(r => r.month),
+      ...expensesQ.rows.map(r => r.month),
+      ...incomeQ.rows.map(r => r.month),
+    ]);
 
-      const result = [...months].sort((a,b) => b.localeCompare(a)).map(month => {
-        const pay = paymentsQ.rows.find(r => r.month === month) || {};
-        const exp = expensesQ.rows.find(r => r.month === month) || {};
-        const inc = incomeQ.rows.find(r => r.month === month) || {};
+    const result = [...months].sort((a,b) => b.localeCompare(a)).map(month => {
+      const pay = paymentsQ.rows.find(r => r.month === month) || {};
+      const exp = expensesQ.rows.find(r => r.month === month) || {};
+      const inc = incomeQ.rows.find(r => r.month === month) || {};
 
-        const collected    = Number(pay.collected    || 0);
-        const income_usd   = Number(inc.income_usd   || 0);
-        const empresa_usd  = Number(exp.empresa_usd  || 0);
-        const empresa_ars  = Number(exp.empresa_ars  || 0);
-        const personal_usd = Number(exp.personal_usd || 0);
-        const personal_ars = Number(exp.personal_ars || 0);
+      const collected    = Number(pay.collected    || 0);
+      const income_usd   = Number(inc.income_usd   || 0);
+      const empresa_usd  = Number(exp.empresa_usd  || 0);
+      const empresa_ars  = Number(exp.empresa_ars  || 0);
+      const personal_usd = Number(exp.personal_usd || 0);
+      const personal_ars = Number(exp.personal_ars || 0);
 
-        const total_income = collected + income_usd;
-        const net          = total_income - empresa_usd;
-        const margin       = total_income > 0 ? (net / total_income * 100) : 0;
+      const total_income = collected + income_usd;
+      const net          = total_income - empresa_usd;
+      const margin       = total_income > 0 ? (net / total_income * 100) : 0;
 
-        return {
-          month,
-          collected,
-          income_usd,
-          income_ars:   Number(inc.income_ars   || 0),
-          empresa_usd,
-          empresa_ars,
-          personal_usd,
-          personal_ars,
-          total_income,
-          net,
-          margin: Number(margin.toFixed(1)),
-        };
-      });
+      return {
+        month, collected, income_usd,
+        income_ars:   Number(inc.income_ars   || 0),
+        empresa_usd, empresa_ars, personal_usd, personal_ars,
+        total_income, net, margin: Number(margin.toFixed(1)),
+      };
+    });
 
-      res.json({ rows: result });
-    } catch (err) {
-      console.error("MONTHLY ERROR:", err);
-      res.status(500).json({ error: "Error obteniendo P&L mensual" });
-    }
+    res.json({ rows: result });
+  } catch (err) {
+    console.error("MONTHLY ERROR:", err);
+    res.status(500).json({ error: "Error obteniendo P&L mensual" });
   }
-);
+});
 
-// ── GET /cash/summary — resumen para dashboard ──────────────────────
-app.get(
-  "/cash/summary",
-  authRequired,
-  requireRole(["operator", "admin"]),
-  async (req, res) => {
-    try {
-      const month = req.query.month || new Date().toISOString().slice(0, 7); // YYYY-MM
-      const from = `${month}-01`;
-      const to   = new Date(new Date(from).getFullYear(), new Date(from).getMonth() + 1, 0)
-                   .toISOString().slice(0, 10);
+app.get("/cash/summary", authRequired, requireRole(["operator", "admin"]), async (req, res) => {
+  try {
+    const month = req.query.month || new Date().toISOString().slice(0, 7);
+    const from = `${month}-01`;
+    const to   = new Date(new Date(from).getFullYear(), new Date(from).getMonth() + 1, 0).toISOString().slice(0, 10);
 
-      // Cobros del mes
-      const payQ = await db.query(`
-        SELECT
-          COUNT(*)                                          AS payment_count,
-          COALESCE(SUM(amount_usd), 0)                    AS total_usd,
-          COALESCE(SUM(amount_usd) FILTER (WHERE method='USD_CASH'),  0) AS usd_cash,
-          COALESCE(SUM(amount_usd) FILTER (WHERE method='USDT'),      0) AS usdt,
-          COALESCE(SUM(amount_usd) FILTER (WHERE method='ARS_TRANSFER'),0) AS ars_transfer_usd,
-          COALESCE(SUM(amount_usd) FILTER (WHERE method='ARS_CASH'),  0) AS ars_cash_usd
-        FROM payments
-        WHERE created_at >= $1 AND created_at <= $2::date + INTERVAL '1 day'
-      `, [from, to]);
+    const payQ = await db.query(`
+      SELECT COUNT(*) AS payment_count, COALESCE(SUM(amount_usd), 0) AS total_usd,
+             COALESCE(SUM(amount_usd) FILTER (WHERE method='USD_CASH'),    0) AS usd_cash,
+             COALESCE(SUM(amount_usd) FILTER (WHERE method='USDT'),        0) AS usdt,
+             COALESCE(SUM(amount_usd) FILTER (WHERE method='ARS_TRANSFER'),0) AS ars_transfer_usd,
+             COALESCE(SUM(amount_usd) FILTER (WHERE method='ARS_CASH'),    0) AS ars_cash_usd
+      FROM payments WHERE created_at >= $1 AND created_at <= $2::date + INTERVAL '1 day'
+    `, [from, to]);
 
-      // Gastos del mes
-      const expQ = await db.query(`
-        SELECT
-          COUNT(*)                                             AS expense_count,
-          COALESCE(SUM(amount) FILTER (WHERE currency='USD'), 0) AS total_usd,
-          COALESCE(SUM(amount) FILTER (WHERE currency='ARS'), 0) AS total_ars,
-          COALESCE(SUM(amount) FILTER (WHERE type='empresa' AND currency='USD'), 0) AS empresa_usd,
-          COALESCE(SUM(amount) FILTER (WHERE type='empresa' AND currency='ARS'), 0) AS empresa_ars,
-          COALESCE(SUM(amount) FILTER (WHERE type='personal' AND currency='USD'), 0) AS personal_usd,
-          COALESCE(SUM(amount) FILTER (WHERE type='personal' AND currency='ARS'), 0) AS personal_ars
-        FROM expenses
-        WHERE date >= $1 AND date <= $2
-      `, [from, to]);
+    const expQ = await db.query(`
+      SELECT COUNT(*) AS expense_count,
+             COALESCE(SUM(amount) FILTER (WHERE currency='USD'), 0) AS total_usd,
+             COALESCE(SUM(amount) FILTER (WHERE currency='ARS'), 0) AS total_ars,
+             COALESCE(SUM(amount) FILTER (WHERE type='empresa'  AND currency='USD'), 0) AS empresa_usd,
+             COALESCE(SUM(amount) FILTER (WHERE type='empresa'  AND currency='ARS'), 0) AS empresa_ars,
+             COALESCE(SUM(amount) FILTER (WHERE type='personal' AND currency='USD'), 0) AS personal_usd,
+             COALESCE(SUM(amount) FILTER (WHERE type='personal' AND currency='ARS'), 0) AS personal_ars
+      FROM expenses WHERE date >= $1 AND date <= $2
+    `, [from, to]);
 
-      // Cobros por día (últimos 30 días)
-      const byDayQ = await db.query(`
-        SELECT
-          TO_CHAR(created_at, 'YYYY-MM-DD') AS day,
-          COALESCE(SUM(amount_usd), 0)       AS collected
-        FROM payments
-        WHERE created_at >= NOW() - INTERVAL '30 days'
-        GROUP BY TO_CHAR(created_at, 'YYYY-MM-DD')
-        ORDER BY day
-      `);
+    const byDayQ = await db.query(`
+      SELECT TO_CHAR(created_at, 'YYYY-MM-DD') AS day, COALESCE(SUM(amount_usd), 0) AS collected
+      FROM payments WHERE created_at >= NOW() - INTERVAL '30 days'
+      GROUP BY TO_CHAR(created_at, 'YYYY-MM-DD') ORDER BY day
+    `);
 
-      // Paquetes pendientes de cobro (todos)
-      const pendQ = await db.query(`
-        SELECT COUNT(*) AS count, COALESCE(SUM(s.estimated_usd), 0) AS total
-        FROM shipments s
-        WHERE s.estimated_usd IS NOT NULL
-          AND s.id NOT IN (SELECT shipment_id FROM payment_items)
-      `);
+    const pendQ = await db.query(`
+      SELECT COUNT(*) AS count, COALESCE(SUM(s.estimated_usd), 0) AS total
+      FROM shipments s
+      WHERE s.estimated_usd IS NOT NULL AND s.id NOT IN (SELECT shipment_id FROM payment_items)
+    `);
 
-      // Ingresos adicionales del mes
-      const incQ = await db.query(`
-        SELECT
-          COUNT(*)                                             AS income_count,
-          COALESCE(SUM(amount) FILTER (WHERE currency='USD'), 0) AS total_usd,
-          COALESCE(SUM(amount) FILTER (WHERE currency='ARS'), 0) AS total_ars
-        FROM additional_income
-        WHERE date >= $1 AND date <= $2
-      `, [from, to]);
+    const incQ = await db.query(`
+      SELECT COUNT(*) AS income_count,
+             COALESCE(SUM(amount) FILTER (WHERE currency='USD'), 0) AS total_usd,
+             COALESCE(SUM(amount) FILTER (WHERE currency='ARS'), 0) AS total_ars
+      FROM additional_income WHERE date >= $1 AND date <= $2
+    `, [from, to]);
 
-      res.json({
-        month,
-        payments:  payQ.rows[0],
-        expenses:  expQ.rows[0],
-        by_day:    byDayQ.rows,
-        pending:   pendQ.rows[0],
-        income:    incQ.rows[0],
-      });
-    } catch (err) {
-      console.error("CASH SUMMARY ERROR:", err);
-      res.status(500).json({ error: "Error summary caja" });
-    }
+    res.json({ month, payments: payQ.rows[0], expenses: expQ.rows[0], by_day: byDayQ.rows, pending: pendQ.rows[0], income: incQ.rows[0] });
+  } catch (err) {
+    console.error("CASH SUMMARY ERROR:", err);
+    res.status(500).json({ error: "Error summary caja" });
   }
-);
+});
+
+// ════════════════════════════════════════════════════════════════════
+// ✅ LEMON COINS ROUTER
+// ════════════════════════════════════════════════════════════════════
+app.use("/coins", coinsRouter);
 
 app.listen(PORT, () => {
   console.log(`API corriendo en http://localhost:${PORT}`);
 });
+
 // Servir frontend
 const path = require("path");
 const distPath = path.join(__dirname, "../client/dist");
