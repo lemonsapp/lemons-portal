@@ -4,11 +4,47 @@ const cors = require("cors");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { z } = require("zod");
+const rateLimit = require("express-rate-limit");
+const helmet = require("helmet");
 
 const db = require("./db");
 const { authRequired, requireRole } = require("./auth");
 const { sendEmail } = require("./mailer"); // ✅ mails
 const coinsRouter = require("./routes/coins"); // ✅ Lemon Coins
+
+const app = express();
+
+// ── Seguridad: headers HTTP ──
+app.use(helmet({
+  contentSecurityPolicy: false, // desactivado para no romper la SPA
+  crossOriginEmbedderPolicy: false,
+}));
+
+// ── Rate limiting general (todas las rutas) ──
+app.use(rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 200,                  // máx 200 requests por IP por ventana
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Demasiadas solicitudes. Intentá de nuevo en 15 minutos." },
+}));
+
+// ── Rate limiting estricto para auth ──
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 10,                   // máx 10 intentos de login por IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Demasiados intentos. Esperá 15 minutos antes de volver a intentar." },
+  skipSuccessfulRequests: true, // no cuenta los logins exitosos
+});
+
+// ── Rate limiting para forgot-password ──
+const forgotLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hora
+  max: 5,                    // máx 5 emails por hora por IP
+  message: { error: "Demasiadas solicitudes de reset. Esperá 1 hora." },
+});
 
 const app = express();
 app.use(express.json());
@@ -455,7 +491,7 @@ function shipmentUpdateEmailHtml({
 
 // ==================== AUTH ====================
 
-app.post("/auth/login", async (req, res) => {
+app.post("/auth/login", authLimiter, async (req, res) => {
   try {
     const schema = z.object({
       email: z.string().email(),
@@ -535,7 +571,7 @@ async function compareToken(token, hash) {
   return bcrypt.compare(token, hash);
 }
 
-app.post("/auth/forgot-password", async (req, res) => {
+app.post("/auth/forgot-password", forgotLimiter, async (req, res) => {
   try {
     const schema = z.object({ email: z.string().email() });
     const p = schema.safeParse(req.body);
