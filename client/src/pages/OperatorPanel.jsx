@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import Topbar from "../components/Topbar.jsx";
 import StatusBadge from "../components/StatusBadge.jsx";
 import BarcodeScanner from "../components/BarcodeScanner.jsx";
@@ -200,7 +199,6 @@ function ScanBtn({ onClick, title = "Escanear código de barras" }) {
 }
 
 export default function OperatorPanel() {
-  const navigate = useNavigate();
   const [msg, setMsg] = useState("");
 
   // Scanner state
@@ -306,10 +304,29 @@ export default function OperatorPanel() {
 
   useEffect(() => {
     const allowed = SERVICES_BY_ORIGIN[origin] || ["NORMAL"];
-    if (!allowed.includes(service)) setService(allowed[0]);
+    const nextService = allowed.includes(service) ? service : allowed[0];
+    if (!allowed.includes(service)) setService(nextService);
+    fetchNextCode(origin, nextService);
   }, [origin]); // eslint-disable-line
 
+  useEffect(() => {
+    fetchNextCode(origin, service);
+  }, [service]); // eslint-disable-line
+
   // ── API calls ─────────────────────────────────────────────────────────────
+  async function fetchNextCode(originVal, serviceVal) {
+    try {
+      const o = normalizeOrigin(originVal);
+      const s = normalizeService(originVal, serviceVal);
+      const res = await fetch(
+        `${API}/operator/next-code?origin=${o}&service=${s}`,
+        { headers: { Authorization: `Bearer ${getToken()}` } }
+      );
+      const data = await res.json();
+      if (res.ok && data.code) setPackageCode(data.code);
+    } catch { /* no-op */ }
+  }
+
   async function loadDashboard() {
     setLoadingStats(true);
     try {
@@ -440,6 +457,7 @@ export default function OperatorPanel() {
     setPackageCode(""); setDescription(""); setBoxCode(""); setTracking(""); setWeightKg("");
     setStatus("Recibido en depósito"); setOrigin("USA"); setService("NORMAL");
     setOverrideEnabled(false); setOverrideRate("");
+    fetchNextCode("USA", "NORMAL");
     await loadOperatorShipments();
     await loadDashboard();
   }
@@ -630,7 +648,10 @@ export default function OperatorPanel() {
     await loadDashboard();
   }
 
-  useEffect(() => { refreshAll(); }, []); // eslint-disable-line
+  useEffect(() => {
+    refreshAll();
+    fetchNextCode("USA", "NORMAL");
+  }, []); // eslint-disable-line
 
   // ── RENDER ────────────────────────────────────────────────────────────────
   return (
@@ -660,23 +681,10 @@ export default function OperatorPanel() {
             LEMON&apos;S — carga y control de paquetes
           </div>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            onClick={() => navigate("/coins/operator")}
-            style={{
-              height: 38, padding: "0 16px", fontSize: 13, fontWeight: 800,
-              background: "linear-gradient(135deg,#ffd200,#ff8a00)",
-              color: "#0b1020", border: "none", borderRadius: 10, cursor: "pointer",
-              display: "flex", alignItems: "center", gap: 6,
-            }}
-          >
-            🍋 Lemon Coins
-          </button>
-          <button className="btn btnPrimary" onClick={refreshAll} disabled={loadingStats}
-            style={{ height: 38, padding: "0 18px", fontSize: 13 }}>
-            {loadingStats ? "Actualizando…" : "↻ Actualizar"}
-          </button>
-        </div>
+        <button className="btn btnPrimary" onClick={refreshAll} disabled={loadingStats}
+          style={{ height: 38, padding: "0 18px", fontSize: 13 }}>
+          {loadingStats ? "Actualizando…" : "↻ Actualizar"}
+        </button>
       </div>
 
       <MsgBanner msg={msg} />

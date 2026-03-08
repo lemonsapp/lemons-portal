@@ -2117,6 +2117,46 @@ app.get("/cash/summary", authRequired, requireRole(["operator", "admin"]), async
   }
 });
 
+app.get(
+  "/operator/next-code",
+  authRequired,
+  requireRole(["operator", "admin"]),
+  async (req, res) => {
+    try {
+      const origin  = (req.query.origin  || "USA").toUpperCase().trim();
+      const service = (req.query.service || "NORMAL").toUpperCase().trim();
+
+      const originPfx  = origin === "CHINA" ? "CHN" : origin === "EUROPA" ? "EUR" : "USA";
+      const servicePfx = service === "EXPRESS" ? "EXP" : service === "TECH_PREMIUM" ? "TEC" : "NRM";
+      const prefix     = `${originPfx}-${servicePfx}-`;
+
+      const q = await db.query(
+        `SELECT COUNT(*) AS cnt FROM shipments WHERE code LIKE $1`,
+        [`${prefix}%`]
+      );
+      const next = Number(q.rows[0]?.cnt || 0) + 1;
+      const code = `${prefix}${String(next).padStart(4, "0")}`;
+
+      const exists = await db.query(`SELECT id FROM shipments WHERE code = $1`, [code]);
+      if (exists.rows[0]) {
+        const maxQ = await db.query(
+          `SELECT code FROM shipments WHERE code LIKE $1 ORDER BY code DESC LIMIT 1`,
+          [`${prefix}%`]
+        );
+        const lastNum = parseInt(
+          (maxQ.rows[0]?.code || `${prefix}0000`).replace(prefix, ""), 10
+        ) || 0;
+        return res.json({ code: `${prefix}${String(lastNum + 1).padStart(4, "0")}`, prefix });
+      }
+
+      res.json({ code, prefix });
+    } catch (e) {
+      console.error("NEXT CODE ERROR", e);
+      res.status(500).json({ error: "Error generando código" });
+    }
+  }
+);
+
 // ════════════════════════════════════════════════════════════════════
 // ✅ LEMON COINS ROUTER
 // ════════════════════════════════════════════════════════════════════
