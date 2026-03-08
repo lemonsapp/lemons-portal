@@ -24,6 +24,8 @@ const APP_ROUTES = [
   '/client/quote',
   '/quote',
   '/login',
+  '/coins',
+  '/coins/operator',
 ];
 
 // Endpoints de API a cachear (solo GET, para offline)
@@ -36,6 +38,7 @@ const CACHEABLE_API_PATTERNS = [
   /\/quote\/my-rates/,
   /\/cash\/summary/,
   /\/accounts/,
+  /\/coins/,
 ];
 
 // ─── Install ────────────────────────────────────────────────────────────────
