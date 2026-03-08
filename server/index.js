@@ -17,6 +17,8 @@ app.use(express.json());
 const allowedOrigins = [
   "https://lemonsarg.com",
   "https://www.lemonsarg.com",
+  "https://app.lemonsarg.com",
+  "https://lemons-portal-w3of.vercel.app",
 ];
 
 app.use(
