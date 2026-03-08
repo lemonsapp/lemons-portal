@@ -753,6 +753,137 @@ app.get("/users", authRequired, requireRole(["operator", "admin"]), async (req, 
   }
 });
 
+// ── GET /operator/clients/all — listar todos los clientes con stats ──
+app.get("/operator/clients/all", authRequired, requireRole(["operator", "admin"]), async (req, res) => {
+  try {
+    const q = await db.query(`
+      SELECT
+        u.id, u.client_number, u.name, u.email, u.role,
+        COALESCE(u.active, true) AS active,
+        COUNT(s.id)                              AS shipment_count,
+        COALESCE(SUM(s.estimated_usd), 0)        AS total_billed,
+        MAX(s.date_in)                           AS last_shipment
+      FROM users u
+      LEFT JOIN shipments s ON s.user_id = u.id
+      WHERE u.role = 'client'
+      GROUP BY u.id, u.client_number, u.name, u.email, u.role, u.active
+      ORDER BY u.client_number ASC
+    `);
+    res.json({ clients: q.rows });
+  } catch (e) {
+    console.error("GET ALL CLIENTS ERROR", e);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// ── PATCH /operator/clients/:id — editar datos del cliente ──
+app.patch("/operator/clients/:id", authRequired, requireRole(["operator", "admin"]), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (Number.isNaN(id)) return res.status(400).json({ error: "ID inválido" });
+
+    const schema = z.object({
+      name:          z.string().min(1).optional(),
+      email:         z.string().email().optional(),
+      client_number: z.number().int().min(0).optional(),
+    });
+    const p = schema.safeParse(req.body);
+    if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
+
+    const fields = []; const vals = []; let pi = 1;
+    if (p.data.name          !== undefined) { fields.push(`name=$${pi++}`);          vals.push(p.data.name); }
+    if (p.data.email         !== undefined) { fields.push(`email=$${pi++}`);         vals.push(p.data.email.toLowerCase()); }
+    if (p.data.client_number !== undefined) { fields.push(`client_number=$${pi++}`); vals.push(p.data.client_number); }
+
+    if (fields.length === 0) return res.status(400).json({ error: "Nada para actualizar" });
+    vals.push(id);
+
+    const r = await db.query(
+      `UPDATE users SET ${fields.join(",")} WHERE id=$${pi} RETURNING id, client_number, name, email, role`,
+      vals
+    );
+    if (!r.rows[0]) return res.status(404).json({ error: "Cliente no existe" });
+    res.json({ user: r.rows[0] });
+  } catch (e) {
+    console.error("PATCH CLIENT ERROR", e);
+    if (String(e?.message || "").includes("duplicate"))
+      return res.status(400).json({ error: "Email o número de cliente ya existe" });
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// ── PATCH /operator/clients/:id/password — resetear contraseña ──
+app.patch("/operator/clients/:id/password", authRequired, requireRole(["operator", "admin"]), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (Number.isNaN(id)) return res.status(400).json({ error: "ID inválido" });
+
+    const { new_password } = req.body;
+    if (!new_password || String(new_password).length < 6)
+      return res.status(400).json({ error: "Contraseña debe tener mínimo 6 caracteres" });
+
+    const hash = await bcrypt.hash(new_password, 10);
+    const r = await db.query(
+      "UPDATE users SET password_hash=$1 WHERE id=$2 RETURNING id",
+      [hash, id]
+    );
+    if (!r.rows[0]) return res.status(404).json({ error: "Cliente no existe" });
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("RESET PWD ERROR", e);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// ── PATCH /operator/clients/:id/status — suspender / activar ──
+app.patch("/operator/clients/:id/status", authRequired, requireRole(["operator", "admin"]), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (Number.isNaN(id)) return res.status(400).json({ error: "ID inválido" });
+
+    const schema = z.object({ active: z.boolean() });
+    const p = schema.safeParse(req.body);
+    if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
+
+    // Asegurarse de que la columna exista (add IF NOT EXISTS en runtime si falta)
+    try {
+      await db.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT TRUE");
+    } catch (_) { /* ya existe */ }
+
+    const r = await db.query(
+      "UPDATE users SET active=$1 WHERE id=$2 RETURNING id, active",
+      [p.data.active, id]
+    );
+    if (!r.rows[0]) return res.status(404).json({ error: "Cliente no existe" });
+    res.json({ ok: true, active: r.rows[0].active });
+  } catch (e) {
+    console.error("TOGGLE STATUS ERROR", e);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// ── DELETE /operator/clients/:id — eliminar cliente ──
+app.delete("/operator/clients/:id", authRequired, requireRole(["operator", "admin"]), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (Number.isNaN(id)) return res.status(400).json({ error: "ID inválido" });
+
+    // No permitir eliminar admins ni operators
+    const check = await db.query("SELECT role FROM users WHERE id=$1", [id]);
+    if (!check.rows[0]) return res.status(404).json({ error: "Usuario no existe" });
+    if (["admin", "operator"].includes(check.rows[0].role))
+      return res.status(403).json({ error: "No se puede eliminar un admin u operador" });
+
+    await db.query("DELETE FROM users WHERE id=$1", [id]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("DELETE CLIENT ERROR", e);
+    if (String(e?.message || "").includes("foreign key") || String(e?.message || "").includes("violates"))
+      return res.status(400).json({ error: "No se puede eliminar: el cliente tiene envíos asociados. Suspendélo en su lugar." });
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
 app.put(
   "/operator/clients/:id/rates",
   authRequired,

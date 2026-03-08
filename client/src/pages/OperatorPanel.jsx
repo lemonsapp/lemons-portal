@@ -239,9 +239,24 @@ export default function OperatorPanel() {
   const [overrideEnabled, setOverrideEnabled] = useState(false);
   const [overrideRate, setOverrideRate] = useState("");
 
+  // Tab activo en gestión
+  const [activeTab, setActiveTab] = useState("shipments"); // "shipments" | "clients"
+
   // Tabla operador
   const [opSearch, setOpSearch] = useState("");
   const [opClientNumber, setOpClientNumber] = useState("");
+
+  // Gestión de clientes
+  const [clientsList, setClientsList] = useState([]);
+  const [clientsLoading, setClientsLoading] = useState(false);
+  const [clientsSearch, setClientsSearch] = useState("");
+  const [editingClient, setEditingClient] = useState(null); // { id, client_number, name, email }
+  const [editClientDraft, setEditClientDraft] = useState({});
+  const [savingClient, setSavingClient] = useState(false);
+  const [resetPwdClientId, setResetPwdClientId] = useState(null);
+  const [resetPwdValue, setResetPwdValue] = useState("");
+  const [savingPwd, setSavingPwd] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(null); // client id
 
   // Filtros avanzados
   const [filterOpen, setFilterOpen]     = useState(false);
@@ -650,6 +665,117 @@ export default function OperatorPanel() {
 
   useEffect(() => { refreshAll(); }, []); // eslint-disable-line
 
+  // ── GESTIÓN DE CLIENTES ───────────────────────────────────────────────────
+  async function loadClients() {
+    setClientsLoading(true);
+    try {
+      const res = await fetch(`${API}/operator/clients/all`, {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      const data = await res.json();
+      setClientsList(data.clients || []);
+    } catch {
+      setMsg("Error cargando clientes");
+    } finally {
+      setClientsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === "clients" && clientsList.length === 0) loadClients();
+  }, [activeTab]); // eslint-disable-line
+
+  async function saveClientEdit() {
+    if (!editingClient) return;
+    setSavingClient(true);
+    try {
+      const res = await fetch(`${API}/operator/clients/${editingClient.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify({
+          name: editClientDraft.name,
+          email: editClientDraft.email,
+          client_number: Number(editClientDraft.client_number),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error");
+      setMsg("Cliente actualizado ✅");
+      setEditingClient(null);
+      await loadClients();
+    } catch (e) {
+      setMsg("Error: " + e.message);
+    } finally {
+      setSavingClient(false);
+    }
+  }
+
+  async function resetClientPassword() {
+    if (!resetPwdClientId || !resetPwdValue || resetPwdValue.length < 6) {
+      setMsg("La contraseña debe tener mínimo 6 caracteres");
+      return;
+    }
+    setSavingPwd(true);
+    try {
+      const res = await fetch(`${API}/operator/clients/${resetPwdClientId}/password`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify({ new_password: resetPwdValue }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error");
+      setMsg("Contraseña actualizada ✅");
+      setResetPwdClientId(null);
+      setResetPwdValue("");
+    } catch (e) {
+      setMsg("Error: " + e.message);
+    } finally {
+      setSavingPwd(false);
+    }
+  }
+
+  async function toggleSuspendClient(clientId, currentActive) {
+    try {
+      const res = await fetch(`${API}/operator/clients/${clientId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify({ active: !currentActive }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error");
+      setMsg(currentActive ? "Cliente suspendido" : "Cliente activado ✅");
+      await loadClients();
+    } catch (e) {
+      setMsg("Error: " + e.message);
+    }
+  }
+
+  async function deleteClient(clientId) {
+    try {
+      const res = await fetch(`${API}/operator/clients/${clientId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error");
+      setMsg("Cliente eliminado");
+      setConfirmDelete(null);
+      await loadClients();
+    } catch (e) {
+      setMsg("Error: " + e.message);
+    }
+  }
+
+  const filteredClients = clientsList.filter((c) => {
+    if (!clientsSearch) return true;
+    const q = clientsSearch.toLowerCase();
+    return (
+      String(c.client_number).includes(q) ||
+      (c.name || "").toLowerCase().includes(q) ||
+      (c.email || "").toLowerCase().includes(q)
+    );
+  });
+
   // ── RENDER ────────────────────────────────────────────────────────────────
   return (
     <div className="screen" style={{ maxWidth: 1600, margin: "0 auto" }}>
@@ -950,8 +1076,30 @@ export default function OperatorPanel() {
         </div>
       </Panel>
 
-      {/* ── GESTIÓN DE ENVÍOS ── */}
-      <Panel title="Gestión de envíos" icon="🗂" defaultOpen={true}>
+      {/* ── GESTIÓN ── */}
+      <Panel title="Gestión" icon="🗂" defaultOpen={true}>
+
+        {/* ── TAB SWITCHER ── */}
+        <div style={{ display: "flex", gap: 6, marginBottom: 18 }}>
+          {[
+            { key: "shipments", label: "📦 Envíos" },
+            { key: "clients",   label: "👥 Clientes" },
+          ].map(({ key, label }) => (
+            <button key={key} onClick={() => setActiveTab(key)} style={{
+              height: 38, padding: "0 20px", borderRadius: 10, fontSize: 13,
+              fontWeight: activeTab === key ? 800 : 600, cursor: "pointer",
+              border: activeTab === key ? "1px solid rgba(255,210,0,0.5)" : "1px solid rgba(255,255,255,0.12)",
+              background: activeTab === key ? "rgba(255,210,0,0.10)" : "rgba(255,255,255,0.04)",
+              color: activeTab === key ? "#ffd200" : "rgba(255,255,255,0.60)",
+              transition: "all 0.15s",
+            }}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* ══════════════════ TAB: ENVÍOS ══════════════════ */}
+        {activeTab === "shipments" && (<>
         {/* Filtros con botón scanner en búsqueda */}
         {/* ── Overlay ── */}
         {filterOpen && (
@@ -1353,6 +1501,280 @@ export default function OperatorPanel() {
         <div style={{ marginTop: 10, fontSize: 12, color: "rgba(255,255,255,0.35)" }}>
           Tip: cambiás el estado → Guardar → el cliente lo ve al instante.
         </div>
+        </>)}
+
+        {/* ══════════════════ TAB: CLIENTES ══════════════════ */}
+        {activeTab === "clients" && (
+          <div>
+            {/* Modales */}
+            {/* Modal reset password */}
+            {resetPwdClientId && (
+              <div style={{
+                position: "fixed", inset: 0, zIndex: 1100,
+                background: "rgba(0,0,0,0.6)", display: "grid", placeItems: "center",
+              }} onClick={() => { setResetPwdClientId(null); setResetPwdValue(""); }}>
+                <div onClick={(e) => e.stopPropagation()} style={{
+                  background: "#0f1628", border: "1px solid rgba(255,255,255,0.12)",
+                  borderRadius: 18, padding: 28, width: 340,
+                }}>
+                  <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 16 }}>🔑 Resetear contraseña</div>
+                  <input
+                    className="input" type="password"
+                    placeholder="Nueva contraseña (mín 6 chars)"
+                    value={resetPwdValue}
+                    onChange={(e) => setResetPwdValue(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && resetClientPassword()}
+                    style={{ width: "100%", marginBottom: 14 }}
+                  />
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button className="btn" onClick={() => { setResetPwdClientId(null); setResetPwdValue(""); }}
+                      style={{ flex: 1, height: 40 }}>Cancelar</button>
+                    <button className="btn btnPrimary" onClick={resetClientPassword} disabled={savingPwd}
+                      style={{ flex: 2, height: 40, fontWeight: 800 }}>
+                      {savingPwd ? "Guardando…" : "Cambiar contraseña"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Modal confirmar eliminación */}
+            {confirmDelete && (
+              <div style={{
+                position: "fixed", inset: 0, zIndex: 1100,
+                background: "rgba(0,0,0,0.6)", display: "grid", placeItems: "center",
+              }} onClick={() => setConfirmDelete(null)}>
+                <div onClick={(e) => e.stopPropagation()} style={{
+                  background: "#0f1628", border: "1px solid rgba(255,80,80,0.30)",
+                  borderRadius: 18, padding: 28, width: 340,
+                }}>
+                  <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 8 }}>🗑️ Eliminar cliente</div>
+                  <div style={{ fontSize: 13, color: "rgba(255,255,255,0.60)", marginBottom: 20 }}>
+                    Esta acción es permanente. Se eliminarán todos los datos del cliente.<br />
+                    <span style={{ color: "#ff6b6b", fontWeight: 700 }}>¿Estás seguro?</span>
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button className="btn" onClick={() => setConfirmDelete(null)}
+                      style={{ flex: 1, height: 40 }}>Cancelar</button>
+                    <button onClick={() => deleteClient(confirmDelete)}
+                      style={{
+                        flex: 2, height: 40, borderRadius: 10, border: "1px solid rgba(255,80,80,0.4)",
+                        background: "rgba(255,80,80,0.15)", color: "#ff6b6b",
+                        fontWeight: 800, fontSize: 13, cursor: "pointer",
+                      }}>
+                      Sí, eliminar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Barra de búsqueda y refresh */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+              <input
+                className="input"
+                placeholder="🔍 Buscar por nombre, email o número..."
+                value={clientsSearch}
+                onChange={(e) => setClientsSearch(e.target.value)}
+                style={{ flex: 1 }}
+              />
+              <button className="btn" onClick={loadClients} style={{ height: 42, padding: "0 16px" }}>
+                ↻
+              </button>
+              <div style={{ display: "flex", alignItems: "center", fontSize: 12, color: "rgba(255,255,255,0.40)", whiteSpace: "nowrap" }}>
+                {filteredClients.length} cliente{filteredClients.length !== 1 ? "s" : ""}
+              </div>
+            </div>
+
+            {/* Tabla de clientes */}
+            {clientsLoading ? (
+              <div style={{ padding: 40, textAlign: "center", color: "rgba(255,255,255,0.40)" }}>Cargando clientes…</div>
+            ) : (
+              <div className="tableWrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>NOMBRE</th>
+                      <th>EMAIL</th>
+                      <th>ROL</th>
+                      <th>ENVÍOS</th>
+                      <th>FACTURADO</th>
+                      <th>ÚLTIMO ENVÍO</th>
+                      <th>ESTADO</th>
+                      <th>ACCIONES</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredClients.length === 0 && (
+                      <tr>
+                        <td colSpan={9} style={{ padding: 28, textAlign: "center", color: "rgba(255,255,255,0.35)" }}>
+                          No hay clientes. Creá uno desde el panel de arriba.
+                        </td>
+                      </tr>
+                    )}
+                    {filteredClients.map((c) => {
+                      const isEditing = editingClient?.id === c.id;
+                      const isActive = c.active !== false;
+                      return (
+                        <>
+                          <tr key={c.id} style={{
+                            opacity: isActive ? 1 : 0.5,
+                            background: isEditing ? "rgba(255,210,0,0.04)" : undefined,
+                          }}>
+                            {/* Nº cliente */}
+                            <td>
+                              {isEditing ? (
+                                <input className="input" value={editClientDraft.client_number}
+                                  onChange={(e) => setEditClientDraft((p) => ({ ...p, client_number: e.target.value }))}
+                                  style={{ width: 70, padding: "4px 8px", fontSize: 13 }} />
+                              ) : (
+                                <span style={{ fontWeight: 800, color: "#ffd200" }}>#{c.client_number}</span>
+                              )}
+                            </td>
+
+                            {/* Nombre */}
+                            <td>
+                              {isEditing ? (
+                                <input className="input" value={editClientDraft.name}
+                                  onChange={(e) => setEditClientDraft((p) => ({ ...p, name: e.target.value }))}
+                                  style={{ width: 160, padding: "4px 8px", fontSize: 13 }} />
+                              ) : (
+                                <span style={{ fontWeight: 600 }}>{c.name}</span>
+                              )}
+                            </td>
+
+                            {/* Email */}
+                            <td>
+                              {isEditing ? (
+                                <input className="input" value={editClientDraft.email}
+                                  onChange={(e) => setEditClientDraft((p) => ({ ...p, email: e.target.value }))}
+                                  style={{ width: 200, padding: "4px 8px", fontSize: 13 }} />
+                              ) : (
+                                <span style={{ fontSize: 13, color: "rgba(255,255,255,0.65)" }}>{c.email}</span>
+                              )}
+                            </td>
+
+                            {/* Rol */}
+                            <td>
+                              <span style={{
+                                fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 6,
+                                background: c.role === "admin" ? "rgba(168,85,247,0.2)" : c.role === "operator" ? "rgba(59,130,246,0.2)" : "rgba(255,255,255,0.06)",
+                                color: c.role === "admin" ? "#c084fc" : c.role === "operator" ? "#60a5fa" : "rgba(255,255,255,0.55)",
+                              }}>
+                                {c.role}
+                              </span>
+                            </td>
+
+                            {/* Envíos */}
+                            <td style={{ textAlign: "center", fontWeight: 700 }}>
+                              {c.shipment_count ?? 0}
+                            </td>
+
+                            {/* Facturado */}
+                            <td style={{ fontWeight: 700, color: "#ffd200" }}>
+                              {c.total_billed != null ? `$${Number(c.total_billed).toFixed(0)}` : "-"}
+                            </td>
+
+                            {/* Último envío */}
+                            <td style={{ fontSize: 12, color: "rgba(255,255,255,0.50)" }}>
+                              {c.last_shipment ? fmtDate(c.last_shipment) : "-"}
+                            </td>
+
+                            {/* Estado activo/suspendido */}
+                            <td>
+                              <span style={{
+                                fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 6,
+                                background: isActive ? "rgba(34,197,94,0.15)" : "rgba(255,107,107,0.15)",
+                                color: isActive ? "#4ade80" : "#ff6b6b",
+                              }}>
+                                {isActive ? "Activo" : "Suspendido"}
+                              </span>
+                            </td>
+
+                            {/* Acciones */}
+                            <td>
+                              <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                                {isEditing ? (
+                                  <>
+                                    <button className="btn btnPrimary" onClick={saveClientEdit} disabled={savingClient}
+                                      style={{ height: 30, padding: "0 12px", fontSize: 12, fontWeight: 800 }}>
+                                      {savingClient ? "…" : "Guardar"}
+                                    </button>
+                                    <button className="btn" onClick={() => setEditingClient(null)}
+                                      style={{ height: 30, padding: "0 10px", fontSize: 12 }}>
+                                      ✕
+                                    </button>
+                                  </>
+                                ) : (
+                                  <>
+                                    {/* Editar */}
+                                    <button title="Editar datos" onClick={() => {
+                                      setEditingClient(c);
+                                      setEditClientDraft({ name: c.name, email: c.email, client_number: c.client_number });
+                                    }} style={{
+                                      height: 30, padding: "0 10px", borderRadius: 7, fontSize: 12,
+                                      border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.05)",
+                                      color: "rgba(255,255,255,0.75)", cursor: "pointer",
+                                    }}>✏️</button>
+
+                                    {/* Reset password */}
+                                    <button title="Resetear contraseña" onClick={() => {
+                                      setResetPwdClientId(c.id);
+                                      setResetPwdValue("");
+                                    }} style={{
+                                      height: 30, padding: "0 10px", borderRadius: 7, fontSize: 12,
+                                      border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.05)",
+                                      color: "rgba(255,255,255,0.75)", cursor: "pointer",
+                                    }}>🔑</button>
+
+                                    {/* Suspender / Activar */}
+                                    <button title={isActive ? "Suspender cliente" : "Activar cliente"}
+                                      onClick={() => toggleSuspendClient(c.id, isActive)}
+                                      style={{
+                                        height: 30, padding: "0 10px", borderRadius: 7, fontSize: 12,
+                                        border: isActive ? "1px solid rgba(255,150,0,0.3)" : "1px solid rgba(34,197,94,0.3)",
+                                        background: isActive ? "rgba(255,150,0,0.08)" : "rgba(34,197,94,0.08)",
+                                        color: isActive ? "#fb923c" : "#4ade80", cursor: "pointer",
+                                      }}>
+                                      {isActive ? "🚫" : "✅"}
+                                    </button>
+
+                                    {/* Eliminar */}
+                                    <button title="Eliminar cliente" onClick={() => setConfirmDelete(c.id)}
+                                      style={{
+                                        height: 30, padding: "0 10px", borderRadius: 7, fontSize: 12,
+                                        border: "1px solid rgba(255,80,80,0.25)", background: "rgba(255,80,80,0.07)",
+                                        color: "#ff6b6b", cursor: "pointer",
+                                      }}>🗑️</button>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                          {/* Fila expandida de edición — visual feedback */}
+                          {isEditing && (
+                            <tr key={`edit-${c.id}`}>
+                              <td colSpan={9} style={{
+                                padding: "6px 14px 10px", fontSize: 12,
+                                background: "rgba(255,210,0,0.03)",
+                                color: "rgba(255,255,255,0.45)",
+                                borderBottom: "2px solid rgba(255,210,0,0.15)",
+                              }}>
+                                Editando cliente #{c.client_number} — completá los campos y presioná Guardar
+                              </td>
+                            </tr>
+                          )}
+                        </>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
       </Panel>
     </div>
   );
