@@ -142,7 +142,7 @@ export default function Login() {
             </div>
 
             <div className="loginHint">
-              Si sos staff, entrás al panel operador automáticamente.
+              Ingresá tus datos de usuario para acceder al portal de envíos. Si no tenés cuenta, contactá a tu administrador.
             </div>
           </form>
         </div>
