@@ -2,6 +2,17 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
+  <!-- Desregistrar Service Workers del portal anterior -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for (let reg of registrations) reg.unregister();
+      });
+      caches.keys().then(function(names) {
+        for (let name of names) caches.delete(name);
+      });
+    }
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Lemon's ARG — Courier Internacional</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
