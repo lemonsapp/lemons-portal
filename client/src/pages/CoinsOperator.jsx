@@ -38,7 +38,8 @@ export default function CoinsOperator() {
   const [adjClientData, setAdjClientData] = useState(null);
 
   // Otorgar coins a un envío manualmente
-  const [earnForm, setEarnForm] = useState({ shipment_id: "", user_id: "" });
+  const [earnForm, setEarnForm]         = useState({ shipment_id: "", client_number: "" });
+  const [earnClientData, setEarnClientData] = useState(null);
 
   async function loadRanking() {
     setLoading(true);
@@ -126,18 +127,38 @@ export default function CoinsOperator() {
     } catch { setMsg("Error de red"); }
   }
 
+  async function findClientForEarn() {
+    if (!earnForm.client_number.trim()) return;
+    setEarnClientData(null);
+    try {
+      const res  = await fetch(`${API}/users?client_number=${earnForm.client_number.trim()}`, {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      const data = await res.json();
+      if (res.ok && data.users?.length > 0) {
+        setEarnClientData(data.users[0]);
+        setMsg("");
+      } else {
+        setMsg("Cliente no encontrado");
+      }
+    } catch { setMsg("Error de red"); }
+  }
+
   async function earnManual() {
-    if (!earnForm.shipment_id || !earnForm.user_id) return setMsg("Completá shipment_id y user_id");
+    if (!earnForm.shipment_id) return setMsg("Ingresá el ID del envío");
+    if (!earnClientData) return setMsg("Buscá el cliente primero");
     try {
       const res  = await fetch(`${API}/coins/earn`, {
         method: "POST",
         headers: { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: parseInt(earnForm.user_id), shipment_id: parseInt(earnForm.shipment_id) }),
+        body: JSON.stringify({ user_id: earnClientData.id, shipment_id: parseInt(earnForm.shipment_id) }),
       });
       const data = await res.json();
       if (!res.ok) { setMsg(data.error || "Error"); return; }
       if (data.already_awarded) { setMsg("ℹ️ Ya se otorgaron coins para este envío"); return; }
       setMsg(`✅ Otorgados ${data.earned} coins — saldo: ${data.balance}`);
+      setEarnForm({ shipment_id: "", client_number: "" });
+      setEarnClientData(null);
       await loadRanking();
     } catch { setMsg("Error de red"); }
   }
@@ -376,14 +397,40 @@ export default function CoinsOperator() {
             Esto calcula y otorga automáticamente los coins correspondientes al envío según la fórmula del sistema.
             Se ignora si ya fue procesado.
           </div>
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <input className="input" placeholder="ID del envío (shipment_id)" value={earnForm.shipment_id}
-              onChange={e => setEarnForm(f => ({ ...f, shipment_id: e.target.value }))}
-              style={{ width: 220 }} inputMode="numeric" />
-            <input className="input" placeholder="ID del usuario (user_id)" value={earnForm.user_id}
-              onChange={e => setEarnForm(f => ({ ...f, user_id: e.target.value }))}
-              style={{ width: 220 }} inputMode="numeric" />
-            <button className="btn btnPrimary" onClick={earnManual} style={{ height: 42, padding: "0 20px", fontWeight: 800 }}>
+          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            <input className="input" placeholder="Nº de cliente" value={earnForm.client_number}
+              onChange={e => { setEarnForm(f => ({ ...f, client_number: e.target.value })); setEarnClientData(null); }}
+              onKeyDown={e => e.key === "Enter" && findClientForEarn()}
+              style={{ maxWidth: 200 }} />
+            <button className="btn" onClick={findClientForEarn} style={{ height: 42, padding: "0 16px" }}>
+              Buscar
+            </button>
+          </div>
+
+          {earnClientData && (
+            <div style={{
+              background: "rgba(245,230,66,0.06)", border: "1px solid rgba(245,230,66,0.20)",
+              borderRadius: 14, padding: "12px 16px", marginBottom: 16,
+            }}>
+              <div style={{ fontWeight: 700 }}>
+                #{earnClientData.client_number} — {earnClientData.name}
+              </div>
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginTop: 2 }}>
+                {earnClientData.email}
+              </div>
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", fontWeight: 700, marginBottom: 6 }}>ID DEL ENVÍO</div>
+              <input className="input" placeholder="shipment_id" value={earnForm.shipment_id}
+                onChange={e => setEarnForm(f => ({ ...f, shipment_id: e.target.value }))}
+                style={{ width: 200 }} inputMode="numeric" />
+            </div>
+            <button className="btn btnPrimary" onClick={earnManual}
+              disabled={!earnClientData || !earnForm.shipment_id}
+              style={{ height: 42, padding: "0 20px", fontWeight: 800 }}>
               ⚡ Otorgar coins
             </button>
           </div>
