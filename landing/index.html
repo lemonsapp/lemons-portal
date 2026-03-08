@@ -581,6 +581,86 @@
     .calc-select:focus, .calc-input:focus {
       border-color: rgba(245,230,66,0.4);
     }
+
+    /* Custom dropdown */
+    .custom-select-wrapper {
+      position: relative;
+    }
+    .custom-select-trigger {
+      width: 100%;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--white);
+      font-family: 'Barlow', sans-serif;
+      font-size: 15px;
+      padding: 12px 44px 12px 16px;
+      cursor: pointer;
+      display: flex; align-items: center; gap: 10px;
+      transition: border-color 0.2s, background 0.2s;
+      user-select: none;
+    }
+    .custom-select-trigger:hover, .custom-select-wrapper.open .custom-select-trigger {
+      border-color: rgba(245,230,66,0.4);
+      background: rgba(255,255,255,0.07);
+    }
+    .custom-select-trigger .trigger-arrow {
+      position: absolute; right: 14px; top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted); font-size: 12px;
+      transition: transform 0.25s;
+      pointer-events: none;
+    }
+    .custom-select-wrapper.open .trigger-arrow { transform: translateY(-50%) rotate(180deg); }
+    .custom-select-trigger .trigger-flag { font-size: 18px; flex-shrink: 0; }
+    .trigger-info { display: flex; flex-direction: column; }
+    .trigger-name { font-weight: 700; font-size: 14px; }
+    .trigger-price { font-size: 12px; color: var(--muted); }
+
+    .custom-select-dropdown {
+      position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+      background: #141930;
+      border: 1px solid rgba(245,230,66,0.2);
+      border-radius: 12px;
+      overflow: hidden;
+      z-index: 50;
+      opacity: 0; transform: translateY(-8px);
+      pointer-events: none;
+      transition: opacity 0.2s, transform 0.2s;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+    .custom-select-wrapper.open .custom-select-dropdown {
+      opacity: 1; transform: translateY(0);
+      pointer-events: all;
+    }
+    .dropdown-group-label {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 10px; font-weight: 800; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--muted);
+      padding: 10px 14px 4px;
+    }
+    .dropdown-option {
+      display: flex; align-items: center; gap: 12px;
+      padding: 11px 14px;
+      cursor: pointer;
+      transition: background 0.15s;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .dropdown-option:last-child { border-bottom: none; }
+    .dropdown-option:hover { background: rgba(245,230,66,0.07); }
+    .dropdown-option.selected { background: rgba(245,230,66,0.10); }
+    .dropdown-option .opt-flag { font-size: 18px; flex-shrink: 0; }
+    .dropdown-option .opt-info { flex: 1; }
+    .dropdown-option .opt-name { font-size: 14px; font-weight: 600; }
+    .dropdown-option .opt-type {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 11px; letter-spacing: 1px; text-transform: uppercase;
+      color: var(--muted);
+    }
+    .dropdown-option .opt-price {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 20px; color: var(--lemon);
+    }
     .calc-result {
       text-align: center;
       padding: 40px;
@@ -1192,14 +1272,51 @@
         <div class="calc-fields">
           <div>
             <label class="calc-label">Origen</label>
-            <select class="calc-select" id="calcOrigin">
-              <option value="45">🇺🇸 USA — Normal ($45/kg)</option>
-              <option value="55">🇺🇸 USA — Express ($55/kg)</option>
-              <option value="75">🇺🇸 USA — Tech Premium ($75/kg)</option>
-              <option value="58">🇨🇳 China — Normal ($58/kg)</option>
-              <option value="68">🇨🇳 China — Express ($68/kg)</option>
-              <option value="58">🇪🇺 Europa — Normal ($58/kg)</option>
-            </select>
+            <div class="custom-select-wrapper" id="originSelect">
+              <div class="custom-select-trigger" onclick="toggleSelect()">
+                <span class="trigger-flag">🇺🇸</span>
+                <div class="trigger-info">
+                  <span class="trigger-name">USA — Normal</span>
+                  <span class="trigger-price">$45 USD/kg</span>
+                </div>
+                <span class="trigger-arrow">▼</span>
+              </div>
+              <div class="custom-select-dropdown">
+                <div class="dropdown-group-label">🇺🇸 Estados Unidos</div>
+                <div class="dropdown-option selected" data-rate="45" data-flag="🇺🇸" data-name="USA — Normal" data-price="$45 USD/kg" onclick="selectOption(this)">
+                  <span class="opt-flag">🇺🇸</span>
+                  <div class="opt-info"><div class="opt-name">Normal</div><div class="opt-type">Estándar</div></div>
+                  <span class="opt-price">$45</span>
+                </div>
+                <div class="dropdown-option" data-rate="55" data-flag="🇺🇸" data-name="USA — Express" data-price="$55 USD/kg" onclick="selectOption(this)">
+                  <span class="opt-flag">🇺🇸</span>
+                  <div class="opt-info"><div class="opt-name">Express</div><div class="opt-type">⚡ Más rápido</div></div>
+                  <span class="opt-price">$55</span>
+                </div>
+                <div class="dropdown-option" data-rate="75" data-flag="🇺🇸" data-name="USA — Tech Premium" data-price="$75 USD/kg" onclick="selectOption(this)">
+                  <span class="opt-flag">🇺🇸</span>
+                  <div class="opt-info"><div class="opt-name">Tech Premium</div><div class="opt-type">📱 Solo tecnología</div></div>
+                  <span class="opt-price">$75</span>
+                </div>
+                <div class="dropdown-group-label">🇨🇳 China</div>
+                <div class="dropdown-option" data-rate="58" data-flag="🇨🇳" data-name="China — Normal" data-price="$58 USD/kg" onclick="selectOption(this)">
+                  <span class="opt-flag">🇨🇳</span>
+                  <div class="opt-info"><div class="opt-name">Normal</div><div class="opt-type">Estándar</div></div>
+                  <span class="opt-price">$58</span>
+                </div>
+                <div class="dropdown-option" data-rate="68" data-flag="🇨🇳" data-name="China — Express" data-price="$68 USD/kg" onclick="selectOption(this)">
+                  <span class="opt-flag">🇨🇳</span>
+                  <div class="opt-info"><div class="opt-name">Express</div><div class="opt-type">⚡ Más rápido</div></div>
+                  <span class="opt-price">$68</span>
+                </div>
+                <div class="dropdown-group-label">🇪🇺 Europa</div>
+                <div class="dropdown-option" data-rate="58" data-flag="🇪🇺" data-name="Europa — Normal" data-price="$58 USD/kg" onclick="selectOption(this)">
+                  <span class="opt-flag">🇪🇺</span>
+                  <div class="opt-info"><div class="opt-name">Normal</div><div class="opt-type">España y Europa</div></div>
+                  <span class="opt-price">$58</span>
+                </div>
+              </div>
+            </div>
           </div>
           <div>
             <label class="calc-label">Peso estimado (kg)</label>
@@ -1526,9 +1643,30 @@
       if (!isOpen) item.classList.add('open');
     }
 
+    // ── Custom select ──
+    let selectedRate = 45;
+    function toggleSelect() {
+      document.getElementById('originSelect').classList.toggle('open');
+    }
+    function selectOption(el) {
+      selectedRate = parseFloat(el.dataset.rate);
+      const trigger = document.querySelector('.custom-select-trigger');
+      trigger.querySelector('.trigger-flag').textContent = el.dataset.flag;
+      trigger.querySelector('.trigger-name').textContent = el.dataset.name;
+      trigger.querySelector('.trigger-price').textContent = el.dataset.price;
+      document.querySelectorAll('.dropdown-option').forEach(o => o.classList.remove('selected'));
+      el.classList.add('selected');
+      document.getElementById('originSelect').classList.remove('open');
+      calcular();
+    }
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#originSelect')) {
+        document.getElementById('originSelect').classList.remove('open');
+      }
+    });
+
     // ── Calculadora ──
     function calcular() {
-      const rate = parseFloat(document.getElementById('calcOrigin').value);
       const weight = parseFloat(document.getElementById('calcWeight').value);
       const amt = document.getElementById('calcAmount');
       const sub = document.getElementById('calcSub');
@@ -1538,12 +1676,11 @@
         return;
       }
       const billable = Math.max(weight, 1);
-      const total = (billable * rate).toFixed(2);
+      const total = (billable * selectedRate).toFixed(2);
       amt.textContent = `USD ${total}`;
-      sub.textContent = `${billable < weight ? 1 : billable} kg × $${rate}/kg (mín. 1 kg)`;
+      sub.textContent = `${billable} kg × $${selectedRate}/kg${weight < 1 ? ' (mín. 1 kg)' : ''}`;
     }
     document.getElementById('calcWeight').addEventListener('input', calcular);
-    document.getElementById('calcOrigin').addEventListener('change', calcular);
 
     // ── Mobile menu (simple toggle) ──
     document.getElementById('mobileBtn').addEventListener('click', () => {
