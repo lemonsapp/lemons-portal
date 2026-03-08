@@ -34,7 +34,14 @@ export default function Topbar({ title = "LEMON's" }) {
     const btn = btnRefs.current[path];
     if (btn) {
       const r = btn.getBoundingClientRect();
-      setDropPos({ top: r.bottom + 6, left: r.left });
+      const fromRight = window.innerWidth - r.right;
+      setDropPos({
+        top: r.bottom + 6,
+        // Si hay menos de 200px a la derecha, alinear por la derecha del botón
+        ...(fromRight < 200
+          ? { right: fromRight, left: "auto" }
+          : { left: r.left, right: "auto" }),
+      });
     }
     setDropOpen(path);
   }, []);
@@ -120,7 +127,9 @@ export default function Topbar({ title = "LEMON's" }) {
                       <div
                         onClick={(e) => e.stopPropagation()}
                         style={{
-                          position: "fixed", top: dropPos.top, left: dropPos.left,
+                          position: "fixed", top: dropPos.top,
+                          left: dropPos.left !== "auto" ? dropPos.left : undefined,
+                          right: dropPos.right !== "auto" ? dropPos.right : undefined,
                           background: "rgba(12,18,34,0.98)",
                           border: "1px solid rgba(255,255,255,0.12)",
                           borderRadius: 12, overflow: "hidden", minWidth: 170,
