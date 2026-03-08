@@ -27,6 +27,17 @@ export default function Topbar({ title = "LEMON's" }) {
   const [me, setMe]           = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [dropOpen, setDropOpen] = useState(null); // path of open dropdown
+  const [dropPos, setDropPos]   = useState({ top: 0, left: 0 });
+  const btnRefs = useRef({});
+
+  const openDrop = useCallback((path) => {
+    const btn = btnRefs.current[path];
+    if (btn) {
+      const r = btn.getBoundingClientRect();
+      setDropPos({ top: r.bottom + 6, left: r.left });
+    }
+    setDropOpen(path);
+  }, []);
   const location              = useLocation();
 
   useEffect(() => {
@@ -87,7 +98,8 @@ export default function Topbar({ title = "LEMON's" }) {
                 return (
                   <div key={link.path} style={{ position: "relative" }}>
                     <button
-                      onClick={(e) => { e.stopPropagation(); setDropOpen(isDropOpen ? null : link.path); }}
+                      ref={(el) => { btnRefs.current[link.path] = el; }}
+                      onClick={(e) => { e.stopPropagation(); isDropOpen ? setDropOpen(null) : openDrop(link.path); }}
                       style={{
                         display: "flex", alignItems: "center", gap: 6,
                         padding: "7px 13px", borderRadius: 10,
@@ -108,11 +120,11 @@ export default function Topbar({ title = "LEMON's" }) {
                       <div
                         onClick={(e) => e.stopPropagation()}
                         style={{
-                          position: "absolute", top: "calc(100% + 6px)", left: 0,
+                          position: "fixed", top: dropPos.top, left: dropPos.left,
                           background: "rgba(12,18,34,0.98)",
                           border: "1px solid rgba(255,255,255,0.12)",
                           borderRadius: 12, overflow: "hidden", minWidth: 170,
-                          zIndex: 999, boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+                          zIndex: 9999, boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
                         }}
                       >
                         {link.dropdown.map((item) => {
