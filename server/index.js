@@ -46,7 +46,6 @@ const forgotLimiter = rateLimit({
   message: { error: "Demasiadas solicitudes de reset. Esperá 1 hora." },
 });
 
-const app = express();
 app.use(express.json());
 
 // CORS abierto mientras probás
