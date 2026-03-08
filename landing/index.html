@@ -1,0 +1,1572 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lemon's ARG — Courier Internacional</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:ital,wght@0,400;0,600;0,700;0,800;1,700&family=Barlow+Condensed:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --ink:     #080c18;
+      --ink2:    #0d1225;
+      --ink3:    #141930;
+      --lemon:   #f5e642;
+      --lemon2:  #ffe900;
+      --orange:  #ff6b00;
+      --orange2: #ff8c2a;
+      --white:   #f0eee6;
+      --muted:   rgba(240,238,230,0.45);
+      --border:  rgba(240,238,230,0.08);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--ink);
+      color: var(--white);
+      font-family: 'Barlow', sans-serif;
+      overflow-x: hidden;
+      cursor: none;
+    }
+
+    /* ── CURSOR ── */
+    .cursor {
+      width: 12px; height: 12px;
+      background: var(--lemon);
+      border-radius: 50%;
+      position: fixed; pointer-events: none; z-index: 9999;
+      transform: translate(-50%, -50%);
+      transition: width 0.2s, height 0.2s, background 0.2s;
+      mix-blend-mode: difference;
+    }
+    .cursor.big { width: 40px; height: 40px; }
+
+    /* ── SCROLLBAR ── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: var(--ink); }
+    ::-webkit-scrollbar-thumb { background: var(--lemon); border-radius: 2px; }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 5vw;
+      height: 64px;
+      background: rgba(8,12,24,0.85);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      transition: all 0.3s;
+    }
+    nav.scrolled {
+      height: 56px;
+      background: rgba(8,12,24,0.98);
+    }
+    .nav-logo {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 26px;
+      letter-spacing: 2px;
+      color: var(--white);
+      text-decoration: none;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .nav-logo span { color: var(--lemon); }
+    .nav-logo em {
+      display: inline-block;
+      width: 8px; height: 8px;
+      background: var(--orange);
+      border-radius: 50%;
+      margin-bottom: 2px;
+      animation: blink 2s ease-in-out infinite;
+    }
+    @keyframes blink {
+      0%,100% { opacity: 1; } 50% { opacity: 0.3; }
+    }
+    .nav-links {
+      display: flex; align-items: center; gap: 32px;
+      list-style: none;
+    }
+    .nav-links a {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 14px; font-weight: 700; letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--muted);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--white); }
+    .nav-cta {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 13px; font-weight: 800; letter-spacing: 1.5px;
+      text-transform: uppercase;
+      background: var(--lemon);
+      color: var(--ink);
+      padding: 10px 20px;
+      border-radius: 6px;
+      text-decoration: none;
+      transition: background 0.2s, transform 0.15s;
+    }
+    .nav-cta:hover { background: var(--lemon2); transform: translateY(-1px); }
+
+    .nav-mobile-btn {
+      display: none;
+      flex-direction: column; gap: 5px;
+      background: none; border: none; cursor: pointer; padding: 4px;
+    }
+    .nav-mobile-btn span {
+      display: block; width: 24px; height: 2px;
+      background: var(--white); border-radius: 2px;
+      transition: all 0.3s;
+    }
+
+    /* ── HERO ── */
+    #hero {
+      min-height: 100vh;
+      display: flex; flex-direction: column; justify-content: flex-end;
+      padding: 0 5vw 80px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-bg {
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 70% 40%, rgba(255,107,0,0.12) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 80% at 20% 80%, rgba(245,230,66,0.07) 0%, transparent 50%),
+        linear-gradient(180deg, var(--ink) 0%, #0a0f1e 100%);
+    }
+
+    /* Grid lines decoration */
+    .hero-grid {
+      position: absolute; inset: 0;
+      background-image:
+        linear-gradient(rgba(240,238,230,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(240,238,230,0.025) 1px, transparent 1px);
+      background-size: 80px 80px;
+      mask-image: linear-gradient(180deg, transparent 0%, black 30%, black 70%, transparent 100%);
+    }
+
+    /* Floating badge top-right */
+    .hero-badge {
+      position: absolute; top: 100px; right: 5vw;
+      display: flex; flex-direction: column; align-items: center;
+      gap: 4px; opacity: 0;
+      animation: fadeSlideLeft 1s ease 0.8s forwards;
+    }
+    .hero-badge-ring {
+      width: 90px; height: 90px;
+      border: 1.5px solid rgba(245,230,66,0.3);
+      border-radius: 50%;
+      display: grid; place-items: center;
+      position: relative;
+    }
+    .hero-badge-ring::before {
+      content: '';
+      position: absolute; inset: -8px;
+      border: 1px dashed rgba(245,230,66,0.15);
+      border-radius: 50%;
+      animation: spin 20s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .hero-badge-inner {
+      text-align: center;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 11px; font-weight: 800; letter-spacing: 1px;
+      text-transform: uppercase;
+      line-height: 1.3;
+      color: var(--lemon);
+    }
+
+    /* Origin pills */
+    .hero-origins {
+      display: flex; gap: 10px; margin-bottom: 28px;
+      opacity: 0; animation: fadeSlideUp 0.8s ease 0.2s forwards;
+    }
+    .origin-pill {
+      display: flex; align-items: center; gap: 6px;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 12px; font-weight: 700; letter-spacing: 1.5px;
+      text-transform: uppercase;
+      padding: 6px 14px;
+      border-radius: 100px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.04);
+      color: var(--muted);
+    }
+    .origin-pill .flag { font-size: 14px; }
+    .origin-pill.active {
+      border-color: rgba(245,230,66,0.4);
+      background: rgba(245,230,66,0.08);
+      color: var(--lemon);
+    }
+
+    .hero-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(72px, 12vw, 160px);
+      line-height: 0.88;
+      letter-spacing: -1px;
+      margin-bottom: 32px;
+      opacity: 0; animation: fadeSlideUp 0.9s ease 0.3s forwards;
+    }
+    .hero-title .line2 { color: var(--lemon); display: block; }
+    .hero-title .line3 {
+      display: block;
+      -webkit-text-stroke: 1.5px var(--white);
+      color: transparent;
+    }
+
+    .hero-bottom {
+      display: flex; align-items: flex-end; justify-content: space-between;
+      gap: 40px;
+      opacity: 0; animation: fadeSlideUp 0.9s ease 0.5s forwards;
+    }
+    .hero-sub {
+      font-size: 17px; font-weight: 400; color: var(--muted);
+      max-width: 440px; line-height: 1.65;
+    }
+    .hero-sub strong { color: var(--white); font-weight: 700; }
+    .hero-actions { display: flex; gap: 12px; flex-shrink: 0; }
+    .btn-primary {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 15px; font-weight: 800; letter-spacing: 1px;
+      text-transform: uppercase;
+      background: var(--lemon);
+      color: var(--ink);
+      padding: 14px 28px;
+      border-radius: 8px;
+      text-decoration: none;
+      border: none; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 8px;
+      transition: all 0.2s;
+    }
+    .btn-primary:hover { background: var(--lemon2); transform: translateY(-2px); box-shadow: 0 12px 32px rgba(245,230,66,0.25); }
+    .btn-secondary {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 15px; font-weight: 700; letter-spacing: 1px;
+      text-transform: uppercase;
+      background: transparent;
+      color: var(--white);
+      padding: 14px 28px;
+      border-radius: 8px;
+      border: 1.5px solid var(--border);
+      text-decoration: none;
+      display: inline-flex; align-items: center; gap: 8px;
+      transition: all 0.2s;
+    }
+    .btn-secondary:hover { border-color: rgba(240,238,230,0.3); background: rgba(240,238,230,0.04); }
+
+    /* Scroll indicator */
+    .scroll-indicator {
+      position: absolute; bottom: 30px; left: 50%;
+      transform: translateX(-50%);
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      opacity: 0; animation: fadeIn 1s ease 1.5s forwards;
+    }
+    .scroll-indicator span {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 11px; font-weight: 700; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--muted);
+    }
+    .scroll-line {
+      width: 1px; height: 50px;
+      background: linear-gradient(to bottom, var(--muted), transparent);
+      animation: scrollPulse 2s ease-in-out infinite;
+    }
+    @keyframes scrollPulse {
+      0% { transform: scaleY(0); transform-origin: top; opacity: 0; }
+      50% { transform: scaleY(1); opacity: 1; }
+      100% { transform: scaleY(1); transform-origin: bottom; opacity: 0; }
+    }
+
+    /* ── TICKER ── */
+    .ticker {
+      background: var(--lemon);
+      overflow: hidden;
+      height: 44px;
+      display: flex; align-items: center;
+    }
+    .ticker-track {
+      display: flex; gap: 0;
+      animation: ticker 30s linear infinite;
+      white-space: nowrap;
+    }
+    @keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+    .ticker-item {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 13px; font-weight: 800; letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--ink);
+      padding: 0 24px;
+      display: flex; align-items: center; gap: 16px;
+    }
+    .ticker-dot {
+      width: 5px; height: 5px;
+      background: rgba(8,12,24,0.35);
+      border-radius: 50%; flex-shrink: 0;
+    }
+
+    /* ── SECTIONS ── */
+    section {
+      padding: 100px 5vw;
+    }
+    .section-label {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 11px; font-weight: 800; letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--orange);
+      margin-bottom: 16px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .section-label::before {
+      content: '';
+      display: block; width: 32px; height: 2px;
+      background: var(--orange);
+    }
+    .section-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(42px, 6vw, 80px);
+      line-height: 0.95;
+      letter-spacing: 0.5px;
+      margin-bottom: 48px;
+    }
+    .section-title em {
+      font-style: normal;
+      color: var(--lemon);
+    }
+
+    /* ── SERVICES ── */
+    #servicios { background: var(--ink2); }
+
+    .services-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2px;
+    }
+    .service-card {
+      background: var(--ink3);
+      padding: 40px 36px;
+      position: relative; overflow: hidden;
+      transition: background 0.3s;
+    }
+    .service-card:hover { background: #1a1f38; }
+    .service-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 3px;
+      background: var(--gradient);
+      transform: scaleX(0); transform-origin: left;
+      transition: transform 0.4s ease;
+    }
+    .service-card:hover::before { transform: scaleX(1); }
+    .service-card[data-color="lemon"] { --gradient: linear-gradient(90deg, var(--lemon), var(--orange)); }
+    .service-card[data-color="orange"] { --gradient: linear-gradient(90deg, var(--orange), #ff4500); }
+    .service-card[data-color="blue"] { --gradient: linear-gradient(90deg, #3b82f6, #8b5cf6); }
+
+    .service-flag {
+      font-size: 44px; margin-bottom: 20px;
+      display: block;
+      filter: drop-shadow(0 4px 20px rgba(0,0,0,0.5));
+    }
+    .service-name {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 38px; line-height: 1;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+    }
+    .service-sub {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 12px; font-weight: 700; letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 20px;
+    }
+    .service-desc {
+      font-size: 14px; color: var(--muted); line-height: 1.7;
+      margin-bottom: 28px;
+    }
+    .service-tags {
+      display: flex; flex-wrap: wrap; gap: 6px;
+    }
+    .service-tag {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 11px; font-weight: 700; letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 4px 10px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .service-num {
+      position: absolute; bottom: 28px; right: 28px;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 80px; line-height: 1;
+      color: rgba(240,238,230,0.04);
+      pointer-events: none;
+    }
+
+    /* ── COMO FUNCIONA ── */
+    #como-funciona { background: var(--ink); }
+
+    .steps {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 0;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+    .step {
+      padding: 40px 28px;
+      border-right: 1px solid var(--border);
+      position: relative;
+      transition: background 0.3s;
+    }
+    .step:last-child { border-right: none; }
+    .step:hover { background: rgba(245,230,66,0.03); }
+    .step-num {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 13px; letter-spacing: 3px;
+      color: var(--lemon);
+      margin-bottom: 20px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .step-num::after {
+      content: ''; flex: 1;
+      height: 1px; background: rgba(245,230,66,0.2);
+    }
+    .step-icon {
+      font-size: 32px; margin-bottom: 16px; display: block;
+    }
+    .step-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 18px; font-weight: 800; letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .step-desc {
+      font-size: 13px; color: var(--muted); line-height: 1.65;
+    }
+
+    /* ── PRECIOS ── */
+    #precios { background: var(--ink2); }
+
+    .pricing-intro {
+      font-size: 16px; color: var(--muted); line-height: 1.7;
+      max-width: 560px; margin-bottom: 48px;
+    }
+
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 2px;
+    }
+    .price-card {
+      background: var(--ink3);
+      padding: 32px 28px;
+      border-radius: 0;
+      position: relative;
+      transition: background 0.25s;
+    }
+    .price-card:first-child { border-radius: 12px 0 0 12px; }
+    .price-card:last-child { border-radius: 0 12px 12px 0; }
+    .price-card:hover { background: #181d30; }
+    .price-card.featured {
+      background: rgba(245,230,66,0.07);
+      border: 1px solid rgba(245,230,66,0.2);
+      border-radius: 12px;
+      transform: scale(1.02);
+      z-index: 1;
+    }
+    .price-badge {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 10px; font-weight: 800; letter-spacing: 2px;
+      text-transform: uppercase;
+      background: var(--lemon);
+      color: var(--ink);
+      padding: 3px 9px;
+      border-radius: 100px;
+      display: inline-block;
+      margin-bottom: 16px;
+    }
+    .price-origin {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 12px; font-weight: 700; letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .price-service {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 26px; letter-spacing: 1px;
+      margin-bottom: 16px;
+    }
+    .price-amount {
+      margin-bottom: 20px;
+    }
+    .price-usd {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 52px; line-height: 1;
+      color: var(--lemon);
+    }
+    .price-unit {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 13px; color: var(--muted);
+      margin-left: 4px;
+    }
+    .price-note {
+      font-size: 12px; color: var(--muted); line-height: 1.6;
+    }
+    .price-features {
+      list-style: none;
+      margin-top: 20px;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .price-features li {
+      font-size: 13px; color: var(--muted);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .price-features li::before {
+      content: '✓';
+      font-weight: 800; color: var(--lemon);
+      font-size: 12px;
+    }
+
+    /* Calculadora */
+    .calc-wrapper {
+      margin-top: 60px;
+      background: var(--ink3);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 40px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 48px;
+      align-items: center;
+    }
+    .calc-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 36px; letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    .calc-sub {
+      font-size: 14px; color: var(--muted); line-height: 1.6;
+      margin-bottom: 28px;
+    }
+    .calc-fields {
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .calc-label {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 11px; font-weight: 800; letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+      display: block;
+    }
+    .calc-select, .calc-input {
+      width: 100%;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--white);
+      font-family: 'Barlow', sans-serif;
+      font-size: 15px;
+      padding: 12px 16px;
+      outline: none;
+      appearance: none;
+      transition: border-color 0.2s;
+    }
+    .calc-select:focus, .calc-input:focus {
+      border-color: rgba(245,230,66,0.4);
+    }
+    .calc-result {
+      text-align: center;
+      padding: 40px;
+      background: rgba(245,230,66,0.05);
+      border: 1px solid rgba(245,230,66,0.15);
+      border-radius: 16px;
+    }
+    .calc-result-label {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 12px; font-weight: 800; letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+    .calc-result-amount {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 80px; line-height: 1;
+      color: var(--lemon);
+      margin-bottom: 4px;
+    }
+    .calc-result-sub {
+      font-size: 13px; color: var(--muted);
+    }
+    .calc-btn {
+      margin-top: 16px;
+      width: 100%;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 14px; font-weight: 800; letter-spacing: 1.5px;
+      text-transform: uppercase;
+      background: var(--lemon);
+      color: var(--ink);
+      padding: 14px;
+      border-radius: 10px;
+      border: none; cursor: pointer;
+      transition: all 0.2s;
+    }
+    .calc-btn:hover { background: var(--lemon2); transform: translateY(-1px); }
+
+    /* ── COINS ── */
+    #coins {
+      background: var(--ink);
+      position: relative; overflow: hidden;
+    }
+    .coins-bg {
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse 70% 70% at 80% 50%, rgba(245,230,66,0.06) 0%, transparent 60%);
+      pointer-events: none;
+    }
+    .coins-layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 80px;
+      align-items: center;
+    }
+    .coins-content {}
+    .coins-visual {
+      display: flex; flex-direction: column; gap: 12px;
+      position: relative;
+    }
+    .tier-card {
+      display: flex; align-items: center; gap: 16px;
+      padding: 20px 24px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: var(--ink2);
+      transition: all 0.3s;
+      position: relative; overflow: hidden;
+    }
+    .tier-card::before {
+      content: '';
+      position: absolute; left: 0; top: 0; bottom: 0;
+      width: 3px;
+      background: var(--tc);
+    }
+    .tier-card:hover { transform: translateX(6px); border-color: rgba(240,238,230,0.15); }
+    .tier-card[data-tier="gold"] { --tc: var(--lemon); }
+    .tier-card[data-tier="silver"] { --tc: #c0c0d0; }
+    .tier-card[data-tier="bronze"] { --tc: #cd7f32; }
+    .tier-icon { font-size: 28px; flex-shrink: 0; }
+    .tier-info {}
+    .tier-name {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 16px; font-weight: 800; letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .tier-range {
+      font-size: 12px; color: var(--muted);
+    }
+    .tier-perks {
+      margin-left: auto; flex-shrink: 0;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 22px; color: var(--lemon);
+    }
+
+    .earn-table {
+      width: 100%; border-collapse: collapse; margin-top: 32px;
+    }
+    .earn-table th {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 11px; font-weight: 800; letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--muted);
+      text-align: left; padding: 0 0 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .earn-table td {
+      padding: 14px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 14px; color: var(--muted);
+    }
+    .earn-table td:last-child {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 20px; color: var(--lemon);
+      text-align: right;
+    }
+
+    /* ── FAQ ── */
+    #faq { background: var(--ink2); }
+    .faq-list {
+      display: flex; flex-direction: column; gap: 2px;
+      max-width: 780px;
+    }
+    .faq-item {
+      background: var(--ink3);
+      border-radius: 0;
+      overflow: hidden;
+      transition: background 0.2s;
+    }
+    .faq-item:first-child { border-radius: 12px 12px 0 0; }
+    .faq-item:last-child { border-radius: 0 0 12px 12px; }
+    .faq-q {
+      width: 100%; padding: 22px 28px;
+      display: flex; align-items: center; justify-content: space-between;
+      background: none; border: none; cursor: pointer;
+      text-align: left; color: var(--white);
+      font-family: 'Barlow', sans-serif;
+      font-size: 15px; font-weight: 700;
+      transition: color 0.2s;
+    }
+    .faq-q:hover { color: var(--lemon); }
+    .faq-icon {
+      font-size: 20px; color: var(--lemon);
+      transition: transform 0.3s;
+      flex-shrink: 0; margin-left: 16px;
+    }
+    .faq-item.open .faq-icon { transform: rotate(45deg); }
+    .faq-a {
+      max-height: 0; overflow: hidden;
+      transition: max-height 0.4s ease, padding 0.3s;
+    }
+    .faq-a-inner {
+      padding: 0 28px 22px;
+      font-size: 14px; color: var(--muted); line-height: 1.75;
+    }
+    .faq-item.open .faq-a { max-height: 300px; }
+
+    /* ── CONTACTO ── */
+    #contacto {
+      background: var(--ink);
+      border-top: 1px solid var(--border);
+    }
+    .contact-layout {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 80px;
+      align-items: start;
+    }
+    .contact-big-text {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(52px, 7vw, 100px);
+      line-height: 0.92;
+      letter-spacing: 0.5px;
+      margin-bottom: 32px;
+    }
+    .contact-big-text em {
+      font-style: normal; color: var(--lemon); display: block;
+    }
+    .contact-sub {
+      font-size: 16px; color: var(--muted);
+      line-height: 1.7; max-width: 400px;
+    }
+    .contact-channels {
+      display: flex; flex-direction: column; gap: 12px;
+      margin-top: 48px;
+    }
+    .contact-channel {
+      display: flex; align-items: center; gap: 16px;
+      padding: 18px 24px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: var(--ink2);
+      text-decoration: none; color: var(--white);
+      transition: all 0.25s;
+    }
+    .contact-channel:hover {
+      border-color: rgba(245,230,66,0.3);
+      background: rgba(245,230,66,0.04);
+      transform: translateX(4px);
+    }
+    .channel-icon {
+      width: 42px; height: 42px;
+      border-radius: 10px;
+      display: grid; place-items: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+    .channel-icon.wa { background: rgba(37,211,102,0.15); }
+    .channel-icon.ig { background: rgba(193,53,132,0.15); }
+    .channel-icon.em { background: rgba(245,230,66,0.12); }
+    .channel-info {}
+    .channel-label {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 11px; font-weight: 800; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--muted);
+    }
+    .channel-value { font-size: 15px; font-weight: 600; }
+    .channel-arrow {
+      margin-left: auto; color: var(--muted); font-size: 18px;
+      transition: transform 0.2s;
+    }
+    .contact-channel:hover .channel-arrow { transform: translateX(4px); color: var(--lemon); }
+
+    /* Access portal button */
+    .portal-cta {
+      padding: 32px;
+      border-radius: 16px;
+      background: rgba(245,230,66,0.07);
+      border: 1px solid rgba(245,230,66,0.2);
+      margin-top: 12px;
+    }
+    .portal-cta-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 13px; font-weight: 800; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--lemon);
+      margin-bottom: 8px;
+    }
+    .portal-cta-desc {
+      font-size: 14px; color: var(--muted); margin-bottom: 20px; line-height: 1.6;
+    }
+    .portal-cta a {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 14px; font-weight: 800; letter-spacing: 1px;
+      text-transform: uppercase;
+      background: var(--lemon); color: var(--ink);
+      padding: 12px 20px; border-radius: 8px;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .portal-cta a:hover { background: var(--lemon2); transform: translateY(-1px); }
+
+    /* ── FOOTER ── */
+    footer {
+      background: var(--ink);
+      border-top: 1px solid var(--border);
+      padding: 48px 5vw 32px;
+    }
+    .footer-top {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 40px;
+      padding-bottom: 40px;
+      border-bottom: 1px solid var(--border);
+    }
+    .footer-brand {}
+    .footer-logo {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 30px; letter-spacing: 2px;
+      color: var(--white);
+      margin-bottom: 8px;
+    }
+    .footer-logo span { color: var(--lemon); }
+    .footer-tagline {
+      font-size: 13px; color: var(--muted); line-height: 1.6;
+      max-width: 260px;
+    }
+    .footer-links {
+      display: flex; gap: 60px;
+    }
+    .footer-col {}
+    .footer-col-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 11px; font-weight: 800; letter-spacing: 2.5px;
+      text-transform: uppercase; color: var(--muted);
+      margin-bottom: 16px;
+    }
+    .footer-col ul { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+    .footer-col a {
+      font-size: 14px; color: var(--muted);
+      text-decoration: none; transition: color 0.2s;
+    }
+    .footer-col a:hover { color: var(--white); }
+    .footer-bottom {
+      display: flex; align-items: center; justify-content: space-between;
+      padding-top: 28px;
+      font-size: 12px; color: var(--muted);
+    }
+
+    /* ── ANIMATIONS ── */
+    @keyframes fadeSlideUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeSlideLeft {
+      from { opacity: 0; transform: translateX(20px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; } to { opacity: 1; }
+    }
+
+    .reveal {
+      opacity: 0; transform: translateY(24px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+    .reveal.visible {
+      opacity: 1; transform: translateY(0);
+    }
+    .reveal-delay-1 { transition-delay: 0.1s; }
+    .reveal-delay-2 { transition-delay: 0.2s; }
+    .reveal-delay-3 { transition-delay: 0.3s; }
+    .reveal-delay-4 { transition-delay: 0.4s; }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 1024px) {
+      .services-grid { grid-template-columns: 1fr; }
+      .steps { grid-template-columns: 1fr 1fr; }
+      .step { border-bottom: 1px solid var(--border); }
+      .step:nth-child(odd) { border-right: 1px solid var(--border); }
+      .step:nth-child(even) { border-right: none; }
+      .coins-layout { grid-template-columns: 1fr; gap: 48px; }
+      .contact-layout { grid-template-columns: 1fr; gap: 40px; }
+      .calc-wrapper { grid-template-columns: 1fr; gap: 32px; }
+    }
+
+    @media (max-width: 768px) {
+      .nav-links { display: none; }
+      .nav-cta { display: none; }
+      .nav-mobile-btn { display: flex; }
+      .hero-badge { display: none; }
+      .hero-bottom { flex-direction: column; align-items: flex-start; }
+      .hero-actions { width: 100%; }
+      .btn-primary, .btn-secondary { flex: 1; justify-content: center; }
+      .steps { grid-template-columns: 1fr; }
+      .step { border-right: none; }
+      .footer-top { flex-direction: column; }
+      .footer-links { flex-direction: column; gap: 32px; }
+      .footer-bottom { flex-direction: column; gap: 8px; text-align: center; }
+      .pricing-grid { grid-template-columns: 1fr 1fr; }
+      .price-card.featured { transform: none; }
+    }
+
+    @media (max-width: 480px) {
+      .pricing-grid { grid-template-columns: 1fr; }
+      .price-card:first-child { border-radius: 12px 12px 0 0; }
+      .price-card:last-child { border-radius: 0 0 12px 12px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Custom cursor -->
+  <div class="cursor" id="cursor"></div>
+
+  <!-- ── NAV ── -->
+  <nav id="nav">
+    <a href="#" class="nav-logo">
+      LEMON<span>'S</span> <em></em> ARG
+    </a>
+    <ul class="nav-links">
+      <li><a href="#servicios">Servicios</a></li>
+      <li><a href="#como-funciona">Cómo funciona</a></li>
+      <li><a href="#precios">Precios</a></li>
+      <li><a href="#coins">Coins</a></li>
+      <li><a href="#faq">FAQ</a></li>
+    </ul>
+    <a href="https://app.lemonsarg.com" class="nav-cta">Acceder al portal →</a>
+    <button class="nav-mobile-btn" id="mobileBtn" aria-label="Menú">
+      <span></span><span></span><span></span>
+    </button>
+  </nav>
+
+  <!-- ── HERO ── -->
+  <section id="hero">
+    <div class="hero-bg"></div>
+    <div class="hero-grid"></div>
+
+    <div class="hero-badge">
+      <div class="hero-badge-ring">
+        <div class="hero-badge-inner">Gestión<br/>Aduanera<br/>incluida</div>
+      </div>
+    </div>
+
+    <div class="hero-origins">
+      <div class="origin-pill active"><span class="flag">🇺🇸</span> Estados Unidos</div>
+      <div class="origin-pill"><span class="flag">🇨🇳</span> China</div>
+      <div class="origin-pill"><span class="flag">🇪🇺</span> Europa</div>
+    </div>
+
+    <h1 class="hero-title">
+      TRAEMOS<br/>
+      <span class="line2">LO QUE</span>
+      <span class="line3">QUERÉS</span>
+    </h1>
+
+    <div class="hero-bottom">
+      <p class="hero-sub">
+        Courier internacional con <strong>depósito propio en USA, China y Europa</strong>.
+        Importá tus compras o carga comercial. Entrega en todo el país,
+        gestión aduanera incluida.
+      </p>
+      <div class="hero-actions">
+        <a href="https://wa.me/5491100000000" class="btn-primary">💬 Consultarnos</a>
+        <a href="#precios" class="btn-secondary">Ver precios →</a>
+      </div>
+    </div>
+
+    <div class="scroll-indicator">
+      <span>Scroll</span>
+      <div class="scroll-line"></div>
+    </div>
+  </section>
+
+  <!-- ── TICKER ── -->
+  <div class="ticker">
+    <div class="ticker-track" id="ticker">
+      <!-- duplicado para loop continuo -->
+    </div>
+  </div>
+
+  <!-- ── SERVICIOS ── -->
+  <section id="servicios">
+    <div class="section-label reveal">Servicios</div>
+    <h2 class="section-title reveal">DESDE CUALQUIER<br/><em>RINCÓN DEL MUNDO</em></h2>
+    <div class="services-grid">
+      <div class="service-card reveal" data-color="lemon">
+        <span class="service-flag">🇺🇸</span>
+        <div class="service-name">Estados Unidos</div>
+        <div class="service-sub">Normal · Express · Tech Premium</div>
+        <p class="service-desc">
+          Depósito propio en Miami. Recibimos tus compras de Amazon, eBay,
+          tiendas de ropa, tecnología, repuestos y más.
+          Tres modalidades de servicio según urgencia y tipo de producto.
+        </p>
+        <div class="service-tags">
+          <span class="service-tag">🛍️ Compras online</span>
+          <span class="service-tag">📱 Tecnología</span>
+          <span class="service-tag">👟 Ropa & calzado</span>
+          <span class="service-tag">🔧 Repuestos</span>
+        </div>
+        <div class="service-num">01</div>
+      </div>
+      <div class="service-card reveal reveal-delay-1" data-color="orange">
+        <span class="service-flag">🇨🇳</span>
+        <div class="service-name">China</div>
+        <div class="service-sub">Normal · Express</div>
+        <p class="service-desc">
+          Directo desde fábricas y mayoristas. Ideal para importar mercadería
+          comercial, productos electrónicos, accesorios y artículos de
+          Alibaba, Shein y más.
+        </p>
+        <div class="service-tags">
+          <span class="service-tag">🏭 Mercadería comercial</span>
+          <span class="service-tag">⚡ Electrónica</span>
+          <span class="service-tag">📦 Mayorista</span>
+        </div>
+        <div class="service-num">02</div>
+      </div>
+      <div class="service-card reveal reveal-delay-2" data-color="blue">
+        <span class="service-flag">🇪🇺</span>
+        <div class="service-name">Europa</div>
+        <div class="service-sub">Normal</div>
+        <p class="service-desc">
+          Traemos paquetes desde España y el resto de Europa. Perfumería,
+          moda, productos exclusivos y cualquier compra online que quieras
+          traer al país.
+        </p>
+        <div class="service-tags">
+          <span class="service-tag">🌹 Perfumería</span>
+          <span class="service-tag">👗 Moda europea</span>
+          <span class="service-tag">🍷 Exclusivos</span>
+        </div>
+        <div class="service-num">03</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── CÓMO FUNCIONA ── -->
+  <section id="como-funciona">
+    <div class="section-label reveal">Proceso</div>
+    <h2 class="section-title reveal">¿CÓMO <em>FUNCIONA?</em></h2>
+    <div class="steps">
+      <div class="step reveal">
+        <div class="step-num">01</div>
+        <span class="step-icon">🛒</span>
+        <div class="step-title">Elegí tu tienda</div>
+        <p class="step-desc">Comprá en cualquier tienda online del exterior. Si no tenés métodos de pago internacionales, nosotros te ayudamos con la gestión.</p>
+      </div>
+      <div class="step reveal reveal-delay-1">
+        <div class="step-num">02</div>
+        <span class="step-icon">📨</span>
+        <div class="step-title">Pre-alertanos</div>
+        <p class="step-desc">Envianos la factura o invoice y el número de tracking. Recibimos tu paquete en nuestro depósito y te avisamos al instante.</p>
+      </div>
+      <div class="step reveal reveal-delay-2">
+        <div class="step-num">03</div>
+        <span class="step-icon">✈️</span>
+        <div class="step-title">Viaja a Argentina</div>
+        <p class="step-desc">Tu paquete sale de nuestro depósito con toda la documentación aduanera. Seguí el estado en tiempo real desde tu portal.</p>
+      </div>
+      <div class="step reveal reveal-delay-3">
+        <div class="step-num">04</div>
+        <span class="step-icon">🏠</span>
+        <div class="step-title">Recibís en casa</div>
+        <p class="step-desc">Entregamos en tu puerta en todo el país. Coordinamos horario y método de pago. Así de fácil.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── PRECIOS ── -->
+  <section id="precios">
+    <div class="section-label reveal">Tarifas</div>
+    <h2 class="section-title reveal">PRECIOS<br/><em>TRANSPARENTES</em></h2>
+    <p class="pricing-intro reveal">
+      Cobramemos por kilogramo de peso. Sin costos ocultos. La gestión aduanera está siempre incluida.
+      Peso mínimo facturable: 1 kg.
+    </p>
+
+    <div class="pricing-grid reveal">
+      <div class="price-card">
+        <div class="price-origin">🇺🇸 USA</div>
+        <div class="price-service">Normal</div>
+        <div class="price-amount">
+          <span class="price-usd">$45</span><span class="price-unit">USD/kg</span>
+        </div>
+        <ul class="price-features">
+          <li>Gestión aduanera incluida</li>
+          <li>Entrega en todo el país</li>
+          <li>Tracking en tiempo real</li>
+        </ul>
+      </div>
+      <div class="price-card featured">
+        <div class="price-badge">⚡ Más rápido</div>
+        <div class="price-origin">🇺🇸 USA</div>
+        <div class="price-service">Express</div>
+        <div class="price-amount">
+          <span class="price-usd">$55</span><span class="price-unit">USD/kg</span>
+        </div>
+        <ul class="price-features">
+          <li>Prioridad en despacho</li>
+          <li>Tiempos reducidos</li>
+          <li>Seguimiento premium</li>
+        </ul>
+      </div>
+      <div class="price-card">
+        <div class="price-origin">🇺🇸 USA</div>
+        <div class="price-service">Tech Premium</div>
+        <div class="price-amount">
+          <span class="price-usd">$75</span><span class="price-unit">USD/kg</span>
+        </div>
+        <ul class="price-features">
+          <li>Solo tecnología</li>
+          <li>Embalaje especial</li>
+          <li>Seguro incluido</li>
+        </ul>
+      </div>
+      <div class="price-card">
+        <div class="price-origin">🇨🇳 China</div>
+        <div class="price-service">Normal</div>
+        <div class="price-amount">
+          <span class="price-usd">$58</span><span class="price-unit">USD/kg</span>
+        </div>
+        <ul class="price-features">
+          <li>Directo desde fábrica</li>
+          <li>Consolidación de envíos</li>
+          <li>Gestión incluida</li>
+        </ul>
+      </div>
+      <div class="price-card">
+        <div class="price-origin">🇨🇳 China</div>
+        <div class="price-service">Express</div>
+        <div class="price-amount">
+          <span class="price-usd">$68</span><span class="price-unit">USD/kg</span>
+        </div>
+        <ul class="price-features">
+          <li>Despacho prioritario</li>
+          <li>Tiempos optimizados</li>
+          <li>Ideal para reposición</li>
+        </ul>
+      </div>
+      <div class="price-card">
+        <div class="price-origin">🇪🇺 Europa</div>
+        <div class="price-service">Normal</div>
+        <div class="price-amount">
+          <span class="price-usd">$58</span><span class="price-unit">USD/kg</span>
+        </div>
+        <ul class="price-features">
+          <li>España y toda Europa</li>
+          <li>Gestión incluida</li>
+          <li>Entrega a domicilio</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Calculadora -->
+    <div class="calc-wrapper reveal">
+      <div>
+        <div class="calc-title">Calculá tu envío</div>
+        <p class="calc-sub">Estimá el costo de tu importación al instante. El resultado es una estimación basada en tarifas estándar.</p>
+        <div class="calc-fields">
+          <div>
+            <label class="calc-label">Origen</label>
+            <select class="calc-select" id="calcOrigin">
+              <option value="45">🇺🇸 USA — Normal ($45/kg)</option>
+              <option value="55">🇺🇸 USA — Express ($55/kg)</option>
+              <option value="75">🇺🇸 USA — Tech Premium ($75/kg)</option>
+              <option value="58">🇨🇳 China — Normal ($58/kg)</option>
+              <option value="68">🇨🇳 China — Express ($68/kg)</option>
+              <option value="58">🇪🇺 Europa — Normal ($58/kg)</option>
+            </select>
+          </div>
+          <div>
+            <label class="calc-label">Peso estimado (kg)</label>
+            <input class="calc-input" type="number" id="calcWeight" placeholder="Ej: 3.5" min="0.1" step="0.1" />
+          </div>
+          <button class="calc-btn" onclick="calcular()">Calcular estimado →</button>
+        </div>
+      </div>
+      <div class="calc-result" id="calcResult">
+        <div class="calc-result-label">Costo estimado</div>
+        <div class="calc-result-amount" id="calcAmount">—</div>
+        <div class="calc-result-sub" id="calcSub">Ingresá los datos para calcular</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── LEMON COINS ── -->
+  <section id="coins">
+    <div class="coins-bg"></div>
+    <div class="coins-layout">
+      <div class="coins-content">
+        <div class="section-label reveal">Programa de fidelidad</div>
+        <h2 class="section-title reveal">LEMON<br/><em>COINS 🍋</em></h2>
+        <p style="font-size:15px; color:var(--muted); line-height:1.75; max-width:460px;" class="reveal">
+          Cada envío suma coins. Acumulás según el peso y el valor de tus importaciones.
+          Canjeá por descuentos, kilos gratis o envíos completos sin costo.
+        </p>
+        <table class="earn-table reveal" style="margin-top:32px;">
+          <thead>
+            <tr>
+              <th>Por cada</th>
+              <th style="text-align:right">Ganás</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1 kg de peso del envío</td>
+              <td>3 🍋</td>
+            </tr>
+            <tr>
+              <td>Envío mayor a USD 500</td>
+              <td>+10 🍋</td>
+            </tr>
+            <tr>
+              <td>Tu primer envío (único)</td>
+              <td>+15 🍋</td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="margin-top:32px; display:flex; flex-wrap:wrap; gap:12px;" class="reveal">
+          <div style="padding:14px 20px; border-radius:12px; background:rgba(255,255,255,0.04); border:1px solid var(--border); font-size:13px; color:var(--muted);">
+            <strong style="color:var(--lemon); font-family:'Bebas Neue',sans-serif; font-size:20px; display:block;">500 🍋</strong>
+            USD 8 de descuento
+          </div>
+          <div style="padding:14px 20px; border-radius:12px; background:rgba(255,255,255,0.04); border:1px solid var(--border); font-size:13px; color:var(--muted);">
+            <strong style="color:var(--lemon); font-family:'Bebas Neue',sans-serif; font-size:20px; display:block;">1.000 🍋</strong>
+            USD 15 de descuento
+          </div>
+          <div style="padding:14px 20px; border-radius:12px; background:rgba(255,255,255,0.04); border:1px solid var(--border); font-size:13px; color:var(--muted);">
+            <strong style="color:var(--lemon); font-family:'Bebas Neue',sans-serif; font-size:20px; display:block;">5.000 🍋</strong>
+            5 kg gratis
+          </div>
+          <div style="padding:14px 20px; border-radius:12px; background:rgba(255,255,255,0.04); border:1px solid var(--border); font-size:13px; color:var(--muted);">
+            <strong style="color:var(--lemon); font-family:'Bebas Neue',sans-serif; font-size:20px; display:block;">10.000 🍋</strong>
+            Envío gratis
+          </div>
+        </div>
+      </div>
+
+      <div class="coins-visual reveal">
+        <div class="tier-card" data-tier="gold">
+          <div class="tier-icon">🥇</div>
+          <div class="tier-info">
+            <div class="tier-name">Oro</div>
+            <div class="tier-range">1.500+ coins</div>
+          </div>
+          <div class="tier-perks">ELITE</div>
+        </div>
+        <div class="tier-card" data-tier="silver">
+          <div class="tier-icon">🥈</div>
+          <div class="tier-info">
+            <div class="tier-name">Plata</div>
+            <div class="tier-range">500 – 1.499 coins</div>
+          </div>
+          <div class="tier-perks">VIP</div>
+        </div>
+        <div class="tier-card" data-tier="bronze">
+          <div class="tier-icon">🥉</div>
+          <div class="tier-info">
+            <div class="tier-name">Bronce</div>
+            <div class="tier-range">0 – 499 coins</div>
+          </div>
+          <div class="tier-perks">MEMBER</div>
+        </div>
+
+        <div style="margin-top:20px; padding:28px; background:var(--ink2); border-radius:16px; border:1px solid var(--border);">
+          <div style="font-family:'Barlow Condensed',sans-serif; font-size:11px; font-weight:800; letter-spacing:2px; text-transform:uppercase; color:var(--muted); margin-bottom:12px;">
+            Ya sos cliente?
+          </div>
+          <p style="font-size:13px; color:var(--muted); line-height:1.6; margin-bottom:16px;">
+            Accedé al portal para ver tu saldo de Lemon Coins, historial de envíos y canjear recompensas.
+          </p>
+          <a href="https://app.lemonsarg.com/coins" style="
+            display:inline-flex; align-items:center; gap:6px;
+            font-family:'Barlow Condensed',sans-serif; font-size:13px; font-weight:800; letter-spacing:1px; text-transform:uppercase;
+            background:var(--lemon); color:var(--ink);
+            padding:10px 18px; border-radius:8px; text-decoration:none;
+            transition:all 0.2s;
+          ">🍋 Ver mis coins →</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── FAQ ── -->
+  <section id="faq">
+    <div class="section-label reveal">Preguntas frecuentes</div>
+    <h2 class="section-title reveal">LO QUE<br/><em>MÁS NOS PREGUNTAN</em></h2>
+    <div class="faq-list reveal">
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">
+          ¿Qué productos puedo importar?
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-a">
+          <div class="faq-a-inner">
+            Podés traer casi cualquier cosa: ropa, calzado, tecnología, repuestos, electrodomésticos, perfumes, accesorios, mercadería comercial y más.
+            Hay restricciones aduaneras para ciertos productos (armas, medicamentos, etc.). Si tenés dudas sobre un artículo específico, consultanos por WhatsApp.
+          </div>
+        </div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">
+          ¿Cuánto tarda en llegar?
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-a">
+          <div class="faq-a-inner">
+            Los tiempos varían según el origen y la modalidad. USA Normal: 15-25 días hábiles. USA Express: 8-14 días. China: 25-40 días. Europa: 20-35 días.
+            Los tiempos son estimativos y pueden variar por aduanas o temporadas de alta demanda.
+          </div>
+        </div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">
+          ¿Qué incluye la gestión aduanera?
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-a">
+          <div class="faq-a-inner">
+            Nosotros nos encargamos de toda la documentación: declaración de importación, DGA, pago de aranceles cuando corresponde y liberación en aduana.
+            Vos solo esperás la entrega. No necesitás saber nada de trámites aduaneros.
+          </div>
+        </div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">
+          ¿Cómo se calcula el costo?
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-a">
+          <div class="faq-a-inner">
+            El costo se calcula por kilogramo de peso real o volumétrico (el que sea mayor). El peso mínimo facturable es 1 kg.
+            Usá nuestra calculadora para tener un estimado. Para cargas grandes o comerciales, consultanos para una cotización personalizada.
+          </div>
+        </div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">
+          ¿Hacen envíos a todo el país?
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-a">
+          <div class="faq-a-inner">
+            Sí. Entregamos en todo Argentina. El costo del flete interno está incluido para el área del GBA.
+            Para el interior del país puede aplicar un costo adicional dependiendo de la localidad. Consultanos.
+          </div>
+        </div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">
+          ¿Cómo sigo el estado de mi paquete?
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-a">
+          <div class="faq-a-inner">
+            Todos nuestros clientes tienen acceso al portal de seguimiento en app.lemonsarg.com donde pueden ver el estado actualizado de cada envío en tiempo real.
+            También enviamos notificaciones automáticas por email en cada cambio de estado.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── CONTACTO ── -->
+  <section id="contacto">
+    <div class="contact-layout">
+      <div>
+        <h2 class="contact-big-text reveal">
+          ¿LISTA<br/>TU COMPRA?
+          <em>HABLEMOS.</em>
+        </h2>
+        <p class="contact-sub reveal">
+          Respondemos rápido. Ya sea para una compra personal, carga comercial o cualquier consulta sobre el proceso.
+        </p>
+      </div>
+      <div>
+        <div class="contact-channels reveal">
+          <a href="https://wa.me/5491100000000" class="contact-channel" target="_blank">
+            <div class="channel-icon wa">💬</div>
+            <div class="channel-info">
+              <div class="channel-label">WhatsApp</div>
+              <div class="channel-value">+54 9 11 0000-0000</div>
+            </div>
+            <div class="channel-arrow">→</div>
+          </a>
+          <a href="https://instagram.com/lemonsarg" class="contact-channel" target="_blank">
+            <div class="channel-icon ig">📸</div>
+            <div class="channel-info">
+              <div class="channel-label">Instagram</div>
+              <div class="channel-value">@lemonsarg</div>
+            </div>
+            <div class="channel-arrow">→</div>
+          </a>
+          <a href="mailto:hola@lemonsarg.com" class="contact-channel">
+            <div class="channel-icon em">✉️</div>
+            <div class="channel-info">
+              <div class="channel-label">Email</div>
+              <div class="channel-value">hola@lemonsarg.com</div>
+            </div>
+            <div class="channel-arrow">→</div>
+          </a>
+        </div>
+        <div class="portal-cta reveal reveal-delay-2">
+          <div class="portal-cta-title">¿Ya sos cliente?</div>
+          <p class="portal-cta-desc">Accedé al portal para ver tus envíos, estado en tiempo real y tus Lemon Coins.</p>
+          <a href="https://app.lemonsarg.com">Ir al portal →</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── FOOTER ── -->
+  <footer>
+    <div class="footer-top">
+      <div class="footer-brand">
+        <div class="footer-logo">LEMON<span>'S</span> ARG</div>
+        <p class="footer-tagline">Courier internacional. Traemos lo que querés desde USA, China y Europa hacia Argentina.</p>
+      </div>
+      <div class="footer-links">
+        <div class="footer-col">
+          <div class="footer-col-title">Servicios</div>
+          <ul>
+            <li><a href="#servicios">USA</a></li>
+            <li><a href="#servicios">China</a></li>
+            <li><a href="#servicios">Europa</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">Empresa</div>
+          <ul>
+            <li><a href="#como-funciona">Cómo funciona</a></li>
+            <li><a href="#precios">Precios</a></li>
+            <li><a href="#coins">Lemon Coins</a></li>
+            <li><a href="#faq">FAQ</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">Portal</div>
+          <ul>
+            <li><a href="https://app.lemonsarg.com">Iniciar sesión</a></li>
+            <li><a href="https://app.lemonsarg.com/coins">Mis Coins</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2025 Lemon's ARG. Todos los derechos reservados.</span>
+      <span style="display:flex; align-items:center; gap:6px;">
+        Hecho con 🍋 en Argentina
+      </span>
+    </div>
+  </footer>
+
+  <script>
+    // ── Cursor ──
+    const cursor = document.getElementById('cursor');
+    document.addEventListener('mousemove', e => {
+      cursor.style.left = e.clientX + 'px';
+      cursor.style.top = e.clientY + 'px';
+    });
+    document.querySelectorAll('a, button').forEach(el => {
+      el.addEventListener('mouseenter', () => cursor.classList.add('big'));
+      el.addEventListener('mouseleave', () => cursor.classList.remove('big'));
+    });
+
+    // ── Nav scroll ──
+    const nav = document.getElementById('nav');
+    window.addEventListener('scroll', () => {
+      nav.classList.toggle('scrolled', window.scrollY > 40);
+    });
+
+    // ── Ticker ──
+    const items = [
+      '🇺🇸 USA', '🇨🇳 China', '🇪🇺 Europa',
+      '✈️ Courier Internacional', '📦 Puerta a Puerta',
+      '🍋 Lemon Coins', '⚡ Express Available', '🔒 Gestión Aduanera',
+    ];
+    const ticker = document.getElementById('ticker');
+    const doubled = [...items, ...items, ...items, ...items];
+    ticker.innerHTML = doubled.map(t => `<div class="ticker-item"><span class="ticker-dot"></span>${t}</div>`).join('');
+
+    // ── Scroll reveal ──
+    const obs = new IntersectionObserver(entries => {
+      entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+    }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+    document.querySelectorAll('.reveal').forEach(el => obs.observe(el));
+
+    // ── FAQ ──
+    function toggleFaq(btn) {
+      const item = btn.closest('.faq-item');
+      const isOpen = item.classList.contains('open');
+      document.querySelectorAll('.faq-item.open').forEach(i => i.classList.remove('open'));
+      if (!isOpen) item.classList.add('open');
+    }
+
+    // ── Calculadora ──
+    function calcular() {
+      const rate = parseFloat(document.getElementById('calcOrigin').value);
+      const weight = parseFloat(document.getElementById('calcWeight').value);
+      const amt = document.getElementById('calcAmount');
+      const sub = document.getElementById('calcSub');
+      if (!weight || weight <= 0) {
+        amt.textContent = '—';
+        sub.textContent = 'Ingresá el peso para calcular';
+        return;
+      }
+      const billable = Math.max(weight, 1);
+      const total = (billable * rate).toFixed(2);
+      amt.textContent = `USD ${total}`;
+      sub.textContent = `${billable < weight ? 1 : billable} kg × $${rate}/kg (mín. 1 kg)`;
+    }
+    document.getElementById('calcWeight').addEventListener('input', calcular);
+    document.getElementById('calcOrigin').addEventListener('change', calcular);
+
+    // ── Mobile menu (simple toggle) ──
+    document.getElementById('mobileBtn').addEventListener('click', () => {
+      const links = document.querySelector('.nav-links');
+      if (!links) return;
+      const isOpen = links.style.display === 'flex';
+      links.style.cssText = isOpen ? '' : `
+        display: flex; flex-direction: column;
+        position: fixed; top: 64px; left: 0; right: 0;
+        background: rgba(8,12,24,0.98); backdrop-filter: blur(20px);
+        padding: 24px 5vw; gap: 20px; border-bottom: 1px solid rgba(240,238,230,0.08);
+        z-index: 99;
+      `;
+    });
+
+    // ── Hero origin pills animation ──
+    const pills = document.querySelectorAll('.origin-pill');
+    let current = 0;
+    setInterval(() => {
+      pills.forEach(p => p.classList.remove('active'));
+      current = (current + 1) % pills.length;
+      pills[current].classList.add('active');
+    }, 2000);
+  </script>
+</body>
+</html>
