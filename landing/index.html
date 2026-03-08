@@ -594,6 +594,7 @@
     /* Custom dropdown */
     .custom-select-wrapper {
       position: relative;
+      z-index: 10;
     }
     .custom-select-trigger {
       width: 100%;
@@ -637,6 +638,8 @@
       pointer-events: none;
       transition: opacity 0.2s, transform 0.2s;
       box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+      max-height: 320px;
+      overflow-y: auto;
     }
     .custom-select-wrapper.open .custom-select-dropdown {
       opacity: 1; transform: translateY(0);
