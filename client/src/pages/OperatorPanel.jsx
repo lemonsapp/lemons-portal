@@ -672,17 +672,22 @@ export default function OperatorPanel() {
       const res = await fetch(`${API}/operator/clients/all`, {
         headers: { Authorization: `Bearer ${getToken()}` },
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
       const data = await res.json();
       setClientsList(data.clients || []);
-    } catch {
-      setMsg("Error cargando clientes");
+    } catch (e) {
+      setMsg("Error cargando clientes: " + e.message);
+      setClientsList([]);
     } finally {
       setClientsLoading(false);
     }
   }
 
   useEffect(() => {
-    if (activeTab === "clients" && clientsList.length === 0) loadClients();
+    if (activeTab === "clients") loadClients();
   }, [activeTab]); // eslint-disable-line
 
   async function saveClientEdit() {

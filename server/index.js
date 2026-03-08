@@ -756,6 +756,9 @@ app.get("/users", authRequired, requireRole(["operator", "admin"]), async (req, 
 // ── GET /operator/clients/all — listar todos los clientes con stats ──
 app.get("/operator/clients/all", authRequired, requireRole(["operator", "admin"]), async (req, res) => {
   try {
+    // Agregar columna active si no existe
+    await db.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT TRUE").catch(() => {});
+
     const q = await db.query(`
       SELECT
         u.id, u.client_number, u.name, u.email, u.role,
@@ -765,7 +768,7 @@ app.get("/operator/clients/all", authRequired, requireRole(["operator", "admin"]
         MAX(s.date_in)                           AS last_shipment
       FROM users u
       LEFT JOIN shipments s ON s.user_id = u.id
-      WHERE u.role = 'client'
+      WHERE u.role IN ('client', 'operator')
       GROUP BY u.id, u.client_number, u.name, u.email, u.role, u.active
       ORDER BY u.client_number ASC
     `);
