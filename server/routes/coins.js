@@ -102,20 +102,28 @@ router.get("/:userId", authRequired, async (req, res) => {
 // ── POST /coins/earn — otorgar coins manual ───────────────────────────────────
 router.post("/earn", authRequired, requireRole(["operator", "admin"]), async (req, res) => {
   try {
-    const { user_id, shipment_id } = req.body;
-    if (!user_id || !shipment_id) return res.status(400).json({ error: "Faltan datos" });
+    const { user_id, shipment_id, shipment_code } = req.body;
+    if (!user_id || (!shipment_id && !shipment_code)) return res.status(400).json({ error: "Faltan datos" });
 
-    const shipQ = await db.query(`
-      SELECT s.*, u.first_shipment_bonus_given
-      FROM shipments s JOIN users u ON u.id = s.user_id
-      WHERE s.id = $1
-    `, [shipment_id]);
+    // Resolver shipment por código o por ID numérico
+    const shipQ = shipment_code
+      ? await db.query(
+          `SELECT s.*, u.first_shipment_bonus_given
+           FROM shipments s JOIN users u ON u.id = s.user_id
+           WHERE UPPER(s.code) = UPPER($1)`,
+          [shipment_code.trim()])
+      : await db.query(
+          `SELECT s.*, u.first_shipment_bonus_given
+           FROM shipments s JOIN users u ON u.id = s.user_id
+           WHERE s.id = $1`,
+          [shipment_id]);
     const ship = shipQ.rows[0];
     if (!ship) return res.status(404).json({ error: "Envío no encontrado" });
+    const resolvedShipmentId = ship.id;
 
     const existQ = await db.query(
       `SELECT id FROM coin_transactions WHERE shipment_id=$1 AND type='earn' LIMIT 1`,
-      [shipment_id]
+      [resolvedShipmentId]
     );
     if (existQ.rows[0]) return res.json({ already_awarded: true });
 
@@ -136,7 +144,7 @@ router.post("/earn", authRequired, requireRole(["operator", "admin"]), async (re
     await db.query(
       `INSERT INTO coin_transactions (user_id, type, amount, reason, shipment_id)
        VALUES ($1,'earn',$2,$3,$4)`,
-      [user_id, total, `Envío completado — ${breakdown.join(", ")}`, shipment_id]
+      [user_id, total, `Envío completado — ${breakdown.join(", ")}`, resolvedShipmentId]
     );
     await db.query(
       `UPDATE lemon_coins SET balance=balance+$1, total_earned=total_earned+$1, updated_at=NOW()

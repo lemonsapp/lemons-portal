@@ -151,7 +151,7 @@ export default function CoinsOperator() {
       const res  = await fetch(`${API}/coins/earn`, {
         method: "POST",
         headers: { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: earnClientData.id, shipment_id: parseInt(earnForm.shipment_id) }),
+        body: JSON.stringify({ user_id: earnClientData.id, shipment_code: earnForm.shipment_id.trim() }),
       });
       const data = await res.json();
       if (!res.ok) { setMsg(data.error || "Error"); return; }
@@ -424,7 +424,7 @@ export default function CoinsOperator() {
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
             <div>
               <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", fontWeight: 700, marginBottom: 6 }}>ID DEL ENVÍO</div>
-              <input className="input" placeholder="shipment_id" value={earnForm.shipment_id}
+              <input className="input" placeholder="Código (ej: TP0002)" value={earnForm.shipment_id}
                 onChange={e => setEarnForm(f => ({ ...f, shipment_id: e.target.value }))}
                 style={{ width: 200 }} inputMode="numeric" />
             </div>
