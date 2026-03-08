@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Topbar from "../components/Topbar.jsx";
 import StatusBadge from "../components/StatusBadge.jsx";
+import BarcodeScanner from "../components/BarcodeScanner.jsx";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 const getToken = () =>
@@ -25,7 +26,7 @@ const SERVICES_BY_ORIGIN = {
 const DEFAULT_RATES_FALLBACK = {
   usa_normal: 45,
   usa_express:      55,
-  usa_tech_premium: 75, // Tecnología Premium
+  usa_tech_premium: 75,
   china_normal: 58,
   china_express: 68,
   europa_normal: 58,
@@ -53,15 +54,10 @@ const fmtDate = (v) => {
   if (!v) return "-";
   try {
     return new Date(v).toLocaleString("es-AR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
+      day: "2-digit", month: "2-digit", year: "2-digit",
+      hour: "2-digit", minute: "2-digit",
     });
-  } catch {
-    return String(v);
-  }
+  } catch { return String(v); }
 };
 
 function normalizeOrigin(v) {
@@ -95,7 +91,6 @@ function getLaneRate({ origin, service, rates, defaults }) {
   return 0;
 }
 
-// ── Mini componente: campo de tarifa ──────────────────────────────────────────
 function RateField({ label, value, placeholder, onChange }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
@@ -103,32 +98,19 @@ function RateField({ label, value, placeholder, onChange }) {
         <span style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.75)" }}>{label}</span>
         <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>USD/kg</span>
       </div>
-      <input
-        className="input"
-        inputMode="decimal"
-        placeholder={placeholder}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
+      <input className="input" inputMode="decimal" placeholder={placeholder} value={value}
+        onChange={(e) => onChange(e.target.value)} />
     </div>
   );
 }
 
-// ── Mini componente: stat card del dashboard ──────────────────────────────────
 function StatCard({ icon, label, value, sub, accent }) {
   return (
     <div style={{
-      position: "relative",
-      background: "rgba(255,255,255,0.04)",
-      border: "1px solid rgba(255,255,255,0.09)",
-      borderRadius: 16,
-      padding: "14px 16px",
-      overflow: "hidden",
-      display: "flex",
-      flexDirection: "column",
-      gap: 4,
+      position: "relative", background: "rgba(255,255,255,0.04)",
+      border: "1px solid rgba(255,255,255,0.09)", borderRadius: 16,
+      padding: "14px 16px", overflow: "hidden", display: "flex", flexDirection: "column", gap: 4,
     }}>
-      {/* accent bar */}
       <div style={{
         position: "absolute", top: 0, left: 0, right: 0, height: 3,
         background: accent || "linear-gradient(90deg,#ffd200,#ff8a00)",
@@ -144,51 +126,33 @@ function StatCard({ icon, label, value, sub, accent }) {
   );
 }
 
-// ── Mini componente: label de sección ─────────────────────────────────────────
 function SectionLabel({ children }) {
   return (
-    <div style={{
-      display: "flex",
-      alignItems: "center",
-      gap: 10,
-      marginBottom: 14,
-    }}>
-      <div style={{
-        width: 3, height: 18, borderRadius: 999,
-        background: "linear-gradient(180deg,#ffd200,#ff8a00)",
-      }} />
+    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+      <div style={{ width: 3, height: 18, borderRadius: 999, background: "linear-gradient(180deg,#ffd200,#ff8a00)" }} />
       <h2 style={{ margin: 0, fontSize: 15, fontWeight: 800, letterSpacing: "0.1px" }}>{children}</h2>
     </div>
   );
 }
 
-// ── Mini componente: panel colapsable ─────────────────────────────────────────
 function Panel({ title, icon, children, defaultOpen = true }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div style={{
-      background: "rgba(255,255,255,0.04)",
-      border: "1px solid rgba(255,255,255,0.09)",
-      borderRadius: 18,
-      overflow: "hidden",
-      marginTop: 12,
+      background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)",
+      borderRadius: 18, overflow: "hidden", marginTop: 12,
     }}>
-      <button
-        onClick={() => setOpen(o => !o)}
-        style={{
-          width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "13px 16px", background: "none", border: "none", cursor: "pointer",
-          color: "#fff",
-        }}
-      >
+      <button onClick={() => setOpen(o => !o)} style={{
+        width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "13px 16px", background: "none", border: "none", cursor: "pointer", color: "#fff",
+      }}>
         <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
           <span style={{ fontSize: 16 }}>{icon}</span>
           <span style={{ fontWeight: 800, fontSize: 14, letterSpacing: "0.1px" }}>{title}</span>
         </div>
         <span style={{
           fontSize: 11, color: "rgba(255,255,255,0.40)",
-          transform: open ? "rotate(180deg)" : "rotate(0deg)",
-          transition: "transform 0.2s",
+          transform: open ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s",
         }}>▼</span>
       </button>
       {open && (
@@ -201,17 +165,12 @@ function Panel({ title, icon, children, defaultOpen = true }) {
   );
 }
 
-// ── Mensaje de estado (banner) ────────────────────────────────────────────────
 function MsgBanner({ msg }) {
   if (!msg) return null;
   const isError = /error|inválid|falt|no se|primero/i.test(msg);
   return (
     <div style={{
-      margin: "10px 0",
-      padding: "11px 16px",
-      borderRadius: 12,
-      fontSize: 13,
-      fontWeight: 600,
+      margin: "10px 0", padding: "11px 16px", borderRadius: 12, fontSize: 13, fontWeight: 600,
       background: isError ? "rgba(239,68,68,0.12)" : "rgba(34,197,94,0.12)",
       border: `1px solid ${isError ? "rgba(239,68,68,0.28)" : "rgba(34,197,94,0.28)"}`,
       color: isError ? "#fca5a5" : "#86efac",
@@ -221,8 +180,30 @@ function MsgBanner({ msg }) {
   );
 }
 
+// ── Botón de escaneo reutilizable ─────────────────────────────────────────────
+function ScanBtn({ onClick, title = "Escanear código de barras" }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      style={{
+        background: "#f5e642", border: "none", borderRadius: 8,
+        padding: "0 13px", fontSize: 17, cursor: "pointer",
+        flexShrink: 0, height: 42, display: "flex", alignItems: "center",
+      }}
+    >
+      📷
+    </button>
+  );
+}
+
 export default function OperatorPanel() {
   const [msg, setMsg] = useState("");
+
+  // Scanner state
+  const [showScanner, setShowScanner] = useState(false);
+  const [scannerMode, setScannerMode] = useState("search"); // "search" | "fill" | "fill_edit"
 
   // Dashboard stats
   const [stats, setStats] = useState(null);
@@ -242,8 +223,7 @@ export default function OperatorPanel() {
   const [defaults, setDefaults] = useState(DEFAULT_RATES_FALLBACK);
   const [rates, setRates] = useState({
     usa_normal: "", usa_express: "", usa_tech_premium: "",
-    china_normal: "", china_express: "",
-    europa_normal: "",
+    china_normal: "", china_express: "", europa_normal: "",
   });
   const [savingRates, setSavingRates] = useState(false);
 
@@ -280,6 +260,23 @@ export default function OperatorPanel() {
   const [editRateCtx, setEditRateCtx] = useState(null);
   const [editRateLoading, setEditRateLoading] = useState(false);
   const editRateCacheRef = useRef(new Map());
+
+  // ── Handler del scanner ───────────────────────────────────────────────────
+  const handleScan = (code) => {
+    if (scannerMode === "fill") {
+      // Autocompletar tracking en formulario de nuevo envío
+      setTracking(code);
+    } else if (scannerMode === "fill_edit") {
+      // Autocompletar tracking en fila de edición
+      setEditDraft((prev) => ({ ...prev, tracking: code }));
+    } else {
+      // Buscar en la tabla de envíos
+      setOpSearch(code);
+      setTimeout(() => loadOperatorShipments(code), 100);
+    }
+    setShowScanner(false);
+    setMsg(`📷 Código escaneado: ${code}`);
+  };
 
   // ── helpers crear envío ───────────────────────────────────────────────────
   const laneRate = useMemo(() => getLaneRate({
@@ -328,7 +325,6 @@ export default function OperatorPanel() {
     const n = Number(newClientNumber);
     if (Number.isNaN(n) || n < 0) return setMsg("Número de cliente inválido");
     if (!newName || !newEmail || !newPassword) return setMsg("Completá nombre, email y contraseña");
-
     const res = await fetch(`${API}/operator/clients`, {
       method: "POST",
       headers: { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" },
@@ -446,10 +442,11 @@ export default function OperatorPanel() {
     await loadDashboard();
   }
 
-  async function loadOperatorShipments() {
+  async function loadOperatorShipments(overrideSearch) {
     setMsg("");
     const qs = new URLSearchParams();
-    if (opSearch.trim()) qs.set("search", opSearch.trim());
+    const searchVal = overrideSearch !== undefined ? overrideSearch : opSearch;
+    if (searchVal.trim()) qs.set("search", searchVal.trim());
     if (opClientNumber.trim() !== "") qs.set("client_number", opClientNumber.trim());
     const res = await fetch(`${API}/operator/shipments?${qs.toString()}`, {
       headers: { Authorization: `Bearer ${getToken()}` },
@@ -631,14 +628,20 @@ export default function OperatorPanel() {
     await loadDashboard();
   }
 
-  useEffect(() => {
-    refreshAll();
-  }, []); // eslint-disable-line
+  useEffect(() => { refreshAll(); }, []); // eslint-disable-line
 
   // ── RENDER ────────────────────────────────────────────────────────────────
   return (
     <div className="screen" style={{ maxWidth: 1600, margin: "0 auto" }}>
       <Topbar title="Panel Operador" />
+
+      {/* Scanner modal */}
+      {showScanner && (
+        <BarcodeScanner
+          onScan={handleScan}
+          onClose={() => setShowScanner(false)}
+        />
+      )}
 
       {/* ── HEADER ── */}
       <div style={{
@@ -655,12 +658,8 @@ export default function OperatorPanel() {
             LEMON&apos;S — carga y control de paquetes
           </div>
         </div>
-        <button
-          className="btn btnPrimary"
-          onClick={refreshAll}
-          disabled={loadingStats}
-          style={{ height: 38, padding: "0 18px", fontSize: 13 }}
-        >
+        <button className="btn btnPrimary" onClick={refreshAll} disabled={loadingStats}
+          style={{ height: 38, padding: "0 18px", fontSize: 13 }}>
           {loadingStats ? "Actualizando…" : "↻ Actualizar"}
         </button>
       </div>
@@ -669,10 +668,8 @@ export default function OperatorPanel() {
 
       {/* ── DASHBOARD STATS ── */}
       <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
-        gap: 10,
-        marginTop: 12,
+        display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+        gap: 10, marginTop: 12,
       }}>
         <StatCard icon="📦" label="TOTAL ENVÍOS" value={loadingStats ? "…" : stats?.total ?? 0} sub="Todos los estados" />
         <StatCard icon="🟡" label="RECIBIDOS" value={loadingStats ? "…" : stats?.received ?? 0} sub="En depósito" accent="linear-gradient(90deg,#ffd200,#ffd200)" />
@@ -685,11 +682,8 @@ export default function OperatorPanel() {
       </div>
 
       {/* ── CREAR CLIENTE + BUSCAR CLIENTE ── */}
-      <div style={{
-        display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 14,
-      }} className="grid2">
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 14 }} className="grid2">
 
-        {/* Crear cliente */}
         <Panel title="Crear cliente" icon="👤" defaultOpen={true}>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <input className="input" placeholder="Nº de cliente (ej: 42)" value={newClientNumber}
@@ -708,27 +702,21 @@ export default function OperatorPanel() {
           </div>
         </Panel>
 
-        {/* Buscar cliente + Tarifas */}
         <Panel title="Buscar cliente & tarifas" icon="🔍" defaultOpen={true}>
           <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
             <input className="input" placeholder="Nº de cliente" value={clientNumber}
               onChange={(e) => setClientNumber(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && findClient()}
-            />
-            <button className="btn" onClick={findClient}
-              style={{ height: 42, padding: "0 18px", whiteSpace: "nowrap" }}>
+              onKeyDown={(e) => e.key === "Enter" && findClient()} />
+            <button className="btn" onClick={findClient} style={{ height: 42, padding: "0 18px", whiteSpace: "nowrap" }}>
               Buscar
             </button>
           </div>
 
           {client && (
             <div style={{
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.10)",
-              borderRadius: 14,
-              padding: "12px 14px",
+              background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.10)",
+              borderRadius: 14, padding: "12px 14px",
             }}>
-              {/* Info cliente */}
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
                 <div style={{
                   width: 36, height: 36, borderRadius: "50%",
@@ -739,25 +727,18 @@ export default function OperatorPanel() {
                   {String(client.name || "?")[0].toUpperCase()}
                 </div>
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: 14 }}>
-                    #{client.client_number} — {client.name}
-                  </div>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>#{client.client_number} — {client.name}</div>
                   <div style={{ fontSize: 12, color: "rgba(255,255,255,0.50)" }}>{client.email}</div>
                 </div>
               </div>
 
-              {/* Tarifas */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                 <span style={{ fontSize: 13, fontWeight: 700 }}>Tarifas (USD/kg)</span>
                 <div style={{ display: "flex", gap: 6 }}>
                   <button className="btn" onClick={applyDefaultsToInputs} disabled={savingRates}
-                    style={{ height: 32, padding: "0 12px", fontSize: 12 }}>
-                    Restaurar defaults
-                  </button>
+                    style={{ height: 32, padding: "0 12px", fontSize: 12 }}>Restaurar defaults</button>
                   <button className="btn" onClick={clearRatesToAuto} disabled={savingRates}
-                    style={{ height: 32, padding: "0 12px", fontSize: 12 }}>
-                    Limpiar (AUTO)
-                  </button>
+                    style={{ height: 32, padding: "0 12px", fontSize: 12 }}>Limpiar (AUTO)</button>
                 </div>
               </div>
 
@@ -815,7 +796,6 @@ export default function OperatorPanel() {
         <div style={{ display: "grid", gridTemplateColumns: "1.4fr 0.6fr", gap: 14, alignItems: "start" }}
           className="operatorForm">
 
-          {/* Columna izquierda: campos */}
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }} className="row">
               <div>
@@ -836,10 +816,15 @@ export default function OperatorPanel() {
                 onChange={(e) => setDescription(e.target.value)} />
             </div>
 
+            {/* TRACKING con botón scanner 📷 */}
             <div>
               <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", marginBottom: 5, fontWeight: 600 }}>TRACKING (opcional)</div>
-              <input className="input" placeholder="Número de tracking del transportista" value={tracking}
-                onChange={(e) => setTracking(e.target.value)} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <input className="input" placeholder="Número de tracking del transportista" value={tracking}
+                  onChange={(e) => setTracking(e.target.value)} style={{ flex: 1 }} />
+                <ScanBtn onClick={() => { setScannerMode("fill"); setShowScanner(true); }}
+                  title="Escanear código de barras del tracking" />
+              </div>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }} className="row">
@@ -859,9 +844,7 @@ export default function OperatorPanel() {
                 <select className="input" value={origin === "EUROPA" ? "NORMAL" : service}
                   onChange={(e) => setService(e.target.value)} disabled={origin === "EUROPA"}>
                   {(SERVICES_BY_ORIGIN[origin] || ["NORMAL"]).map((s) => (
-                    <option key={s} value={s}>
-                      {s === "TECH_PREMIUM" ? "📱 Tecnología Premium" : s}
-                    </option>
+                    <option key={s} value={s}>{s === "TECH_PREMIUM" ? "📱 Tecnología Premium" : s}</option>
                   ))}
                 </select>
               </div>
@@ -874,9 +857,7 @@ export default function OperatorPanel() {
                   {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
-              <div style={{ paddingTop: 22 }}>
-                <StatusBadge status={status} />
-              </div>
+              <div style={{ paddingTop: 22 }}><StatusBadge status={status} /></div>
               <div>
                 <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", marginBottom: 5, fontWeight: 600 }}>MODO TARIFA</div>
                 <select className="input" value={overrideEnabled ? "MANUAL" : "AUTO"}
@@ -901,18 +882,12 @@ export default function OperatorPanel() {
 
           {/* Columna derecha: resumen */}
           <div style={{
-            background: "rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.10)",
-            borderRadius: 16,
-            padding: "16px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 0,
+            background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.10)",
+            borderRadius: 16, padding: "16px", display: "flex", flexDirection: "column", gap: 0,
           }}>
             <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", fontWeight: 700, letterSpacing: "0.5px", marginBottom: 14 }}>
               RESUMEN DEL ENVÍO
             </div>
-
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
                 <span style={{ color: "rgba(255,255,255,0.55)" }}>Origen</span>
@@ -938,26 +913,17 @@ export default function OperatorPanel() {
                 </>
               )}
               <div style={{ height: 1, background: "rgba(255,255,255,0.07)" }} />
-              <div style={{
-                display: "flex", justifyContent: "space-between", alignItems: "center",
-                marginTop: 4, padding: "10px 0 0",
-              }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4, padding: "10px 0 0" }}>
                 <span style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", fontWeight: 700 }}>ESTIMADO USD</span>
                 <span style={{
                   fontSize: 22, fontWeight: 900,
                   background: "linear-gradient(135deg,#ffd200,#ff8a00)",
                   WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
-                }}>
-                  ${Number(estimated || 0).toFixed(2)}
-                </span>
+                }}>${Number(estimated || 0).toFixed(2)}</span>
               </div>
             </div>
-
-            <button
-              className="btn btnPrimary"
-              onClick={createShipment}
-              style={{ marginTop: 20, height: 42, width: "100%", fontWeight: 800, fontSize: 14 }}
-            >
+            <button className="btn btnPrimary" onClick={createShipment}
+              style={{ marginTop: 20, height: 42, width: "100%", fontWeight: 800, fontSize: 14 }}>
               Guardar envío
             </button>
           </div>
@@ -966,35 +932,27 @@ export default function OperatorPanel() {
 
       {/* ── GESTIÓN DE ENVÍOS ── */}
       <Panel title="Gestión de envíos" icon="🗂" defaultOpen={true}>
-        {/* Filtros */}
+        {/* Filtros con botón scanner en búsqueda */}
         <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
-          <input
-            className="input"
+          <input className="input"
             placeholder="🔍 Buscar: código, tracking, descripción, caja..."
             value={opSearch}
             onChange={(e) => setOpSearch(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && loadOperatorShipments()}
-            style={{ flex: 1, minWidth: 240 }}
+            style={{ flex: 1, minWidth: 200 }}
           />
-          <input
-            className="input"
-            placeholder="Filtrar por cliente #"
-            value={opClientNumber}
-            onChange={(e) => setOpClientNumber(e.target.value)}
+          {/* 📷 Botón scanner para buscar */}
+          <ScanBtn onClick={() => { setScannerMode("search"); setShowScanner(true); }}
+            title="Buscar envío escaneando código de barras" />
+          <input className="input" placeholder="Filtrar por cliente #"
+            value={opClientNumber} onChange={(e) => setOpClientNumber(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && loadOperatorShipments()}
-            style={{ width: 180 }}
-          />
-          <button className="btn" onClick={loadOperatorShipments} style={{ height: 42, padding: "0 18px" }}>
+            style={{ width: 150 }} />
+          <button className="btn" onClick={() => loadOperatorShipments()} style={{ height: 42, padding: "0 18px" }}>
             Buscar
           </button>
-          <button className="btn" onClick={refreshAll} style={{ height: 42, padding: "0 14px" }}>
-            ↻
-          </button>
-          <div style={{
-            display: "flex", alignItems: "center",
-            fontSize: 12, color: "rgba(255,255,255,0.45)",
-            whiteSpace: "nowrap",
-          }}>
+          <button className="btn" onClick={refreshAll} style={{ height: 42, padding: "0 14px" }}>↻</button>
+          <div style={{ display: "flex", alignItems: "center", fontSize: 12, color: "rgba(255,255,255,0.45)", whiteSpace: "nowrap" }}>
             {rows.length} envío{rows.length !== 1 ? "s" : ""}
           </div>
         </div>
@@ -1004,25 +962,12 @@ export default function OperatorPanel() {
           <table className="table">
             <thead>
               <tr>
-                <th>CLIENTE</th>
-                <th>CÓDIGO</th>
-                <th>FECHA</th>
-                <th>DESCRIPCIÓN</th>
-                <th>CAJA</th>
-                <th>TRACKING</th>
-                <th>PESO</th>
-                <th>ORIGEN</th>
-                <th>SERVICIO</th>
-                <th>TARIFA</th>
-                <th>ESTIMADO</th>
-                <th>MODO</th>
-                <th>ESTADO</th>
-                <th>GUARDAR</th>
-                <th>HISTORIAL</th>
-                <th>EDITAR</th>
+                <th>CLIENTE</th><th>CÓDIGO</th><th>FECHA</th><th>DESCRIPCIÓN</th>
+                <th>CAJA</th><th>TRACKING</th><th>PESO</th><th>ORIGEN</th>
+                <th>SERVICIO</th><th>TARIFA</th><th>ESTIMADO</th><th>MODO</th>
+                <th>ESTADO</th><th>GUARDAR</th><th>HISTORIAL</th><th>EDITAR</th>
               </tr>
             </thead>
-
             <tbody>
               {rows.map((r) => {
                 const isEditing = editId === r.id;
@@ -1040,67 +985,52 @@ export default function OperatorPanel() {
                         <span className="pill">#{r.client_number}</span>
                         <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>{r.email}</div>
                       </td>
-
                       <td>
                         {isEditing ? (
                           <input className="input" value={editDraft.package_code || ""}
                             onChange={(e) => updateEditField("package_code", e.target.value)} />
-                        ) : (
-                          <span className="pill">{r.code || r.package_code}</span>
-                        )}
+                        ) : <span className="pill">{r.code || r.package_code}</span>}
                       </td>
-
                       <td style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", whiteSpace: "nowrap" }}>
                         {fmtDate(r.date_in)}
                       </td>
-
                       <td>
                         {isEditing ? (
                           <input className="input" value={editDraft.description || ""}
                             onChange={(e) => updateEditField("description", e.target.value)} />
-                        ) : (
-                          <span style={{ fontSize: 13 }}>{r.description}</span>
-                        )}
+                        ) : <span style={{ fontSize: 13 }}>{r.description}</span>}
                       </td>
-
                       <td>
                         {isEditing ? (
                           <input className="input" value={editDraft.box_code || ""}
                             onChange={(e) => updateEditField("box_code", e.target.value)} />
-                        ) : (
-                          r.box_code ? <span className="pill">{r.box_code}</span> : <span className="muted">-</span>
-                        )}
+                        ) : r.box_code ? <span className="pill">{r.box_code}</span> : <span className="muted">-</span>}
                       </td>
-
+                      {/* TRACKING con scanner en modo edición */}
                       <td>
                         {isEditing ? (
-                          <input className="input" value={editDraft.tracking || ""}
-                            onChange={(e) => updateEditField("tracking", e.target.value)} />
-                        ) : (
-                          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.70)" }}>{r.tracking || "-"}</span>
-                        )}
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <input className="input" value={editDraft.tracking || ""}
+                              onChange={(e) => updateEditField("tracking", e.target.value)} style={{ flex: 1, minWidth: 100 }} />
+                            <ScanBtn onClick={() => { setScannerMode("fill_edit"); setShowScanner(true); }}
+                              title="Escanear tracking" />
+                          </div>
+                        ) : <span style={{ fontSize: 12, color: "rgba(255,255,255,0.70)" }}>{r.tracking || "-"}</span>}
                       </td>
-
                       <td>
                         {isEditing ? (
                           <input className="input" value={editDraft.weight_kg || ""}
                             onChange={(e) => updateEditField("weight_kg", e.target.value)} inputMode="decimal" />
-                        ) : (
-                          <span style={{ fontWeight: 600 }}>{Number(r.weight_kg).toFixed(2)}</span>
-                        )}
+                        ) : <span style={{ fontWeight: 600 }}>{Number(r.weight_kg).toFixed(2)}</span>}
                       </td>
-
                       <td>
                         {isEditing ? (
                           <select className="input" value={editDraft.origin || "USA"}
                             onChange={(e) => updateEditField("origin", e.target.value)}>
                             {ORIGINS.map((x) => <option key={x} value={x}>{x}</option>)}
                           </select>
-                        ) : (
-                          <span style={{ fontSize: 12, fontWeight: 600 }}>{r.origin || "-"}</span>
-                        )}
+                        ) : <span style={{ fontSize: 12, fontWeight: 600 }}>{r.origin || "-"}</span>}
                       </td>
-
                       <td>
                         {isEditing ? (
                           <select className="input"
@@ -1109,11 +1039,8 @@ export default function OperatorPanel() {
                             disabled={o === "EUROPA"}>
                             {serviceOptions.map((s) => <option key={s} value={s}>{s}</option>)}
                           </select>
-                        ) : (
-                          <span style={{ fontSize: 12 }}>{r.service || "-"}</span>
-                        )}
+                        ) : <span style={{ fontSize: 12 }}>{r.service || "-"}</span>}
                       </td>
-
                       <td>
                         {isEditing ? (
                           <input className="input" value={editDraft.rate_usd_per_kg || ""}
@@ -1124,7 +1051,6 @@ export default function OperatorPanel() {
                           <span style={{ fontSize: 12 }}>${Number(r.rate_usd_per_kg).toFixed(2)}/kg</span>
                         ) : <span className="muted">-</span>}
                       </td>
-
                       <td>
                         {isEditing ? (
                           <input className="input" value={editDraft.estimated_usd || ""} readOnly />
@@ -1132,7 +1058,6 @@ export default function OperatorPanel() {
                           <b style={{ color: "#ffd200" }}>${Number(r.estimated_usd).toFixed(2)}</b>
                         ) : <span className="muted">-</span>}
                       </td>
-
                       <td>
                         {isEditing ? (
                           <select className="input" value={override ? "MANUAL" : "AUTO"}
@@ -1142,19 +1067,16 @@ export default function OperatorPanel() {
                           </select>
                         ) : <span className="muted" style={{ fontSize: 11 }}>—</span>}
                       </td>
-
                       <td>
                         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                           <select className="input" value={statusDraft[r.id] || r.status}
                             onChange={(e) => setStatusDraft((s) => ({ ...s, [r.id]: e.target.value }))}
-                            disabled={isEditing}
-                            style={{ minWidth: 140 }}>
+                            disabled={isEditing} style={{ minWidth: 140 }}>
                             {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
                           </select>
                           <StatusBadge status={statusDraft[r.id] || r.status} />
                         </div>
                       </td>
-
                       <td>
                         <button className="btn" onClick={() => saveStatus(r.id)}
                           disabled={savingId === r.id || isEditing}
@@ -1162,7 +1084,6 @@ export default function OperatorPanel() {
                           {savingId === r.id ? "…" : "Guardar"}
                         </button>
                       </td>
-
                       <td>
                         <button className="btn" onClick={() => {
                           const next = openId === r.id ? null : r.id;
@@ -1172,7 +1093,6 @@ export default function OperatorPanel() {
                           {openId === r.id ? "Cerrar" : "Ver"}
                         </button>
                       </td>
-
                       <td>
                         {isEditing ? (
                           <div style={{ display: "flex", gap: 6 }}>
@@ -1182,20 +1102,15 @@ export default function OperatorPanel() {
                               {savingEditId === r.id ? "…" : "OK"}
                             </button>
                             <button className="btn" onClick={cancelEdit}
-                              style={{ height: 34, padding: "0 10px", fontSize: 12 }}>
-                              ✕
-                            </button>
+                              style={{ height: 34, padding: "0 10px", fontSize: 12 }}>✕</button>
                           </div>
                         ) : (
                           <button className="btn" onClick={() => startEdit(r)}
-                            style={{ height: 34, padding: "0 12px", fontSize: 12 }}>
-                            Editar
-                          </button>
+                            style={{ height: 34, padding: "0 12px", fontSize: 12 }}>Editar</button>
                         )}
                       </td>
                     </tr>
 
-                    {/* ── Historial inline expandido ── */}
                     {openId === r.id && (
                       <tr key={`events-${r.id}`}>
                         <td colSpan={16} style={{ padding: 0 }}>
@@ -1205,13 +1120,9 @@ export default function OperatorPanel() {
                             borderBottom: "1px solid rgba(255,255,255,0.08)",
                             padding: "12px 16px",
                           }}>
-                            <div style={{
-                              fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.50)",
-                              letterSpacing: "0.5px", marginBottom: 10
-                            }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.50)", letterSpacing: "0.5px", marginBottom: 10 }}>
                               HISTORIAL — Envío #{r.code || r.id}
                             </div>
-
                             {loadingEvents ? (
                               <div className="muted" style={{ fontSize: 13 }}>Cargando…</div>
                             ) : events.length === 0 ? (
@@ -1219,26 +1130,18 @@ export default function OperatorPanel() {
                             ) : (
                               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                                 {events.map((e, i) => (
-                                  <div key={e.id || e.created_at} style={{
-                                    display: "flex", alignItems: "center", gap: 12,
-                                    fontSize: 13,
-                                  }}>
-                                    {/* línea de tiempo */}
+                                  <div key={e.id || e.created_at} style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 13 }}>
                                     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 16 }}>
                                       <div style={{
                                         width: 10, height: 10, borderRadius: "50%", flexShrink: 0,
-                                        background: i === 0
-                                          ? "linear-gradient(135deg,#ffd200,#ff8a00)"
-                                          : "rgba(255,255,255,0.25)",
+                                        background: i === 0 ? "linear-gradient(135deg,#ffd200,#ff8a00)" : "rgba(255,255,255,0.25)",
                                         border: "2px solid rgba(255,255,255,0.15)",
                                       }} />
                                       {i < events.length - 1 && (
                                         <div style={{ width: 1, height: 18, background: "rgba(255,255,255,0.12)", marginTop: 2 }} />
                                       )}
                                     </div>
-                                    <div style={{ color: "rgba(255,255,255,0.40)", minWidth: 130, fontSize: 12 }}>
-                                      {fmtDate(e.created_at)}
-                                    </div>
+                                    <div style={{ color: "rgba(255,255,255,0.40)", minWidth: 130, fontSize: 12 }}>{fmtDate(e.created_at)}</div>
                                     <div style={{ color: "rgba(255,255,255,0.50)" }}>{e.old_status || "—"}</div>
                                     <div style={{ color: "rgba(255,255,255,0.35)" }}>→</div>
                                     <div style={{ fontWeight: 700, color: "#fff" }}>{e.new_status}</div>
@@ -1271,7 +1174,6 @@ export default function OperatorPanel() {
           Tip: cambiás el estado → Guardar → el cliente lo ve al instante.
         </div>
       </Panel>
-
     </div>
   );
 }
