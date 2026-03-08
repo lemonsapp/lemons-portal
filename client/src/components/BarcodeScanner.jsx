@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { BrowserMultiFormatReader, NotFoundException } from "@zxing/browser";
+import { BrowserMultiFormatReader } from "@zxing/browser";
 
 export default function BarcodeScanner({ onScan, onClose }) {
   const videoRef = useRef(null);
@@ -16,7 +16,11 @@ export default function BarcodeScanner({ onScan, onClose }) {
     BrowserMultiFormatReader.listVideoInputDevices()
       .then((devices) => {
         setCameras(devices);
-        const back = devices.find(d => d.label.toLowerCase().includes("back") || d.label.toLowerCase().includes("trasera") || d.label.toLowerCase().includes("environment"));
+        const back = devices.find(d =>
+          d.label.toLowerCase().includes("back") ||
+          d.label.toLowerCase().includes("trasera") ||
+          d.label.toLowerCase().includes("environment")
+        );
         const chosen = back || devices[0];
         if (chosen) setSelectedCamera(chosen.deviceId);
       })
@@ -54,11 +58,19 @@ export default function BarcodeScanner({ onScan, onClose }) {
             {cameras.map((c) => <option key={c.deviceId} value={c.deviceId}>{c.label || `Cámara ${c.deviceId.slice(0,8)}`}</option>)}
           </select>
         )}
-        {error && <div style={{ margin:16,background:"rgba(231,76,60,0.15)",border:"1px solid rgba(231,76,60,0.3)",borderRadius:10,padding:14,color:"#e74c3c",fontSize:13 }}>⚠️ {error}</div>}
+        {error && (
+          <div style={{ margin:16,background:"rgba(231,76,60,0.15)",border:"1px solid rgba(231,76,60,0.3)",borderRadius:10,padding:14,color:"#e74c3c",fontSize:13 }}>
+            ⚠️ {error}<br/><small>Verificá que el navegador tenga permiso para usar la cámara.</small>
+          </div>
+        )}
         {!error && (
           <div style={{ position:"relative",width:"100%",aspectRatio:"4/3",background:"#000",overflow:"hidden" }}>
             <video ref={videoRef} style={{ width:"100%",height:"100%",objectFit:"cover" }} />
-            {scanning && <div style={{ position:"absolute",bottom:12,left:0,right:0,textAlign:"center",color:"rgba(255,255,255,0.7)",fontSize:12,background:"rgba(0,0,0,0.5)",padding:"4px 0" }}>Apuntá al código de barras o QR</div>}
+            {scanning && (
+              <div style={{ position:"absolute",bottom:12,left:0,right:0,textAlign:"center",color:"rgba(255,255,255,0.7)",fontSize:12,background:"rgba(0,0,0,0.5)",padding:"4px 0" }}>
+                Apuntá al código de barras o QR
+              </div>
+            )}
           </div>
         )}
         {lastScan && (
@@ -66,8 +78,14 @@ export default function BarcodeScanner({ onScan, onClose }) {
             <div style={{ color:"rgba(255,255,255,0.6)",fontSize:12,marginBottom:6 }}>✅ Código escaneado:</div>
             <div style={{ color:"#f5e642",fontWeight:700,fontSize:16,wordBreak:"break-all",marginBottom:12,fontFamily:"monospace" }}>{lastScan}</div>
             <div style={{ display:"flex",gap:10 }}>
-              <button onClick={() => { setLastScan(null); setScanning(true); }} style={{ flex:1,background:"transparent",border:"1px solid rgba(255,255,255,0.2)",color:"#fff",borderRadius:8,padding:"9px 0",fontSize:13,cursor:"pointer" }}>Escanear otro</button>
-              <button onClick={() => { onScan(lastScan); onClose(); }} style={{ flex:1,background:"#f5e642",border:"none",color:"#0f1b2d",borderRadius:8,padding:"9px 0",fontSize:13,fontWeight:700,cursor:"pointer" }}>Usar este</button>
+              <button onClick={() => { setLastScan(null); setScanning(true); }}
+                style={{ flex:1,background:"transparent",border:"1px solid rgba(255,255,255,0.2)",color:"#fff",borderRadius:8,padding:"9px 0",fontSize:13,cursor:"pointer" }}>
+                Escanear otro
+              </button>
+              <button onClick={() => { onScan(lastScan); onClose(); }}
+                style={{ flex:1,background:"#f5e642",border:"none",color:"#0f1b2d",borderRadius:8,padding:"9px 0",fontSize:13,fontWeight:700,cursor:"pointer" }}>
+                Usar este
+              </button>
             </div>
           </div>
         )}
