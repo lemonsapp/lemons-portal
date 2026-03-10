@@ -133,6 +133,18 @@ function rateKeyFor(origin, service) {
   return null;
 }
 
+// Descuento por volumen según kg del envío individual
+function volumeDiscount(kg) {
+  if (kg >= 100) return 7;
+  if (kg >= 50)  return 5;
+  if (kg >= 10)  return 3;
+  return 0;
+}
+
+function applyVolumeDiscount(baseRate, kg) {
+  return Math.max(0, baseRate - volumeDiscount(kg));
+}
+
 async function getClientRatesByUserId(userId) {
   const r = await db.query(
     `SELECT user_id, usa_normal, usa_express, usa_tech_premium, china_normal, china_express, europa_normal, updated_at
@@ -184,6 +196,7 @@ async function computeRateAndEstimatedServer({
   serviceRaw,
   weight_kg,
   rateOverride,
+  chargeRealWeight = false,
 }) {
   const origin = normalizeOrigin(originRaw);
   if (!origin) {
@@ -199,13 +212,18 @@ async function computeRateAndEstimatedServer({
   if (origin === "EUROPA") service = "NORMAL";
   if (origin !== "USA" && service === "TECH_PREMIUM") service = "NORMAL";
 
+  // Si chargeRealWeight=true y peso < 1kg, cobrar el peso real (no mínimo de 1kg)
+  const effectiveWeight = (chargeRealWeight && Number(weight_kg) < MIN_BILLABLE_KG)
+    ? Number(weight_kg)
+    : weight_kg;
+
   const override = toNumOrNull(rateOverride);
   if (override !== null) {
     return {
       origin,
       service,
       rate_usd_per_kg: override,
-      estimated_usd: computeEstimated(weight_kg, override),
+      estimated_usd: computeEstimated(effectiveWeight, override),
     };
   }
 
@@ -223,11 +241,15 @@ async function computeRateAndEstimatedServer({
     clientRatesRow: ratesRow,
   });
 
+  // Aplicar descuento por volumen al peso individual del envío
+  const kg = Number(effectiveWeight) || 0;
+  const discountedRate = applyVolumeDiscount(resolved, kg);
+
   return {
     origin,
     service,
-    rate_usd_per_kg: resolved,
-    estimated_usd: computeEstimated(weight_kg, resolved),
+    rate_usd_per_kg: discountedRate,
+    estimated_usd: computeEstimated(effectiveWeight, discountedRate),
   };
 }
 
@@ -1018,6 +1040,7 @@ app.post(
         service: z.enum(["NORMAL", "EXPRESS", "TECH_PREMIUM"]).optional(),
         rate_usd_per_kg: z.number().min(0).nullable().optional(),
         estimated_usd: z.number().min(0).nullable().optional(),
+        charge_real_weight: z.boolean().optional(), // si true y peso <1kg, cobra el peso real
       });
 
       const p = schema.safeParse(req.body);
@@ -1038,6 +1061,7 @@ app.post(
         serviceRaw: d.service ?? null,
         weight_kg: d.weight_kg,
         rateOverride: d.rate_usd_per_kg ?? null,
+        chargeRealWeight: d.charge_real_weight ?? false,
       });
 
       const ins = await db.query(
@@ -1322,7 +1346,7 @@ app.patch(
       if (newStatus === "Entregado") {
         try {
           const existQ = await db.query(
-            `SELECT id FROM coin_transactions WHERE shipment_id=$1 AND type='earn' LIMIT 1`,
+            `SELECT id FROM coin_transactions WHERE shipment_id=$1 AND type='earn' AND reason NOT LIKE '%primer envío%' LIMIT 1`,
             [shipmentId]
           );
           if (!existQ.rows[0]) {
@@ -1333,18 +1357,17 @@ app.patch(
             )).rows[0];
 
             if (shipFull) {
-              const kg         = parseFloat(shipFull.weight_kg     || 0);
-              const usd        = parseFloat(shipFull.estimated_usd || 0);
-              const coinsByKg  = Math.floor(kg * 3);
-              const coinsBig   = usd >= 500 ? 10 : 0;
-              const coinsFirst = !shipFull.first_shipment_bonus_given ? 15 : 0;
-              const total      = coinsByKg + coinsBig + coinsFirst;
+              const kg        = parseFloat(shipFull.weight_kg     || 0);
+              const usd       = parseFloat(shipFull.estimated_usd || 0);
+              const coinsByKg = Math.floor(kg * 3);
+              const coinsBig  = usd >= 500 ? 10 : 0;
+              // Bonus primer envío (15 coins) NO se otorga automáticamente — el cliente lo reclama
+              const total     = coinsByKg + coinsBig;
 
               if (total > 0) {
                 const breakdown = [];
-                if (coinsByKg  > 0) breakdown.push(`${coinsByKg} por ${kg.toFixed(2)}kg`);
-                if (coinsBig   > 0) breakdown.push(`${coinsBig} bonus envío grande`);
-                if (coinsFirst > 0) breakdown.push(`${coinsFirst} bonus primer envío`);
+                if (coinsByKg > 0) breakdown.push(`${coinsByKg} por ${kg.toFixed(2)}kg`);
+                if (coinsBig  > 0) breakdown.push(`${coinsBig} bonus envío grande`);
 
                 await db.query(
                   `INSERT INTO lemon_coins (user_id, balance, total_earned)
@@ -1362,12 +1385,6 @@ app.patch(
                    WHERE user_id=$2`,
                   [total, shipFull.user_id]
                 );
-                if (coinsFirst > 0) {
-                  await db.query(
-                    `UPDATE users SET first_shipment_bonus_given=TRUE WHERE id=$1`,
-                    [shipFull.user_id]
-                  );
-                }
                 console.log(`[COINS] +${total} coins → user ${shipFull.user_id} (envío ${shipmentId})`);
               }
             }
@@ -1933,11 +1950,21 @@ app.get("/quote/my-rates", authRequired, async (req, res) => {
       europa_normal:     Number(custom.europa_normal     ?? defaults.europa_normal),
     };
     const fx = fxQ.rows[0] ? Number(fxQ.rows[0].value) : null;
-    res.json({ rates, fx_rate: fx, personalized: !!ratesQ.rows[0] });
+    res.json({
+      rates,
+      fx_rate: fx,
+      personalized: !!ratesQ.rows[0],
+      volume_discounts: [
+        { min_kg: 1,   max_kg: 9,   discount: 0, label: "1–9 kg" },
+        { min_kg: 10,  max_kg: 49,  discount: 3, label: "10–49 kg (−$3/kg)" },
+        { min_kg: 50,  max_kg: 99,  discount: 5, label: "50–99 kg (−$5/kg)" },
+        { min_kg: 100, max_kg: null, discount: 7, label: "100+ kg (−$7/kg)" },
+      ],
+    });
   } catch(err) { res.status(500).json({ error: "Error obteniendo tarifas" }); }
 });
 
-app.post("/quote/request", authRequired, async (req, res) => {
+app.post("/quote/request", authRequired, requireRole(["operator", "admin"]), async (req, res) => {
   try {
     const schema = z.object({
       origin:        z.enum(["usa","china","europa"]),
@@ -2327,7 +2354,7 @@ app.get(
       const service = (req.query.service || "NORMAL").toUpperCase().trim();
 
       const originPfx  = origin === "CHINA" ? "CHN" : origin === "EUROPA" ? "EUR" : "USA";
-      const servicePfx = service === "EXPRESS" ? "EXP" : service === "TECH_PREMIUM" ? "TEC" : "NRM";
+      const servicePfx = service === "EXPRESS" ? "E" : "N";
       const prefix     = `${originPfx}-${servicePfx}-`;
 
       const q = await db.query(
@@ -2361,6 +2388,67 @@ app.get(
 // ✅ LEMON COINS ROUTER
 // ════════════════════════════════════════════════════════════════════
 app.use("/coins", coinsRouter);
+
+// ── Reclamar bonus primer envío (cliente) ──────────────────────────
+app.post("/coins/claim-first-bonus", authRequired, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Verificar que el cliente tiene al menos un envío entregado
+    const shipQ = await db.query(
+      `SELECT id FROM shipments WHERE user_id=$1 AND status='Entregado' LIMIT 1`,
+      [userId]
+    );
+    if (!shipQ.rows[0]) {
+      return res.status(400).json({ error: "No tenés envíos entregados todavía." });
+    }
+
+    // Verificar que no se otorgó antes
+    const userQ = await db.query(
+      `SELECT first_shipment_bonus_given FROM users WHERE id=$1`,
+      [userId]
+    );
+    if (userQ.rows[0]?.first_shipment_bonus_given) {
+      return res.status(400).json({ error: "Ya reclamaste el bonus de primer envío." });
+    }
+
+    // Verificar que no existe ya una transacción de este tipo
+    const txQ = await db.query(
+      `SELECT id FROM coin_transactions WHERE user_id=$1 AND reason LIKE '%primer envío%' LIMIT 1`,
+      [userId]
+    );
+    if (txQ.rows[0]) {
+      return res.status(400).json({ error: "Ya reclamaste el bonus de primer envío." });
+    }
+
+    const BONUS = 15;
+
+    await db.query(
+      `INSERT INTO lemon_coins (user_id, balance, total_earned)
+       VALUES ($1,0,0) ON CONFLICT (user_id) DO NOTHING`,
+      [userId]
+    );
+    await db.query(
+      `INSERT INTO coin_transactions (user_id, type, amount, reason)
+       VALUES ($1,'earn',$2,'🎉 Bonus primer envío completado')`,
+      [userId, BONUS]
+    );
+    await db.query(
+      `UPDATE lemon_coins SET balance=balance+$1, total_earned=total_earned+$1, updated_at=NOW()
+       WHERE user_id=$2`,
+      [BONUS, userId]
+    );
+    await db.query(
+      `UPDATE users SET first_shipment_bonus_given=TRUE WHERE id=$1`,
+      [userId]
+    );
+
+    res.json({ ok: true, coins: BONUS, message: `+${BONUS} Lemon Coins acreditados 🎉` });
+  } catch (e) {
+    console.error("[COINS] claim-first-bonus error:", e.message);
+    res.status(500).json({ error: "Error al reclamar bonus" });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`API corriendo en http://localhost:${PORT}`);

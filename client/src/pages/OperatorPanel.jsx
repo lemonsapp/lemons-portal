@@ -238,6 +238,7 @@ export default function OperatorPanel() {
   const [service, setService] = useState("NORMAL");
   const [overrideEnabled, setOverrideEnabled] = useState(false);
   const [overrideRate, setOverrideRate] = useState("");
+  const [chargeRealWeight, setChargeRealWeight] = useState(false); // para paquetes < 1kg
 
   // Tab activo en gestión
   const [activeTab, setActiveTab] = useState("shipments"); // "shipments" | "clients"
@@ -446,6 +447,7 @@ export default function OperatorPanel() {
       weight_kg: weightParsed, status,
       origin: normalizeOrigin(origin),
       service: normalizeService(origin, service),
+      charge_real_weight: chargeRealWeight,
     };
     if (overrideEnabled) {
       const r = Number(numOrNull(overrideRate) || 0);
@@ -460,7 +462,7 @@ export default function OperatorPanel() {
     const data = await res.json();
     if (!res.ok) return setMsg(data?.error || "Error interno");
     setMsg(`Envío creado: ${data.shipment?.code || packageCode}`);
-    setPackageCode(""); setDescription(""); setBoxCode(""); setTracking(""); setWeightKg("");
+    setPackageCode(""); setDescription(""); setBoxCode(""); setTracking(""); setWeightKg(""); setChargeRealWeight(false);
     setStatus("Recibido en depósito"); setOrigin("USA"); setService("NORMAL");
     setOverrideEnabled(false); setOverrideRate("");
     await loadOperatorShipments();
@@ -664,6 +666,13 @@ export default function OperatorPanel() {
   }
 
   useEffect(() => { refreshAll(); }, []); // eslint-disable-line
+
+  // Auto-fetch código al montar (con origen/servicio default USA/NORMAL)
+  useEffect(() => {
+    fetch(`${API}/operator/next-code?origin=USA&service=NORMAL`, {
+      headers: { Authorization: `Bearer ${getToken()}` }
+    }).then(r => r.json()).then(d => { if (d.code) setPackageCode(d.code); }).catch(() => {});
+  }, []); // eslint-disable-line
 
   // ── GESTIÓN DE CLIENTES ───────────────────────────────────────────────────
   async function loadClients() {
@@ -983,19 +992,36 @@ export default function OperatorPanel() {
                 <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", marginBottom: 5, fontWeight: 600 }}>PESO (kg) *</div>
                 <input className="input" placeholder="0.00" value={weightKg}
                   onChange={(e) => setWeightKg(e.target.value)} inputMode="decimal" />
+                {Number(weightKg) > 0 && Number(weightKg) < 1 && (
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, fontSize: 11, color: "rgba(255,255,255,0.6)", cursor: "pointer" }}>
+                    <input type="checkbox" checked={chargeRealWeight} onChange={e => setChargeRealWeight(e.target.checked)} />
+                    Cobrar peso real ({weightKg}kg) en vez de mínimo 1kg
+                  </label>
+                )}
               </div>
               <div>
                 <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", marginBottom: 5, fontWeight: 600 }}>ORIGEN</div>
-                <select className="input" value={origin} onChange={(e) => setOrigin(e.target.value)}>
+                <select className="input" value={origin} onChange={(e) => {
+                  const o = e.target.value;
+                  setOrigin(o);
+                  const s = o === "EUROPA" ? "NORMAL" : service;
+                  fetch(`${API}/operator/next-code?origin=${o}&service=${s}`, { headers: { Authorization: `Bearer ${getToken()}` } })
+                    .then(r => r.json()).then(d => { if (d.code) setPackageCode(d.code); });
+                }}>
                   {ORIGINS.map((o) => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
               <div>
                 <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", marginBottom: 5, fontWeight: 600 }}>SERVICIO</div>
                 <select className="input" value={origin === "EUROPA" ? "NORMAL" : service}
-                  onChange={(e) => setService(e.target.value)} disabled={origin === "EUROPA"}>
+                  onChange={(e) => {
+                    const s = e.target.value;
+                    setService(s);
+                    fetch(`${API}/operator/next-code?origin=${origin}&service=${s}`, { headers: { Authorization: `Bearer ${getToken()}` } })
+                      .then(r => r.json()).then(d => { if (d.code) setPackageCode(d.code); });
+                  }} disabled={origin === "EUROPA"}>
                   {(SERVICES_BY_ORIGIN[origin] || ["NORMAL"]).map((s) => (
-                    <option key={s} value={s}>{s === "TECH_PREMIUM" ? "📱 Tecnología Premium" : s}</option>
+                    <option key={s} value={s}>{s}</option>
                   ))}
                 </select>
               </div>

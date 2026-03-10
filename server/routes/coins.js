@@ -11,10 +11,10 @@ const BIG_SHIPMENT_USD   = 500;
 const COINS_FIRST_BONUS  = 15;
 
 const REWARDS = {
-  free_shipment: { coins: 10000, label: "Envío gratis a elección",  type: "service" },
-  free_5kg:      { coins: 5000,  label: "5kg gratis",               type: "service" },
-  discount_15:   { coins: 1000,  label: "USD 15 de descuento",      type: "discount", value: 15 },
-  discount_8:    { coins: 500,   label: "USD 8 de descuento",       type: "discount", value: 8  },
+  free_shipment: { coins: 9500,  label: "Envío gratis a elección",  type: "service" },
+  free_5kg:      { coins: 4500,  label: "5kg gratis",               type: "service" },
+  discount_15:   { coins: 500,   label: "USD 15 de descuento",      type: "discount", value: 15 },
+  discount_8:    { coins: 100,   label: "USD 8 de descuento",       type: "discount", value: 8  },
 };
 
 const LEVELS = [
@@ -64,7 +64,7 @@ router.get("/:userId", authRequired, async (req, res) => {
     const coins = await getOrCreateCoins(userId);
     const level = getLevel(coins.balance);
 
-    const nextLevel   = [...LEVELS].reverse().find(l => l.min > coins.balance) || null;
+    const nextLevel   = [...LEVELS].reverse().find(l => l.min > coins.balance) ?? null;
     const coinsToNext = nextLevel ? nextLevel.min - coins.balance : null;
 
     const txQ = await db.query(`
@@ -83,15 +83,31 @@ router.get("/:userId", authRequired, async (req, res) => {
       ORDER BY cr.created_at DESC LIMIT 20
     `, [userId]);
 
+    // Verificar si tiene envíos entregados y si ya reclamó el bonus
+    const deliveredQ = await db.query(
+      `SELECT id FROM shipments WHERE user_id=$1 AND status='Entregado' LIMIT 1`,
+      [userId]
+    );
+    const userQ = await db.query(
+      `SELECT first_shipment_bonus_given FROM users WHERE id=$1`,
+      [userId]
+    );
+    const bonusClaimedTxQ = await db.query(
+      `SELECT id FROM coin_transactions WHERE user_id=$1 AND reason LIKE '%primer envío%' LIMIT 1`,
+      [userId]
+    );
+
     res.json({
-      balance:       coins.balance,
-      total_earned:  coins.total_earned,
-      level,
-      next_level:    nextLevel,
-      coins_to_next: coinsToNext,
-      rewards:       REWARDS,
-      transactions:  txQ.rows,
-      redemptions:   redQ.rows,
+      balance:               coins.balance,
+      total_earned:          coins.total_earned,
+      level:                 { ...level, min: level.min ?? 0 },
+      next_level:            nextLevel,
+      coins_to_next:         coinsToNext,
+      rewards:               REWARDS,
+      transactions:          txQ.rows,
+      redemptions:           redQ.rows,
+      has_delivered_shipment: !!deliveredQ.rows[0],
+      first_bonus_claimed:   !!userQ.rows[0]?.first_shipment_bonus_given || !!bonusClaimedTxQ.rows[0],
     });
   } catch (e) {
     console.error("COINS GET USER ERROR:", e);
@@ -131,15 +147,14 @@ router.post("/earn", authRequired, requireRole(["operator", "admin"]), async (re
     const usd = parseFloat(ship.estimated_usd || 0);
     const coinsByKg  = Math.floor(kg * COINS_PER_KG);
     const coinsBig   = usd >= BIG_SHIPMENT_USD ? COINS_BIG_SHIPMENT : 0;
-    const coinsFirst = !ship.first_shipment_bonus_given ? COINS_FIRST_BONUS : 0;
-    const total      = coinsByKg + coinsBig + coinsFirst;
+    // Bonus primer envío NO se otorga acá — el cliente lo reclama manualmente
+    const total      = coinsByKg + coinsBig;
     if (total <= 0) return res.json({ earned: 0 });
 
     await getOrCreateCoins(user_id);
     const breakdown = [];
     if (coinsByKg  > 0) breakdown.push(`${coinsByKg} por ${kg.toFixed(2)}kg`);
     if (coinsBig   > 0) breakdown.push(`${coinsBig} bonus envío grande`);
-    if (coinsFirst > 0) breakdown.push(`${coinsFirst} bonus primer envío`);
 
     await db.query(
       `INSERT INTO coin_transactions (user_id, type, amount, reason, shipment_id)
@@ -151,16 +166,13 @@ router.post("/earn", authRequired, requireRole(["operator", "admin"]), async (re
        WHERE user_id=$2`,
       [total, user_id]
     );
-    if (coinsFirst > 0) {
-      await db.query(`UPDATE users SET first_shipment_bonus_given=TRUE WHERE id=$1`, [ship.user_id]);
-    }
 
     const updQ = await db.query(`SELECT * FROM lemon_coins WHERE user_id=$1`, [user_id]);
     res.json({
       earned:    total,
       balance:   updQ.rows[0].balance,
       level:     getLevel(updQ.rows[0].balance),
-      breakdown: { by_kg: coinsByKg, big_shipment: coinsBig, first_bonus: coinsFirst },
+      breakdown: { by_kg: coinsByKg, big_shipment: coinsBig, first_bonus: 0 },
     });
   } catch (e) {
     console.error("COINS EARN ERROR:", e);
