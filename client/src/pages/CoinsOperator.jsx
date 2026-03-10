@@ -12,10 +12,10 @@ const LEVEL_CONFIG = {
   gold:   { label: "Oro",    icon: "🥇", color: "#FFD700" },
 };
 const REWARD_CONFIG = {
-  free_shipment: { icon: "✈️", label: "Envío Gratis",     coins: 10000 },
-  free_5kg:      { icon: "📦", label: "5kg Gratis",       coins: 5000  },
-  discount_15:   { icon: "💸", label: "USD 15 Descuento", coins: 1000  },
-  discount_8:    { icon: "💰", label: "USD 8 Descuento",  coins: 500   },
+  free_shipment: { icon: "✈️", label: "Envío Gratis",     coins: 9500 },
+  free_5kg:      { icon: "📦", label: "5kg Gratis",       coins: 4500 },
+  discount_15:   { icon: "💸", label: "USD 15 Descuento", coins: 500  },
+  discount_8:    { icon: "💰", label: "USD 8 Descuento",  coins: 100  },
 };
 const fmtDate = (v) => {
   if (!v) return "-";
@@ -440,9 +440,9 @@ export default function CoinsOperator() {
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.60)", lineHeight: 1.8 }}>
               • <b>3 coins</b> por kg de peso<br />
               • <b>+10 coins</b> si el envío supera USD 500<br />
-              • <b>+15 coins</b> bonus por primer envío (una sola vez)<br />
+              • <b>+15 coins</b> bonus por primer envío (el cliente lo reclama manualmente)<br />
               <br />
-              <b>Canjes:</b> 1000 → envío gratis · 500 → 5kg gratis · 100 → USD 15 desc · 50 → USD 8 desc<br />
+              <b>Canjes:</b> 9.500 → envío gratis · 4.500 → 5kg gratis · 500 → USD 15 desc · 100 → USD 8 desc<br />
               <b>Niveles:</b> 🥉 Bronce 0-499 · 🥈 Plata 500-1499 · 🥇 Oro 1500+
             </div>
           </div>
