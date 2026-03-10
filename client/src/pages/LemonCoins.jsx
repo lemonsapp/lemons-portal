@@ -12,10 +12,10 @@ const LEVEL_CONFIG = {
 };
 
 const REWARD_CONFIG = {
-  free_shipment: { icon: "✈️", label: "Envío Gratis",      desc: "1 envío a elección sin costo", coins: 10000, color: "#f5e642" },
-  free_5kg:      { icon: "📦", label: "5kg Gratis",        desc: "5 kilogramos sin cargo",       coins: 5000,  color: "#22c55e" },
-  discount_15:   { icon: "💸", label: "USD 15 Descuento",  desc: "Descuento en tu próximo envío", coins: 1000,  color: "#3b82f6" },
-  discount_8:    { icon: "💰", label: "USD 8 Descuento",   desc: "Descuento en tu próximo envío", coins: 500,  color: "#a78bfa" },
+  free_shipment: { icon: "✈️", label: "Envío Gratis",      desc: "1 envío a elección sin costo", coins: 9500,  color: "#f5e642" },
+  free_5kg:      { icon: "📦", label: "5kg Gratis",        desc: "5 kilogramos sin cargo",       coins: 4500,  color: "#22c55e" },
+  discount_15:   { icon: "💸", label: "USD 15 Descuento",  desc: "Descuento en tu próximo envío", coins: 500,   color: "#3b82f6" },
+  discount_8:    { icon: "💰", label: "USD 8 Descuento",   desc: "Descuento en tu próximo envío", coins: 100,   color: "#a78bfa" },
 };
 
 const fmtDate = (v) => {
@@ -30,6 +30,7 @@ export default function LemonCoins({ userId: propUserId }) {
   const [msg, setMsg]         = useState("");
   const [redeeming, setRedeeming] = useState(null);
   const [tab, setTab]         = useState("overview");
+  const [claimingBonus, setClaimingBonus] = useState(false);
 
   // Obtener userId del token si no viene por prop
   function getUserId() {
@@ -40,6 +41,23 @@ export default function LemonCoins({ userId: propUserId }) {
       const payload = JSON.parse(atob(token.split(".")[1]));
       return payload.id || payload.userId || payload.user_id;
     } catch { return null; }
+  }
+
+  async function claimFirstBonus() {
+    if (!confirm("¿Reclamar tu bonus de 15 Lemon Coins por tu primer envío entregado?")) return;
+    setClaimingBonus(true);
+    setMsg("");
+    try {
+      const res  = await fetch(`${API}/coins/claim-first-bonus`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" },
+      });
+      const json = await res.json();
+      if (!res.ok) { setMsg(json.error || "Error al reclamar"); return; }
+      setMsg(`🎉 ${json.message}`);
+      await load();
+    } catch { setMsg("Error de red"); }
+    finally { setClaimingBonus(false); }
   }
 
   async function load() {
@@ -87,8 +105,10 @@ export default function LemonCoins({ userId: propUserId }) {
   if (!data) return null;
 
   const level    = LEVEL_CONFIG[data.level?.key] || LEVEL_CONFIG.bronze;
-  const progress = data.next_level
-    ? Math.min(100, Math.round(((data.balance - data.level.min) / (data.next_level.min - data.level.min)) * 100))
+  const levelMin  = data.level?.min ?? 0;
+  const nextMin   = data.next_level?.min ?? null;
+  const progress  = nextMin
+    ? Math.min(100, Math.max(0, Math.round(((data.balance - levelMin) / (nextMin - levelMin)) * 100)))
     : 100;
 
   return (
@@ -171,6 +191,37 @@ export default function LemonCoins({ userId: propUserId }) {
           )}
         </div>
       </div>
+
+      {/* ── Bonus primer envío ── */}
+      {data.has_delivered_shipment && !data.first_bonus_claimed && (
+        <div style={{
+          marginTop: 12,
+          background: "linear-gradient(135deg, rgba(245,230,66,0.15), rgba(255,138,0,0.12))",
+          border: "1px solid rgba(245,230,66,0.35)",
+          borderRadius: 18, padding: "18px 22px",
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap",
+        }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 800, color: "#f5e642", marginBottom: 4 }}>
+              🎉 ¡Bonus de primer envío disponible!
+            </div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)" }}>
+              Tu primer envío fue entregado. Reclamá +15 Lemon Coins de regalo.
+            </div>
+          </div>
+          <button
+            onClick={claimFirstBonus}
+            disabled={claimingBonus}
+            style={{
+              height: 42, padding: "0 22px", borderRadius: 12, border: "none",
+              background: "linear-gradient(135deg, #f5e642, #ff8a00)",
+              color: "#0f1b2d", fontWeight: 900, fontSize: 14, cursor: "pointer",
+              whiteSpace: "nowrap", flexShrink: 0,
+            }}>
+            {claimingBonus ? "Reclamando…" : "🍋 Reclamar +15 coins"}
+          </button>
+        </div>
+      )}
 
       {/* ── Mensaje ── */}
       {msg && (

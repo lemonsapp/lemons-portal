@@ -241,7 +241,12 @@ export default function OperatorPanel() {
   const [chargeRealWeight, setChargeRealWeight] = useState(false); // para paquetes < 1kg
 
   // Tab activo en gestión
-  const [activeTab, setActiveTab] = useState("shipments"); // "shipments" | "clients"
+  const [activeTab, setActiveTab] = useState("shipments"); // "shipments" | "clients" | "solicitudes"
+
+  // Solicitudes de clientes
+  const [solicitudes, setSolicitudes]       = useState([]);
+  const [solicitudesLoading, setSolicitudesLoading] = useState(false);
+  const [solicitudNotes, setSolicitudNotes] = useState({});
 
   // Tabla operador
   const [opSearch, setOpSearch] = useState("");
@@ -695,8 +700,21 @@ export default function OperatorPanel() {
     }
   }
 
+  async function loadSolicitudes() {
+    setSolicitudesLoading(true);
+    try {
+      const res = await fetch(`${API}/quote/requests`, {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      const data = await res.json();
+      setSolicitudes(data.requests || []);
+    } catch { setSolicitudes([]); }
+    finally { setSolicitudesLoading(false); }
+  }
+
   useEffect(() => {
     if (activeTab === "clients") loadClients();
+    if (activeTab === "solicitudes") loadSolicitudes();
   }, [activeTab]); // eslint-disable-line
 
   async function saveClientEdit() {
@@ -1113,8 +1131,9 @@ export default function OperatorPanel() {
         {/* ── TAB SWITCHER ── */}
         <div style={{ display: "flex", gap: 6, marginBottom: 18 }}>
           {[
-            { key: "shipments", label: "📦 Envíos" },
-            { key: "clients",   label: "👥 Clientes" },
+            { key: "shipments",   label: "📦 Envíos" },
+            { key: "clients",     label: "👥 Clientes" },
+            { key: "solicitudes", label: "📋 Solicitudes" },
           ].map(({ key, label }) => (
             <button key={key} onClick={() => setActiveTab(key)} style={{
               height: 38, padding: "0 20px", borderRadius: 10, fontSize: 13,
@@ -1801,6 +1820,122 @@ export default function OperatorPanel() {
                     })}
                   </tbody>
                 </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === "solicitudes" && (
+          <div style={{ padding: "20px 0" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>📋 Solicitudes de clientes</h3>
+              <button onClick={loadSolicitudes} style={{
+                background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)",
+                color: "rgba(255,255,255,0.7)", borderRadius: 8, padding: "6px 14px",
+                fontSize: 12, cursor: "pointer", fontWeight: 700,
+              }}>↻ Actualizar</button>
+            </div>
+            {solicitudesLoading ? (
+              <div style={{ textAlign: "center", color: "rgba(255,255,255,0.4)", padding: 40 }}>Cargando…</div>
+            ) : solicitudes.length === 0 ? (
+              <div style={{ textAlign: "center", padding: 60, color: "rgba(255,255,255,0.3)", fontSize: 15 }}>
+                No hay solicitudes todavía.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {solicitudes.map(s => {
+                  const statusColors = {
+                    pendiente:  { bg: "rgba(251,191,36,0.12)", border: "rgba(251,191,36,0.3)", text: "#fbbf24" },
+                    aprobada:   { bg: "rgba(74,222,128,0.12)", border: "rgba(74,222,128,0.3)", text: "#4ade80" },
+                    rechazada:  { bg: "rgba(239,68,68,0.10)",  border: "rgba(239,68,68,0.25)",  text: "#f87171" },
+                    contactado: { bg: "rgba(99,102,241,0.12)", border: "rgba(99,102,241,0.3)", text: "#a78bfa" },
+                  };
+                  const sc = statusColors[s.status] || statusColors.pendiente;
+                  return (
+                    <div key={s.id} style={{
+                      background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)",
+                      borderRadius: 16, padding: "18px 20px",
+                    }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+                        <div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                            <span style={{ fontWeight: 900, color: "#ffd200", fontSize: 14 }}>{s.code}</span>
+                            <span style={{
+                              background: sc.bg, border: `1px solid ${sc.border}`,
+                              color: sc.text, borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 800,
+                            }}>{s.status?.toUpperCase()}</span>
+                          </div>
+                          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", marginBottom: 4 }}>
+                            👤 <b>{s.client_name}</b> #{s.client_number} · {s.client_email}
+                          </div>
+                          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)" }}>
+                            {s.origin} · {s.service} · <b>{Number(s.weight_kg).toFixed(2)} kg</b>
+                          </div>
+                          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", marginTop: 2 }}>
+                            📦 {s.description}
+                          </div>
+                          <div style={{ fontSize: 13, color: "#ffd200", fontWeight: 700, marginTop: 4 }}>
+                            Estimado: ${Number(s.estimated_usd).toLocaleString("en-US", { minimumFractionDigits: 2 })} USD
+                          </div>
+                          {s.notes && (
+                            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 6, fontStyle: "italic" }}>
+                              Nota: {s.notes}
+                            </div>
+                          )}
+                          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 6 }}>
+                            {new Date(s.created_at).toLocaleString("es-AR")}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 180 }}>
+                          <select
+                            value={s.status}
+                            onChange={async (e) => {
+                              await fetch(`${API}/quote/requests/${s.id}`, {
+                                method: "PATCH",
+                                headers: { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" },
+                                body: JSON.stringify({ status: e.target.value }),
+                              });
+                              loadSolicitudes();
+                            }}
+                            style={{
+                              background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)",
+                              color: "#fff", borderRadius: 8, padding: "7px 10px", fontSize: 13, cursor: "pointer",
+                            }}
+                          >
+                            <option value="pendiente">⏳ Pendiente</option>
+                            <option value="contactado">📞 Contactado</option>
+                            <option value="aprobada">✅ Aprobada</option>
+                            <option value="rechazada">❌ Rechazada</option>
+                          </select>
+                          <input
+                            placeholder="Agregar nota…"
+                            value={solicitudNotes[s.id] !== undefined ? solicitudNotes[s.id] : (s.notes || "")}
+                            onChange={e => setSolicitudNotes(prev => ({ ...prev, [s.id]: e.target.value }))}
+                            style={{
+                              background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)",
+                              color: "#fff", borderRadius: 8, padding: "7px 10px", fontSize: 12,
+                            }}
+                          />
+                          <button
+                            onClick={async () => {
+                              await fetch(`${API}/quote/requests/${s.id}`, {
+                                method: "PATCH",
+                                headers: { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" },
+                                body: JSON.stringify({ notes: solicitudNotes[s.id] !== undefined ? solicitudNotes[s.id] : (s.notes || "") }),
+                              });
+                              loadSolicitudes();
+                            }}
+                            style={{
+                              background: "rgba(255,210,0,0.12)", border: "1px solid rgba(255,210,0,0.3)",
+                              color: "#ffd200", borderRadius: 8, padding: "7px 10px",
+                              fontSize: 12, fontWeight: 700, cursor: "pointer",
+                            }}
+                          >Guardar nota</button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

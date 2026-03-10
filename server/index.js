@@ -1964,11 +1964,11 @@ app.get("/quote/my-rates", authRequired, async (req, res) => {
   } catch(err) { res.status(500).json({ error: "Error obteniendo tarifas" }); }
 });
 
-app.post("/quote/request", authRequired, requireRole(["operator", "admin"]), async (req, res) => {
+app.post("/quote/request", authRequired, async (req, res) => {
   try {
     const schema = z.object({
-      origin:        z.enum(["usa","china","europa"]),
-      service:       z.enum(["NORMAL","EXPRESS","TECH_PREMIUM"]),
+      origin:        z.enum(["usa","china","europa","USA","CHINA","EUROPA"]),
+      service:       z.enum(["NORMAL","EXPRESS","TECH_PREMIUM","normal","express"]),
       weight_kg:     z.number().min(0.01),
       description:   z.string().min(1),
       estimated_usd: z.number().min(0),
@@ -1976,34 +1976,87 @@ app.post("/quote/request", authRequired, requireRole(["operator", "admin"]), asy
     const p = schema.safeParse(req.body);
     if (!p.success) return res.status(400).json({ error: "Datos inválidos" });
 
-    const userId = req.user.id;
-    const { origin, service, weight_kg, description, estimated_usd } = p.data;
+    const userId  = req.user.id;
+    const origin  = p.data.origin.toUpperCase();
+    const service = p.data.service.toUpperCase();
+    const { weight_kg, description, estimated_usd } = p.data;
 
-    const code = `SOL-${Date.now().toString(36).toUpperCase()}`;
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS quote_requests (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id),
+        code TEXT UNIQUE,
+        origin TEXT, service TEXT,
+        weight_kg NUMERIC, description TEXT,
+        estimated_usd NUMERIC,
+        status TEXT DEFAULT 'pendiente',
+        notes TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    const code = `SOL-\${Date.now().toString(36).toUpperCase()}`;
     const r = await db.query(`
-      INSERT INTO shipments
-        (user_id, code, description, weight_kg, status, origin, service, rate_usd_per_kg, estimated_usd, date_in)
-      VALUES ($1,$2,$3,$4,'Recibido en depósito',$5,$6,
-        (SELECT COALESCE(cr.${origin}_${service.toLowerCase()}, oc.${origin}_${service.toLowerCase()})
-         FROM operator_costs oc
-         LEFT JOIN client_rates cr ON cr.user_id=$1
-         WHERE oc.id=1),
-        $7, CURRENT_DATE)
+      INSERT INTO quote_requests
+        (user_id, code, origin, service, weight_kg, description, estimated_usd, status)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,'pendiente')
       RETURNING *
-    `, [userId, code, description, weight_kg, origin.toUpperCase(), service, estimated_usd]);
+    `, [userId, code, origin, service, weight_kg, description, estimated_usd]);
 
-    await db.query(
-      `INSERT INTO shipment_events (shipment_id, old_status, new_status) VALUES ($1, NULL, 'Recibido en depósito')`,
-      [r.rows[0].id]
-    );
-
-    res.json({ ok: true, shipment: r.rows[0] });
+    res.json({ ok: true, code, request: r.rows[0] });
   } catch(err) {
-    console.error(err);
+    console.error("[QUOTE REQUEST]", err);
     res.status(500).json({ error: "Error creando solicitud" });
   }
 });
 
+// ── GET solicitudes (operador) ─────────────────────────────────────
+app.get("/quote/requests", authRequired, requireRole(["operator","admin"]), async (req, res) => {
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS quote_requests (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id),
+        code TEXT UNIQUE,
+        origin TEXT, service TEXT,
+        weight_kg NUMERIC, description TEXT,
+        estimated_usd NUMERIC,
+        status TEXT DEFAULT 'pendiente',
+        notes TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    const q = await db.query(`
+      SELECT qr.*, u.name AS client_name, u.client_number, u.email AS client_email
+      FROM quote_requests qr
+      JOIN users u ON u.id = qr.user_id
+      ORDER BY qr.created_at DESC
+    `);
+    res.json({ requests: q.rows });
+  } catch(err) {
+    console.error("[QUOTE REQUESTS GET]", err);
+    res.status(500).json({ error: "Error obteniendo solicitudes" });
+  }
+});
+
+// ── PATCH solicitud (operador) ─────────────────────────────────────
+app.patch("/quote/requests/:id", authRequired, requireRole(["operator","admin"]), async (req, res) => {
+  try {
+    const { status, notes } = req.body;
+    const { id } = req.params;
+    const q = await db.query(`
+      UPDATE quote_requests
+      SET status=COALESCE($1,status), notes=COALESCE($2,notes), updated_at=NOW()
+      WHERE id=$3 RETURNING *
+    `, [status || null, notes !== undefined ? notes : null, id]);
+    if (!q.rows[0]) return res.status(404).json({ error: "Solicitud no encontrada" });
+    res.json({ ok: true, request: q.rows[0] });
+  } catch(err) {
+    res.status(500).json({ error: "Error actualizando solicitud" });
+  }
+});
 // ════════════════════════════════════════════════════════════════════
 // TIPO DE CAMBIO
 // ════════════════════════════════════════════════════════════════════

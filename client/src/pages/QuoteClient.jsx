@@ -6,37 +6,44 @@ const WA  = "5491157479346";
 const getToken = () => localStorage.getItem("token") || sessionStorage.getItem("token");
 
 const ORIGINS = [
-  { key: "usa",    label: "🇺🇸 USA",    services: ["NORMAL","EXPRESS","TECH_PREMIUM"] },
+  { key: "usa",    label: "🇺🇸 USA",    services: ["NORMAL","EXPRESS"] },
   { key: "china",  label: "🇨🇳 China",  services: ["NORMAL","EXPRESS"] },
   { key: "europa", label: "🇪🇺 Europa", services: ["NORMAL"] },
 ];
 
 const SERVICE_LABELS = {
-  NORMAL:        { label: "Normal",       desc: "Envío estándar",          color: "#ffd200" },
-  EXPRESS:       { label: "Express",      desc: "Entrega prioritaria",     color: "#f97316" },
-  TECH_PREMIUM:  { label: "Tech Premium", desc: "Tecnología y electrónica", color: "#3b82f6" },
+  NORMAL:   { label: "Normal",  desc: "Envío estándar",      color: "#ffd200" },
+  EXPRESS:  { label: "Express", desc: "Entrega prioritaria", color: "#f97316" },
 };
 
 function rateKey(origin, service) {
   return `${origin}_${service.toLowerCase()}`;
 }
 
+// Descuento por volumen (igual que backend)
+function volumeDiscount(kg) {
+  if (kg >= 100) return 7;
+  if (kg >= 50)  return 5;
+  if (kg >= 10)  return 3;
+  return 0;
+}
+
 const fmtUsd = v => `$${Number(v||0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const fmtArs = v => `$${Number(v||0).toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
 export default function QuoteClient() {
-  const [rates, setRates]             = useState(null);
-  const [fx, setFx]                   = useState(null);
+  const [rates, setRates]               = useState(null);
+  const [fx, setFx]                     = useState(null);
   const [personalized, setPersonalized] = useState(false);
-  const [origin, setOrigin]           = useState("usa");
-  const [service, setService]         = useState("NORMAL");
-  const [weight, setWeight]           = useState("");
-  const [desc, setDesc]               = useState("");
+  const [origin, setOrigin]             = useState("usa");
+  const [service, setService]           = useState("NORMAL");
+  const [weight, setWeight]             = useState("");
+  const [desc, setDesc]                 = useState("");
 
-  const [submitting, setSubmitting]   = useState(false);
-  const [submitted, setSubmitted]     = useState(false);
+  const [submitting, setSubmitting]     = useState(false);
+  const [submitted, setSubmitted]       = useState(false);
   const [submittedCode, setSubmittedCode] = useState("");
-  const [error, setError]             = useState("");
+  const [error, setError]               = useState("");
 
   useEffect(() => {
     fetch(`${API}/quote/my-rates`, {
@@ -59,12 +66,14 @@ export default function QuoteClient() {
     if (!availableServices.includes(service)) setService(availableServices[0]);
   }, [origin]); // eslint-disable-line
 
-  const w        = Math.max(parseFloat(weight) || 0, 0);
-  const billable = Math.max(w, 1);
-  const rate     = rates ? Number(rates[rateKey(origin, service)] || 0) : 0;
-  const totalUsd = rate * billable;
-  const totalArs = fx ? totalUsd * fx : null;
-  const hasResult = w > 0 && rate > 0;
+  const w          = Math.max(parseFloat(weight) || 0, 0);
+  const billable   = Math.max(w, 1);
+  const baseRate   = rates ? Number(rates[rateKey(origin, service)] || 0) : 0;
+  const discount   = volumeDiscount(billable);
+  const rate       = Math.max(0, baseRate - discount);
+  const totalUsd   = rate * billable;
+  const totalArs   = fx ? totalUsd * fx : null;
+  const hasResult  = w > 0 && rate > 0;
 
   async function submitRequest() {
     if (!w || !desc.trim()) return setError("Completá el peso y la descripción del producto.");
@@ -74,14 +83,16 @@ export default function QuoteClient() {
         method: "POST",
         headers: { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          origin, service, weight_kg: w,
-          description: desc, estimated_usd: totalUsd,
+          origin, service: service.toUpperCase(),
+          weight_kg: w,
+          description: desc,
+          estimated_usd: totalUsd,
         }),
       });
       const data = await res.json();
       if (!res.ok) return setError(data.error || "Error al enviar la solicitud.");
       setSubmitted(true);
-      setSubmittedCode(data.shipment?.code || "");
+      setSubmittedCode(data.code || data.shipment?.code || "");
     } catch { setError("Error de red. Intentá de nuevo."); }
     finally { setSubmitting(false); }
   }
@@ -127,7 +138,6 @@ export default function QuoteClient() {
 
       <div style={{ maxWidth: 680, margin: "0 auto", padding: "24px 20px 60px" }}>
 
-        {/* Header */}
         <div style={{ marginBottom: 28 }}>
           <h1 style={{ fontSize: 26, fontWeight: 900, margin: "0 0 8px", letterSpacing: "-0.5px" }}>
             Calculá tu envío
@@ -154,9 +164,7 @@ export default function QuoteClient() {
                 <button key={o.key} onClick={() => setOrigin(o.key)} style={{
                   flex: 1, padding: "12px 8px", borderRadius: 14, border: "none", cursor: "pointer",
                   fontWeight: 700, fontSize: 13, transition: "all 0.15s",
-                  background: origin === o.key
-                    ? "linear-gradient(135deg,#ffd200,#ff8a00)"
-                    : "rgba(255,255,255,0.06)",
+                  background: origin === o.key ? "linear-gradient(135deg,#ffd200,#ff8a00)" : "rgba(255,255,255,0.06)",
                   color: origin === o.key ? "#0b1020" : "rgba(255,255,255,0.65)",
                   boxShadow: origin === o.key ? "0 4px 16px rgba(255,210,0,0.25)" : "none",
                 }}>{o.label}</button>
@@ -205,6 +213,7 @@ export default function QuoteClient() {
                   border: "1.5px solid rgba(255,255,255,0.12)", borderRadius: 14,
                   color: "#fff", fontSize: 18, fontWeight: 700,
                   padding: "14px 60px 14px 18px", outline: "none", transition: "border 0.15s",
+                  boxSizing: "border-box",
                 }}
                 onFocus={e => e.target.style.borderColor = "#ffd200"}
                 onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.12)"}
@@ -235,7 +244,7 @@ export default function QuoteClient() {
                 width: "100%", background: "rgba(255,255,255,0.06)",
                 border: "1.5px solid rgba(255,255,255,0.12)", borderRadius: 14,
                 color: "#fff", fontSize: 15, padding: "13px 18px",
-                outline: "none", transition: "border 0.15s",
+                outline: "none", transition: "border 0.15s", boxSizing: "border-box",
               }}
               onFocus={e => e.target.style.borderColor = "#ffd200"}
               onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.12)"}
@@ -257,7 +266,14 @@ export default function QuoteClient() {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 14 }}>
                 <div>
                   <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)" }}>Tarifa / kg</div>
-                  <div style={{ fontSize: 15, fontWeight: 800 }}>{fmtUsd(rate)}</div>
+                  <div style={{ fontSize: 15, fontWeight: 800 }}>
+                    {fmtUsd(rate)}
+                    {discount > 0 && (
+                      <span style={{ fontSize: 11, color: "#4ade80", marginLeft: 6 }}>
+                        (-${discount} vol.)
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)" }}>Peso facturable</div>
@@ -270,6 +286,18 @@ export default function QuoteClient() {
                   </div>
                 </div>
               </div>
+
+              {/* Descuento por volumen badge */}
+              {discount > 0 && (
+                <div style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  background: "rgba(74,222,128,0.12)", border: "1px solid rgba(74,222,128,0.25)",
+                  borderRadius: 8, padding: "5px 10px", marginBottom: 12, fontSize: 12, color: "#4ade80", fontWeight: 700,
+                }}>
+                  🎯 Descuento por volumen aplicado: -${discount} USD/kg
+                  {billable >= 100 ? " (100kg+)" : billable >= 50 ? " (50kg+)" : " (10kg+)"}
+                </div>
+              )}
 
               <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 14 }}>
                 <div style={{ fontSize: 12, color: "rgba(255,255,255,0.40)", marginBottom: 4 }}>TOTAL ESTIMADO</div>
@@ -302,9 +330,7 @@ export default function QuoteClient() {
               onClick={submitRequest}
               disabled={!hasResult || submitting}
               style={{
-                background: hasResult
-                  ? "linear-gradient(135deg,#ffd200,#ff8a00)"
-                  : "rgba(255,255,255,0.08)",
+                background: hasResult ? "linear-gradient(135deg,#ffd200,#ff8a00)" : "rgba(255,255,255,0.08)",
                 color: hasResult ? "#0b1020" : "rgba(255,255,255,0.35)",
                 fontWeight: 900, fontSize: 15, padding: "15px 24px",
                 borderRadius: 14, border: "none", cursor: hasResult ? "pointer" : "not-allowed",
