@@ -97,6 +97,9 @@ export default function ExternalCargo() {
   const [cierreModal, setCierreModal] = useState(false);
   const [cierreForm, setCierreForm]   = useState({ label:"", date_from:"", date_to:"", notes:"" });
   const [savingCierre, setSavingCierre] = useState(false);
+  const [editCierreModal, setEditCierreModal] = useState(false);
+  const [editCierreForm, setEditCierreForm]   = useState({ label:"", date_from:"", date_to:"", notes:"" });
+  const [savingEditCierre, setSavingEditCierre] = useState(false);
 
   // Cierre detalle
   const [activeCierre, setActiveCierre] = useState(null);
@@ -219,6 +222,24 @@ export default function ExternalCargo() {
       await loadCierres();
     } catch { setMsg("Error de red"); }
     finally { setSavingCierre(false); }
+  }
+
+  async function saveEditCierre() {
+    if (!editCierreForm.label) return setMsg("Label requerido");
+    setSavingEditCierre(true);
+    try {
+      const r = await fetch(`${API}/external/cierres/${activeCierre.id}`, {
+        method:"PATCH", headers:h(), body:JSON.stringify(editCierreForm),
+      });
+      const d = await r.json();
+      if (!r.ok) return setMsg(d.error);
+      setMsg(`Cierre "${d.cierre.label}" actualizado`);
+      setEditCierreModal(false);
+      setActiveCierre(d.cierre);
+      await loadCierres();
+      await loadCierreDetail(activeCierre.id);
+    } catch { setMsg("Error de red"); }
+    finally { setSavingEditCierre(false); }
   }
 
   async function openCierre(cierre) {
@@ -399,9 +420,23 @@ export default function ExternalCargo() {
               }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
                   <h3 style={{ margin:0, fontSize:17, fontWeight:900 }}>{activeCierre.label}</h3>
-                  <button onClick={() => setActiveCierre(null)} style={{
-                    background:"none", border:"none", color:"rgba(255,255,255,0.4)", cursor:"pointer", fontSize:18,
-                  }}>✕</button>
+                  <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                    <button onClick={() => {
+                      setEditCierreForm({
+                        label: activeCierre.label,
+                        date_from: activeCierre.date_from ? activeCierre.date_from.slice(0,10) : "",
+                        date_to: activeCierre.date_to ? activeCierre.date_to.slice(0,10) : "",
+                        notes: activeCierre.notes || "",
+                      });
+                      setEditCierreModal(true);
+                    }} style={{
+                      height:32, padding:"0 12px", borderRadius:8, border:"1px solid rgba(255,210,0,0.3)",
+                      background:"rgba(255,210,0,0.08)", color:"#ffd200", fontSize:12, fontWeight:700, cursor:"pointer",
+                    }}>✏️ Editar</button>
+                    <button onClick={() => setActiveCierre(null)} style={{
+                      background:"none", border:"none", color:"rgba(255,255,255,0.4)", cursor:"pointer", fontSize:18,
+                    }}>✕</button>
+                  </div>
                 </div>
 
                 {/* Grupos de envíos Lemons por origen+fecha */}
@@ -688,6 +723,36 @@ export default function ExternalCargo() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ══════ MODAL: EDITAR CIERRE ══════ */}
+      {editCierreModal && (
+        <Modal title="✏️ Editar cierre" onClose={() => setEditCierreModal(false)}>
+          <Field label="NOMBRE DEL CIERRE *">
+            <input style={inp} placeholder="Ej: CIERRE 10/03" value={editCierreForm.label}
+              onChange={e => setEditCierreForm(f=>({...f,label:e.target.value}))} />
+          </Field>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            <Field label="DESDE">
+              <input style={{...inp, colorScheme:"dark"}} type="date" value={editCierreForm.date_from}
+                onChange={e => setEditCierreForm(f=>({...f,date_from:e.target.value}))} />
+            </Field>
+            <Field label="HASTA">
+              <input style={{...inp, colorScheme:"dark"}} type="date" value={editCierreForm.date_to}
+                onChange={e => setEditCierreForm(f=>({...f,date_to:e.target.value}))} />
+            </Field>
+          </div>
+          <Field label="NOTAS">
+            <input style={inp} placeholder="Opcional" value={editCierreForm.notes}
+              onChange={e => setEditCierreForm(f=>({...f,notes:e.target.value}))} />
+          </Field>
+          <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:8 }}>
+            <button onClick={() => setEditCierreModal(false)} style={btn(false)}>Cancelar</button>
+            <button onClick={saveEditCierre} disabled={savingEditCierre} style={btn(true)}>
+              {savingEditCierre ? "Guardando…" : "Guardar cambios"}
+            </button>
+          </div>
+        </Modal>
       )}
 
       {/* ══════ MODAL: NUEVO CIERRE ══════ */}
