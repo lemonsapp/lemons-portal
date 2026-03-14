@@ -34,6 +34,15 @@ const STATUS_COLOR  = {
   "Listo para entrega":   "#22c55e",
   "Entregado":            "#86efac",
 };
+const KANBAN_COLS = [
+  { status: "Recibido en depósito", icon: "📦", color: "#ffd200" },
+  { status: "En preparación",       icon: "🔧", color: "#ff8a00" },
+  { status: "Despachado",           icon: "🚀", color: "#3b82f6" },
+  { status: "En tránsito",          icon: "✈️", color: "#a78bfa" },
+  { status: "Listo para entrega",   icon: "📬", color: "#22c55e" },
+  { status: "Entregado",            icon: "✅", color: "#86efac" },
+];
+
 const LANE_LABELS = {
   usa_normal:       "🇺🇸 USA · Normal",
   usa_express:      "🇺🇸 USA · Express",
@@ -425,6 +434,51 @@ function RecentTable({ rows }) {
   );
 }
 
+// ── Kanban column ─────────────────────────────────────────────────────────────
+function KanbanCol({ col, rows }) {
+  return (
+    <div style={{ background:"rgba(255,255,255,0.03)", border:`1px solid ${col.color}30`, borderRadius:16, overflow:"hidden" }}>
+      <div style={{ padding:"12px 14px", borderBottom:`1px solid ${col.color}20`, background:`${col.color}08`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <span style={{ fontSize:16 }}>{col.icon}</span>
+          <span style={{ fontWeight:800, fontSize:12, color:"#fff" }}>{col.status}</span>
+        </div>
+        <span style={{ background:`${col.color}22`, border:`1px solid ${col.color}44`, color:col.color, borderRadius:20, padding:"2px 10px", fontSize:12, fontWeight:800 }}>{rows.length}</span>
+      </div>
+      <div style={{ padding:"8px", display:"flex", flexDirection:"column", gap:7, maxHeight:440, overflowY:"auto" }}>
+        {rows.length === 0 ? (
+          <div style={{ textAlign:"center", padding:"24px 0", color:"rgba(255,255,255,0.2)", fontSize:12 }}>Sin envíos</div>
+        ) : rows.map(r => (
+          <div key={r.id} style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:10, padding:"10px 11px" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:5 }}>
+              <span style={{ fontSize:11, fontWeight:800, color:col.color, background:`${col.color}15`, borderRadius:6, padding:"1px 7px" }}>{r.code || `#${r.id}`}</span>
+              <span style={{ fontSize:10, color:"rgba(255,255,255,0.35)" }}>#{r.client_number}</span>
+            </div>
+            <div style={{ fontSize:12, fontWeight:600, color:"rgba(255,255,255,0.85)", marginBottom:5, lineHeight:1.3 }}>
+              {r.description?.length > 32 ? r.description.slice(0,32)+"…" : r.description}
+            </div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <span style={{
+                fontSize:10, fontWeight:700, padding:"1px 6px", borderRadius:5,
+                background: r.origin==="USA" ? "rgba(255,210,0,0.15)" : r.origin==="CHINA" ? "rgba(255,138,0,0.15)" : "rgba(96,165,250,0.15)",
+                color: r.origin==="USA" ? "#ffd200" : r.origin==="CHINA" ? "#ff8a00" : "#60a5fa",
+              }}>{r.origin} {r.service}</span>
+              {r.estimated_usd && <span style={{ fontSize:11, fontWeight:800, color:"#ffd200" }}>${Number(r.estimated_usd).toFixed(0)}</span>}
+            </div>
+            {r.weight_kg && <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", marginTop:3 }}>{Number(r.weight_kg).toFixed(2)} kg</div>}
+          </div>
+        ))}
+      </div>
+      {rows.length > 0 && (
+        <div style={{ padding:"7px 14px", borderTop:`1px solid ${col.color}15`, fontSize:11, color:"rgba(255,255,255,0.4)", display:"flex", justifyContent:"space-between" }}>
+          <span>{rows.reduce((s,r) => s + Number(r.weight_kg||0), 0).toFixed(1)} kg</span>
+          <span style={{ color:col.color, fontWeight:700 }}>${rows.reduce((s,r) => s + Number(r.estimated_usd||0), 0).toFixed(0)}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Componente principal ──────────────────────────────────────────────────────
 export default function Dashboard() {
   const [data, setData]             = useState(null);
@@ -433,6 +487,9 @@ export default function Dashboard() {
   const [lastUpdate, setLastUpdate] = useState(null);
   const [showCosts, setShowCosts]   = useState(false);
   const [monthly, setMonthly]       = useState([]);
+  const [dashTab, setDashTab]           = useState("overview");
+  const [kanbanRows, setKanbanRows]     = useState([]);
+  const [kanbanLoading, setKanbanLoading] = useState(false);
   const [selMonth, setSelMonth]     = useState(new Date().toISOString().slice(0,7));
   const [accounts, setAccounts]     = useState([]);
   const [fxRate, setFxRate]         = useState(null);
@@ -490,7 +547,17 @@ export default function Dashboard() {
     finally { setSavingFx(false); }
   }
 
-  useEffect(() => { loadDashboard(); loadMonthly(); loadAccounts(); }, []); // eslint-disable-line
+  async function loadKanban() {
+    setKanbanLoading(true);
+    try {
+      const res = await fetch(`${API}/operator/shipments`, { headers: { Authorization: `Bearer ${getToken()}` } });
+      const json = await res.json();
+      if (res.ok) setKanbanRows(json.rows || []);
+    } catch { /* no-op */ }
+    finally { setKanbanLoading(false); }
+  }
+
+  useEffect(() => { loadDashboard(); loadMonthly(); loadAccounts(); loadKanban(); }, []); // eslint-disable-line
 
   const s = data?.stats;
   const totalProfit  = (data?.by_month || []).reduce((a, d) => a + num(d.profit), 0);
@@ -517,12 +584,53 @@ export default function Dashboard() {
             style={{ height: 38, padding: "0 16px", fontSize: 13, background: showCosts ? "rgba(255,210,0,0.10)" : undefined, border: showCosts ? "1px solid rgba(255,210,0,0.25)" : undefined, color: showCosts ? "#ffd200" : undefined }}>
             ⚙ Costos reales
           </button>
-          <button className="btn btnPrimary" onClick={loadDashboard} disabled={loading}
+          <button className="btn btnPrimary" onClick={() => { loadDashboard(); loadKanban(); }} disabled={loading}
             style={{ height: 38, padding: "0 18px", fontSize: 13 }}>
             {loading ? "Cargando…" : "↻ Actualizar"}
           </button>
         </div>
       </div>
+
+      {/* ── Tab switcher ── */}
+      <div style={{ display:"flex", gap:6, marginTop:12 }}>
+        {[{ k:"overview", label:"📊 Resumen" }, { k:"kanban", label:"🗂 Por estado" }].map(t => (
+          <button key={t.k} onClick={() => setDashTab(t.k)} style={{
+            height:36, padding:"0 18px", borderRadius:10, border:"none", cursor:"pointer",
+            fontWeight:700, fontSize:13, transition:"all 0.15s",
+            background: dashTab===t.k ? "linear-gradient(135deg,#ffd200,#ff8a00)" : "rgba(255,255,255,0.06)",
+            color: dashTab===t.k ? "#0b1020" : "rgba(255,255,255,0.6)",
+          }}>{t.label}</button>
+        ))}
+      </div>
+
+      {/* ── Kanban ── */}
+      {dashTab === "kanban" && (
+        <div style={{ marginTop:16 }}>
+          {kanbanLoading ? (
+            <div style={{ textAlign:"center", padding:60, color:"rgba(255,255,255,0.3)" }}>Cargando…</div>
+          ) : (
+            <>
+              <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginBottom:16 }}>
+                {KANBAN_COLS.map(col => {
+                  const count = kanbanRows.filter(r => r.status === col.status).length;
+                  return (
+                    <div key={col.status} style={{ display:"flex", alignItems:"center", gap:8, background:`${col.color}10`, border:`1px solid ${col.color}30`, borderRadius:10, padding:"6px 14px", fontSize:13 }}>
+                      <span>{col.icon}</span>
+                      <span style={{ fontWeight:800, color:col.color }}>{count}</span>
+                      <span style={{ color:"rgba(255,255,255,0.5)", fontSize:11 }}>{col.status}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:12 }}>
+                {KANBAN_COLS.map(col => (
+                  <KanbanCol key={col.status} col={col} rows={kanbanRows.filter(r => r.status === col.status)} />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {error && (
         <div style={{ margin: "10px 0", padding: "11px 16px", borderRadius: 12, background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.28)", color: "#fca5a5", fontSize: 13, fontWeight: 600 }}>⚠ {error}</div>
@@ -548,7 +656,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {data && (
+      {data && dashTab === "overview" && (
         <>
           {/* Panel de costos desplegable */}
           {showCosts && (

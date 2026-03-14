@@ -41,6 +41,11 @@ export default function CoinsOperator() {
   const [earnForm, setEarnForm]         = useState({ shipment_id: "", client_number: "" });
   const [earnClientData, setEarnClientData] = useState(null);
 
+  // Notificaciones LIMÓN
+  const [notifs, setNotifs]             = useState([]);
+  const [notifForm, setNotifForm]       = useState({ message:"", emoji:"🍋", type:"info", target_role:"all" });
+  const [savingNotif, setSavingNotif]   = useState(false);
+
   async function loadRanking() {
     setLoading(true);
     try {
@@ -71,6 +76,49 @@ export default function CoinsOperator() {
         setPendingRedemptions(pending.sort((a,b) => new Date(b.created_at) - new Date(a.created_at)));
       }
     } catch { /* no-op */ }
+  }
+
+  async function loadNotifs() {
+    try {
+      const r = await fetch(`${API}/notifications`, { headers: { Authorization: `Bearer ${getToken()}` } });
+      const d = await r.json();
+      setNotifs(d.notifications || []);
+    } catch { /* no-op */ }
+  }
+
+  async function saveNotif() {
+    if (!notifForm.message.trim()) return setMsg("Escribí un mensaje");
+    setSavingNotif(true);
+    try {
+      const r = await fetch(`${API}/notifications`, {
+        method:"POST",
+        headers: { Authorization: `Bearer ${getToken()}`, "Content-Type":"application/json" },
+        body: JSON.stringify(notifForm),
+      });
+      const d = await r.json();
+      if (!r.ok) return setMsg(d.error || "Error");
+      setMsg("✅ Notificación publicada — ya aparece en todos los portales");
+      setNotifForm({ message:"", emoji:"🍋", type:"info", target_role:"all" });
+      await loadNotifs();
+    } catch { setMsg("Error de red"); }
+    finally { setSavingNotif(false); }
+  }
+
+  async function deactivateNotif(id) {
+    await fetch(`${API}/notifications/${id}`, {
+      method:"PATCH",
+      headers: { Authorization: `Bearer ${getToken()}`, "Content-Type":"application/json" },
+      body: JSON.stringify({ active: false }),
+    });
+    await loadNotifs();
+  }
+
+  async function deleteNotif(id) {
+    await fetch(`${API}/notifications/${id}`, {
+      method:"DELETE",
+      headers: { Authorization: `Bearer ${getToken()}` },
+    });
+    await loadNotifs();
   }
 
   async function findClientForAdj() {
@@ -166,6 +214,7 @@ export default function CoinsOperator() {
   useEffect(() => {
     loadRanking();
     loadPendingRedemptions();
+    loadNotifs();
   }, []); // eslint-disable-line
 
   const totalCoinsCirculating = ranking.reduce((a, r) => a + (r.balance || 0), 0);
@@ -225,6 +274,7 @@ export default function CoinsOperator() {
           { key: "redemptions", label: `⏳ Canjes pendientes ${pendingRedemptions.length > 0 ? `(${pendingRedemptions.length})` : ""}` },
           { key: "adjust",      label: "✏️ Ajuste manual" },
           { key: "earn",        label: "⚡ Otorgar coins" },
+          { key: "notifs",      label: "🍋 Notificaciones" },
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
             flex: 1, height: 38, borderRadius: 10, border: "none", cursor: "pointer",
@@ -445,6 +495,116 @@ export default function CoinsOperator() {
               <b>Canjes:</b> 9.500 → envío gratis · 4.500 → 5kg gratis · 500 → USD 15 desc · 100 → USD 8 desc<br />
               <b>Niveles:</b> 🥉 Bronce 0-499 · 🥈 Plata 500-1499 · 🥇 Oro 1500+
             </div>
+          </div>
+        </div>
+      )}
+      {/* ══ NOTIFICACIONES ══ */}
+      {tab === "notifs" && (
+        <div style={{ marginTop: 16, display:"flex", flexDirection:"column", gap:16 }}>
+
+          {/* Form nueva notificación */}
+          <div style={{ background:"rgba(245,230,66,0.05)", border:"1px solid rgba(245,230,66,0.15)", borderRadius:18, padding:"20px" }}>
+            <div style={{ fontSize:13, fontWeight:800, color:"#f5e642", marginBottom:14 }}>🍋 Nueva notificación LIMÓN</div>
+
+            <div style={{ marginBottom:12 }}>
+              <div style={{ fontSize:11, color:"rgba(255,255,255,0.4)", fontWeight:700, marginBottom:6 }}>MENSAJE</div>
+              <textarea
+                value={notifForm.message}
+                onChange={e => setNotifForm(f=>({...f,message:e.target.value}))}
+                placeholder="Ej: ¡Hay nuevas tarifas disponibles! Chequeá tu cotizador 🚀"
+                rows={3}
+                style={{
+                  width:"100%", background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.12)",
+                  borderRadius:10, color:"#fff", fontSize:14, padding:"10px 14px",
+                  outline:"none", resize:"vertical", boxSizing:"border-box", fontFamily:"inherit",
+                }}
+              />
+            </div>
+
+            <div style={{ display:"grid", gridTemplateColumns:"80px 1fr 1fr", gap:12, marginBottom:14 }}>
+              <div>
+                <div style={{ fontSize:11, color:"rgba(255,255,255,0.4)", fontWeight:700, marginBottom:6 }}>EMOJI</div>
+                <input value={notifForm.emoji} onChange={e => setNotifForm(f=>({...f,emoji:e.target.value}))}
+                  style={{ width:"100%", background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.12)",
+                    borderRadius:10, color:"#fff", fontSize:20, padding:"8px 10px", outline:"none", textAlign:"center" }} />
+              </div>
+              <div>
+                <div style={{ fontSize:11, color:"rgba(255,255,255,0.4)", fontWeight:700, marginBottom:6 }}>TIPO</div>
+                <select value={notifForm.type} onChange={e => setNotifForm(f=>({...f,type:e.target.value}))}
+                  style={{ width:"100%", background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.12)",
+                    borderRadius:10, color:"#fff", fontSize:13, padding:"10px 12px", outline:"none" }}>
+                  <option value="info">ℹ️ Info</option>
+                  <option value="promo">🎉 Promo</option>
+                  <option value="warning">⚠️ Aviso</option>
+                  <option value="update">🆕 Update</option>
+                </select>
+              </div>
+              <div>
+                <div style={{ fontSize:11, color:"rgba(255,255,255,0.4)", fontWeight:700, marginBottom:6 }}>PARA QUIÉN</div>
+                <select value={notifForm.target_role} onChange={e => setNotifForm(f=>({...f,target_role:e.target.value}))}
+                  style={{ width:"100%", background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.12)",
+                    borderRadius:10, color:"#fff", fontSize:13, padding:"10px 12px", outline:"none" }}>
+                  <option value="all">👥 Todos</option>
+                  <option value="client">👤 Solo clientes</option>
+                  <option value="operator">🗂 Solo operadores</option>
+                </select>
+              </div>
+            </div>
+
+            <button onClick={saveNotif} disabled={savingNotif} style={{
+              height:44, padding:"0 28px", borderRadius:10, border:"none", cursor:"pointer",
+              fontWeight:800, fontSize:14, background:"linear-gradient(135deg,#f5e642,#ff8a00)", color:"#0b1020",
+            }}>
+              {savingNotif ? "Publicando…" : "📢 Publicar notificación"}
+            </button>
+          </div>
+
+          {/* Lista de notificaciones existentes */}
+          <div>
+            <div style={{ fontSize:12, fontWeight:700, color:"rgba(255,255,255,0.4)", marginBottom:10 }}>HISTORIAL</div>
+            {notifs.length === 0 ? (
+              <div style={{ textAlign:"center", padding:30, color:"rgba(255,255,255,0.3)", fontSize:13 }}>
+                No hay notificaciones todavía.
+              </div>
+            ) : notifs.map(n => (
+              <div key={n.id} style={{
+                display:"flex", justifyContent:"space-between", alignItems:"center", gap:12,
+                background: n.active ? "rgba(245,230,66,0.06)" : "rgba(255,255,255,0.03)",
+                border:`1px solid ${n.active ? "rgba(245,230,66,0.2)" : "rgba(255,255,255,0.07)"}`,
+                borderRadius:12, padding:"12px 16px", marginBottom:8, opacity: n.active ? 1 : 0.5,
+              }}>
+                <div style={{ flex:1 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                    <span style={{ fontSize:18 }}>{n.emoji}</span>
+                    <span style={{
+                      fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:20,
+                      background: n.active ? "rgba(34,197,94,0.15)" : "rgba(255,255,255,0.08)",
+                      color: n.active ? "#4ade80" : "rgba(255,255,255,0.4)",
+                    }}>{n.active ? "ACTIVA" : "INACTIVA"}</span>
+                    <span style={{ fontSize:10, color:"rgba(255,255,255,0.35)" }}>
+                      {n.target_role === "all" ? "👥 Todos" : n.target_role === "client" ? "👤 Clientes" : "🗂 Operadores"}
+                      {" · "}{n.type}
+                    </span>
+                  </div>
+                  <div style={{ fontSize:13, color:"rgba(255,255,255,0.75)", lineHeight:1.4 }}>{n.message}</div>
+                  <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:4 }}>
+                    {new Date(n.created_at).toLocaleString("es-AR")}
+                  </div>
+                </div>
+                <div style={{ display:"flex", gap:6 }}>
+                  {n.active && (
+                    <button onClick={() => deactivateNotif(n.id)} style={{
+                      height:32, padding:"0 12px", borderRadius:8, cursor:"pointer", fontSize:12, fontWeight:700,
+                      border:"1px solid rgba(255,150,0,0.3)", background:"rgba(255,150,0,0.08)", color:"#fb923c",
+                    }}>Desactivar</button>
+                  )}
+                  <button onClick={() => deleteNotif(n.id)} style={{
+                    height:32, padding:"0 10px", borderRadius:8, cursor:"pointer", fontSize:13,
+                    border:"1px solid rgba(239,68,68,0.3)", background:"rgba(239,68,68,0.08)", color:"#f87171",
+                  }}>🗑</button>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
