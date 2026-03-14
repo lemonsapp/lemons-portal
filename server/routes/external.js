@@ -497,16 +497,27 @@ router.post("/cierres", authRequired, requireRole(STAFF), async (req, res) => {
 router.patch("/cierres/:id", authRequired, requireRole(STAFF), async (req, res) => {
   try {
     const { label, date_from, date_to, status, notes } = req.body;
+    // Normalizar: string vacío → null para fechas
+    const normDate = v => (v === "" || v == null) ? null : v;
     const q = await db.query(`
       UPDATE ext_cierres SET
-        label     = COALESCE($1, label),
-        date_from = COALESCE($2, date_from),
-        date_to   = COALESCE($3, date_to),
-        status    = COALESCE($4, status),
-        notes     = COALESCE($5, notes),
+        label     = CASE WHEN $1::text IS NOT NULL THEN $1 ELSE label END,
+        date_from = CASE WHEN $7::boolean THEN $2::date ELSE date_from END,
+        date_to   = CASE WHEN $8::boolean THEN $3::date ELSE date_to END,
+        status    = CASE WHEN $4::text IS NOT NULL THEN $4 ELSE status END,
+        notes     = CASE WHEN $5::text IS NOT NULL THEN $5 ELSE notes END,
         updated_at= NOW()
       WHERE id=$6 RETURNING *
-    `, [label||null, date_from||null, date_to||null, status||null, notes||null, req.params.id]);
+    `, [
+      label||null,
+      normDate(date_from),
+      normDate(date_to),
+      status||null,
+      notes||null,
+      req.params.id,
+      date_from !== undefined,  // $7: ¿vino date_from en el body?
+      date_to   !== undefined,  // $8: ¿vino date_to en el body?
+    ]);
     res.json({ cierre: q.rows[0] });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
