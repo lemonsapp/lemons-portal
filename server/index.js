@@ -1998,7 +1998,7 @@ app.post("/quote/request", authRequired, async (req, res) => {
       )
     `);
 
-    const code = `SOL-\${Date.now().toString(36).toUpperCase()}`;
+    const code = `SOL-${Date.now().toString(36).toUpperCase()}`;
     const r = await db.query(`
       INSERT INTO quote_requests
         (user_id, code, origin, service, weight_kg, description, estimated_usd, status)
