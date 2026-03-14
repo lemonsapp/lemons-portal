@@ -9,16 +9,12 @@ const h = () => ({ Authorization: `Bearer ${getToken()}`, "Content-Type": "appli
 const fmtUsd = v => `$${Number(v||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
 const fmtDate = v => { try { return new Date(v).toLocaleDateString("es-AR"); } catch { return v||"-"; } };
 
-const ORIGINS  = ["USA","CHINA","EUROPA"];
-const SERVICES = ["NORMAL","EXPRESS"];
 const STATUS_ITEM = ["EN DEPOSITO","ENTREGADO"];
 
 const STATUS_COLORS = {
   "EN DEPOSITO": { bg:"rgba(239,68,68,0.15)",  border:"rgba(239,68,68,0.35)",  text:"#f87171" },
   "ENTREGADO":   { bg:"rgba(34,197,94,0.15)",  border:"rgba(34,197,94,0.35)",  text:"#4ade80" },
 };
-const ORIGIN_FLAGS = { USA:"🇺🇸", CHINA:"🇨🇳", EUROPA:"🇪🇺" };
-
 function Badge({ text, colors }) {
   const c = colors || STATUS_COLORS[text] || {};
   return (
@@ -87,7 +83,7 @@ export default function ExternalCargo() {
 
   // Box modal
   const [boxModal, setBoxModal] = useState(false);
-  const [boxForm, setBoxForm]   = useState({ box_number:"", date_received:"", origin:"USA", service:"NORMAL", total_kg:"", notes:"" });
+  const [boxForm, setBoxForm]   = useState({ box_number:"", date_received:"", total_kg:"", notes:"" });
   const [savingBox, setSavingBox] = useState(false);
 
   // Items modal
@@ -152,7 +148,7 @@ export default function ExternalCargo() {
       if (!r.ok) return setMsg(d.error);
       setMsg(`Caja ${d.box.box_number} creada`);
       setBoxModal(false);
-      setBoxForm({ box_number:"", date_received:"", origin:"USA", service:"NORMAL", total_kg:"", notes:"" });
+      setBoxForm({ box_number:"", date_received:"", total_kg:"", notes:"" });
       await loadBoxes();
     } catch { setMsg("Error de red"); }
     finally { setSavingBox(false); }
@@ -317,7 +313,7 @@ export default function ExternalCargo() {
                         }}>{box.box_number}</div>
                         <div>
                           <div style={{ fontWeight:700, fontSize:14 }}>
-                            {ORIGIN_FLAGS[box.origin]} {box.origin} · {box.service}
+                            📦 Caja
                           </div>
                           <div style={{ fontSize:12, color:"rgba(255,255,255,0.45)", marginTop:2 }}>
                             {fmtDate(box.date_received)} · {Number(box.items_kg||0).toFixed(2)} kg · {box.items_count||0} ítems
@@ -408,27 +404,43 @@ export default function ExternalCargo() {
                   }}>✕</button>
                 </div>
 
-                {/* Grupos de cargas */}
-                {cierreDetail.grouped?.map((g, i) => (
-                  <div key={i} style={{ marginBottom:12 }}>
+                {/* Grupos de envíos Lemons por origen+fecha */}
+                {cierreDetail.grouped?.length > 0 ? cierreDetail.grouped.map((g, i) => (
+                  <div key={i} style={{ marginBottom:8 }}>
                     <div style={{
-                      display:"flex", justifyContent:"space-between",
+                      display:"flex", justifyContent:"space-between", alignItems:"center",
                       background:"rgba(34,197,94,0.08)", border:"1px solid rgba(34,197,94,0.2)",
-                      borderRadius:8, padding:"8px 14px", fontWeight:700, fontSize:13,
+                      borderRadius:8, padding:"8px 14px", fontWeight:700, fontSize:12,
                     }}>
-                      <span>CARGAS {g.label.toUpperCase()}</span>
+                      <span style={{ color:"#4ade80" }}>{g.label}</span>
                       <span style={{ color:"#4ade80" }}>{fmtUsd(g.subtotal)}</span>
                     </div>
+                    {/* Detalle de envíos del grupo */}
+                    {g.shipments?.map(s => (
+                      <div key={s.id} style={{
+                        display:"flex", justifyContent:"space-between",
+                        padding:"5px 14px", fontSize:11, color:"rgba(255,255,255,0.5)",
+                        borderLeft:"2px solid rgba(34,197,94,0.2)",
+                        marginLeft:4,
+                      }}>
+                        <span>{s.code} · {s.client_name} · {Number(s.weight_kg).toFixed(2)}kg</span>
+                        <span>{fmtUsd(s.cost)}</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )) : (
+                  <div style={{ fontSize:12, color:"rgba(255,255,255,0.3)", padding:"8px 0", textAlign:"center" }}>
+                    Sin envíos en el período de este cierre
+                  </div>
+                )}
 
                 {/* Notas adicionales */}
                 {cierreDetail.notes?.length > 0 && (
-                  <div style={{ marginBottom:12 }}>
+                  <div style={{ marginBottom:8 }}>
                     <div style={{
                       display:"flex", justifyContent:"space-between",
                       background:"rgba(255,255,255,0.06)", borderRadius:8, padding:"8px 14px",
-                      fontWeight:700, fontSize:13,
+                      fontWeight:700, fontSize:12,
                     }}>
                       <span>NOTAS ADICIONALES</span>
                       <span>{fmtUsd(cierreDetail.summary?.total_notes)}</span>
@@ -530,18 +542,7 @@ export default function ExternalCargo() {
             <input style={{...inp, colorScheme:"dark"}} type="date" value={boxForm.date_received}
               onChange={e => setBoxForm(f=>({...f,date_received:e.target.value}))} />
           </Field>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-            <Field label="ORIGEN">
-              <select style={sel} value={boxForm.origin} onChange={e => setBoxForm(f=>({...f,origin:e.target.value}))}>
-                {ORIGINS.map(o => <option key={o} value={o}>{ORIGIN_FLAGS[o]} {o}</option>)}
-              </select>
-            </Field>
-            <Field label="SERVICIO">
-              <select style={sel} value={boxForm.service} onChange={e => setBoxForm(f=>({...f,service:e.target.value}))}>
-                {SERVICES.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </Field>
-          </div>
+
           <Field label="PESO TOTAL (kg)">
             <input style={inp} type="number" placeholder="Ej: 32" value={boxForm.total_kg}
               onChange={e => setBoxForm(f=>({...f,total_kg:e.target.value}))} />
@@ -574,10 +575,10 @@ export default function ExternalCargo() {
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
               <div>
                 <div style={{ fontWeight:900, fontSize:17 }}>
-                  {ORIGIN_FLAGS[itemsBox.origin]} {itemsBox.box_number}
+                  {itemsBox.box_number}
                 </div>
                 <div style={{ fontSize:12, color:"rgba(255,255,255,0.4)", marginTop:2 }}>
-                  {fmtDate(itemsBox.date_received)} · {itemsBox.origin} {itemsBox.service}
+                  {fmtDate(itemsBox.date_received)}
                 </div>
               </div>
               <button onClick={() => setItemsBox(null)} style={{

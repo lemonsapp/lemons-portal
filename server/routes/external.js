@@ -357,29 +357,86 @@ router.get("/cierres", authRequired, requireRole(STAFF), async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET /external/cierres/:id — cierre completo con cajas, notas y descuentos
+// GET /external/cierres/:id — cierre completo con envíos Lemons + notas + descuentos
 router.get("/cierres/:id", authRequired, requireRole(STAFF), async (req, res) => {
   try {
     const cq = await db.query(`SELECT * FROM ext_cierres WHERE id=$1`, [req.params.id]);
     if (!cq.rows[0]) return res.status(404).json({ error: "Cierre no encontrado" });
     const cierre = cq.rows[0];
 
-    // Cajas asociadas a este cierre
+    // Costos del operador (lo que vos pagás a la central por kg)
+    const costsQ = await db.query(`
+      SELECT usa_normal, china_normal, europa_normal
+      FROM operator_costs LIMIT 1
+    `);
+    const costs = costsQ.rows[0] || { usa_normal: 45, china_normal: 58, europa_normal: 58 };
+
+    // Envíos Lemons NORMAL de USA/CHINA/EUROPA dentro del período del cierre
+    // Si el cierre no tiene fechas, toma todos los no asignados a otro cierre
+    let shipmentsQ;
+    if (cierre.date_from && cierre.date_to) {
+      shipmentsQ = await db.query(`
+        SELECT s.id, s.code, s.origin, s.service, s.weight_kg,
+               s.estimated_usd, s.date_in, s.status,
+               u.name AS client_name, u.client_number
+        FROM shipments s
+        JOIN users u ON u.id = s.user_id
+        WHERE s.service = 'NORMAL'
+          AND s.origin IN ('USA','CHINA','EUROPA')
+          AND s.date_in >= $1::date
+          AND s.date_in <= $2::date
+        ORDER BY s.origin, s.date_in
+      `, [cierre.date_from, cierre.date_to]);
+    } else {
+      shipmentsQ = await db.query(`
+        SELECT s.id, s.code, s.origin, s.service, s.weight_kg,
+               s.estimated_usd, s.date_in, s.status,
+               u.name AS client_name, u.client_number
+        FROM shipments s
+        JOIN users u ON u.id = s.user_id
+        WHERE s.service = 'NORMAL'
+          AND s.origin IN ('USA','CHINA','EUROPA')
+        ORDER BY s.origin, s.date_in
+      `);
+    }
+
+    // Calcular costo de cada envío según tarifas del operador
+    const shipments = shipmentsQ.rows.map(s => {
+      const kg   = Number(s.weight_kg || 0);
+      const billable = Math.max(kg, 1);
+      let costPerKg = 0;
+      if (s.origin === 'USA')    costPerKg = Number(costs.usa_normal    || 0);
+      if (s.origin === 'CHINA')  costPerKg = Number(costs.china_normal  || 0);
+      if (s.origin === 'EUROPA') costPerKg = Number(costs.europa_normal || 0);
+      const cost = Number((billable * costPerKg).toFixed(2));
+      return { ...s, cost_per_kg: costPerKg, cost };
+    });
+
+    // Agrupar envíos por ORIGEN - FECHA para mostrar como el sheet
+    const grouped = {};
+    shipments.forEach(s => {
+      const dateStr = s.date_in ? new Date(s.date_in).toLocaleDateString('es-AR', {day:'2-digit',month:'2-digit'}) : '-';
+      const key = `${s.origin}_${dateStr}`;
+      const label = `CARGAS ${s.origin} - CENTRAL LOGISTICS  ${dateStr}`;
+      if (!grouped[key]) grouped[key] = { key, label, origin: s.origin, date: dateStr, shipments: [], subtotal: 0 };
+      grouped[key].shipments.push(s);
+      grouped[key].subtotal = Number((grouped[key].subtotal + s.cost).toFixed(2));
+    });
+
+    // Cajas externas asociadas a este cierre
     const bq = await db.query(`
       SELECT b.*,
-        COALESCE((SELECT SUM(i.weight_kg * i.tariff_per_kg) FROM ext_items i WHERE i.box_id=b.id), 0) AS box_total,
         COALESCE((SELECT SUM(i.weight_kg) FROM ext_items i WHERE i.box_id=b.id AND i.is_commission=TRUE), 0) AS commission_kg
       FROM ext_boxes b WHERE b.cierre_id=$1
       ORDER BY b.date_received, b.box_number
     `, [req.params.id]);
 
-    // Ítems de todas las cajas del cierre
+    // Ítems de cajas (para comisión)
     const iq = await db.query(`
-      SELECT i.*, b.box_number, b.date_received, b.origin, b.service
+      SELECT i.*
       FROM ext_items i
       JOIN ext_boxes b ON b.id=i.box_id
-      WHERE b.cierre_id=$1
-      ORDER BY b.date_received, b.box_number, i.id
+      WHERE b.cierre_id=$1 AND i.is_commission=TRUE
     `, [req.params.id]);
 
     // Notas adicionales
@@ -388,37 +445,27 @@ router.get("/cierres/:id", authRequired, requireRole(STAFF), async (req, res) =>
       [req.params.id]
     );
 
-    // Descuentos
+    // Descuentos/adicionales manuales
     const dq = await db.query(
       `SELECT * FROM ext_cierre_deductions WHERE cierre_id=$1 ORDER BY id`,
       [req.params.id]
     );
 
-    // Calcular totales
-    const totalCargas = bq.rows.reduce((s, b) => s + Number(b.box_total || 0), 0);
-    const totalNotes  = nq.rows.reduce((s, n) => s + Number(n.value || 0), 0);
-    const totalCommission = iq.rows
-      .filter(i => i.is_commission)
-      .reduce((s, i) => s + Number(i.weight_kg || 0) * COMISION_PER_KG, 0);
+    // Totales
+    const totalCargas     = shipments.reduce((s, sh) => s + sh.cost, 0);
+    const totalNotes      = nq.rows.reduce((s, n) => s + Number(n.value || 0), 0);
+    const totalCommission = iq.rows.reduce((s, i) => s + Number(i.weight_kg || 0) * COMISION_PER_KG, 0);
     const totalDeductions = dq.rows.reduce((s, d) => s + Number(d.amount || 0), 0);
-    const totalFinal = totalCargas + totalNotes - totalCommission + totalDeductions;
-
-    // Agrupar cajas por origen+fecha para la vista del cierre
-    const grouped = {};
-    bq.rows.forEach(b => {
-      const key = `${b.origin} ${b.service !== "NORMAL" ? b.service : ""} ${b.date_received}`.trim();
-      if (!grouped[key]) grouped[key] = { label: key, boxes: [], subtotal: 0 };
-      grouped[key].boxes.push(b);
-      grouped[key].subtotal += Number(b.box_total || 0);
-    });
+    const totalFinal      = totalCargas + totalNotes - totalCommission + totalDeductions;
 
     res.json({
       cierre,
-      boxes: bq.rows,
-      items: iq.rows,
-      notes: nq.rows,
+      costs,
+      shipments,
+      grouped: Object.values(grouped).sort((a,b) => a.origin.localeCompare(b.origin)),
+      boxes:   bq.rows,
+      notes:   nq.rows,
       deductions: dq.rows,
-      grouped: Object.values(grouped),
       summary: {
         total_cargas:     Number(totalCargas.toFixed(2)),
         total_notes:      Number(totalNotes.toFixed(2)),
