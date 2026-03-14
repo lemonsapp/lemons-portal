@@ -9,6 +9,7 @@ const NAV_STAFF = [
   { path: "/dashboard",      label: "Dashboard", icon: "📊" },
   { path: "/operator",       label: "Operador",  icon: "🗂" },
   { path: "/caja",           label: "Caja",      icon: "💵" },
+  { path: "/external",       label: "Cargas Ext.", icon: "📦" },
   {
     path: "/coins/operator", label: "Coins",     icon: "🍋",
     dropdown: [

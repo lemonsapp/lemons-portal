@@ -13,6 +13,8 @@ import QuoteClient from "./pages/QuoteClient.jsx";
 import PWAManager from "./components/PWAManager.jsx";
 import LemonCoins from "./pages/LemonCoins.jsx";
 import CoinsOperator from "./pages/CoinsOperator.jsx";
+import ExternalCargo from "./pages/ExternalCargo.jsx";
+import LemonNotification from "./components/LemonNotification.jsx";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
@@ -62,6 +64,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <PWAManager />
+      <LemonNotification />
       <Routes>
 
         <Route path="/quote" element={<QuotePublic />} />
@@ -128,6 +131,16 @@ export default function App() {
           element={
             <AuthGate allowRoles={["operator", "admin"]}>
               <CoinsOperator />
+            </AuthGate>
+          }
+        />
+
+        {/* Cargas Externas */}
+        <Route
+          path="/external"
+          element={
+            <AuthGate allowRoles={["operator", "admin"]}>
+              <ExternalCargo />
             </AuthGate>
           }
         />

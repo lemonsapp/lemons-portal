@@ -10,7 +10,9 @@ const helmet = require("helmet");
 const db = require("./db");
 const { authRequired, requireRole } = require("./auth");
 const { sendEmail } = require("./mailer"); // ✅ mails
-const coinsRouter = require("./routes/coins"); // ✅ Lemon Coins
+const coinsRouter         = require("./routes/coins");         // ✅ Lemon Coins
+const externalRouter      = require("./routes/external");      // ✅ Cargas Externas
+const notificationsRouter = require("./routes/notifications"); // ✅ Notificaciones LIMÓN
 
 const app = express();
 
@@ -2440,7 +2442,9 @@ app.get(
 // ════════════════════════════════════════════════════════════════════
 // ✅ LEMON COINS ROUTER
 // ════════════════════════════════════════════════════════════════════
-app.use("/coins", coinsRouter);
+app.use("/coins",         coinsRouter);
+app.use("/external",      externalRouter);
+app.use("/notifications", notificationsRouter);
 
 // ── Reclamar bonus primer envío (cliente) ──────────────────────────
 app.post("/coins/claim-first-bonus", authRequired, async (req, res) => {
