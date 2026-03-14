@@ -12,7 +12,7 @@ const { authRequired, requireRole } = require("./auth");
 const { sendEmail } = require("./mailer"); // ✅ mails
 const coinsRouter         = require("./routes/coins");         // ✅ Lemon Coins
 const externalRouter      = require("./routes/external");      // ✅ Cargas Externas
-const notificationsRouter = require("./routes/Notifications"); // ✅ Notificaciones LIMÓN
+const notificationsRouter = require("./routes/notifications"); // ✅ Notificaciones LIMÓN
 
 const app = express();
 
