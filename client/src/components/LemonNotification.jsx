@@ -26,7 +26,7 @@ function addDismissed(id) {
 export default function LemonNotification() {
   const [notif, setNotif]       = useState(null);
   const [visible, setVisible]   = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const [bounce, setBounce]     = useState(false);
 
   useEffect(() => {
