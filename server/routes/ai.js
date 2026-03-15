@@ -56,6 +56,23 @@ function aiLogger(req, res, next) {
 router.use(requireAIKey);
 router.use(aiLogger);
 
+// ── Helper: enviar mensaje WhatsApp al cliente ───────────────────────────────
+function sendWhatsApp(phone, message) {
+  if (!phone) return Promise.resolve();
+  const http = require("http");
+  const jid = phone.replace(/[^0-9]/g, "") + "@s.whatsapp.net";
+  return new Promise((resolve) => {
+    const body = JSON.stringify({ jid, message });
+    const req = http.request({
+      hostname: "localhost", port: 3099, path: "/send", method: "POST",
+      headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) }
+    }, () => resolve());
+    req.on("error", () => resolve());
+    req.write(body);
+    req.end();
+  });
+}
+
 // ── Helper: formatear fechas en español ──────────────────────────────────────
 function fmtDate(v) {
   if (!v) return null;
@@ -1112,6 +1129,17 @@ router.post("/write/payment", async (req, res) => {
 
     console.log(`[AI WRITE] Cobro registrado: $${total_usd} USD — cliente #${client_number}`);
 
+    try {
+      const phoneQ = await db.query(`SELECT phone FROM users WHERE client_number=$1`, [client_number]);
+      const phone = phoneQ.rows[0]?.phone;
+      if (phone) {
+        const labels = { USD_CASH:"Efectivo USD", USDT:"USDT", ARS_TRANSFER:"Transferencia ARS", ARS_CASH:"Efectivo ARS" };
+        const lista = sq.rows.map(s => `• ${s.code} — $${Number(s.estimated_usd).toFixed(2)} USD`).join("\n");
+        const recibo = `🧾 *Recibo Lemon's*\n\n👤 ${user.name}\n📦 Envíos:\n${lista}\n\n💰 Total: *$${Number(total_usd).toFixed(2)} USD*\n💳 ${labels[method]||method}\n📅 ${new Date().toLocaleDateString("es-AR")}\n\nGracias por tu confianza! 🍋`;
+        await sendWhatsApp(phone, recibo);
+      }
+    } catch(e) { console.log("[WA RECIBO]", e.message); }
+
     res.status(201).json({
       ok: true,
       message: `Cobro registrado correctamente`,
@@ -1487,6 +1515,26 @@ router.get("/cash/summary", async (req, res) => {
       WHERE DATE_TRUNC('month',date) = DATE_TRUNC('month',CURRENT_DATE)
     `);
     const p = paymentsQ.rows[0];
+    // Cargas externas del mes
+    let externalSummary = null;
+    try {
+      const extQ = await db.query(`
+        SELECT
+          COUNT(DISTINCT i.id) AS items_total,
+          COALESCE(SUM(i.weight_kg * i.tariff_per_kg) FILTER (WHERE i.is_commission = false), 0) AS external_revenue,
+          COALESCE(SUM(i.weight_kg * i.tariff_per_kg) FILTER (WHERE i.is_commission = true),  0) AS commission_revenue
+        FROM ext_items i
+        JOIN ext_boxes b ON b.id = i.box_id
+        WHERE b.created_at >= DATE_TRUNC('month', CURRENT_DATE)
+      `);
+      externalSummary = {
+        items:               Number(extQ.rows[0].items_total),
+        external_revenue:    Number(Number(extQ.rows[0].external_revenue).toFixed(2)),
+        commission_revenue:  Number(Number(extQ.rows[0].commission_revenue).toFixed(2)),
+        total_revenue:       Number((Number(extQ.rows[0].external_revenue) + Number(extQ.rows[0].commission_revenue)).toFixed(2)),
+      };
+    } catch(e) { externalSummary = null; }
+
     res.json({
       this_month: {
         revenue_usd:  Number(Number(p.revenue).toFixed(2)),
@@ -1495,8 +1543,26 @@ router.get("/cash/summary", async (req, res) => {
         payments:     Number(p.count),
         expenses_usd: Number(Number(expensesQ.rows[0].total_usd).toFixed(2)),
         income_usd:   Number(Number(incomeQ.rows[0].total_usd).toFixed(2)),
+        external:     externalSummary,
+        total_revenue_all: Number((Number(p.revenue) + (externalSummary?.total_revenue || 0)).toFixed(2)),
       }
     });
+    let ext = null;
+    try {
+      const extQ = await db.query(`
+        SELECT
+          COALESCE(SUM(i.weight_kg * i.tariff_per_kg) FILTER (WHERE i.is_commission=false),0) AS rev,
+          COALESCE(SUM(i.weight_kg * i.tariff_per_kg) FILTER (WHERE i.is_commission=true),0)  AS com
+        FROM ext_items i JOIN ext_boxes b ON b.id=i.box_id
+        WHERE b.created_at >= DATE_TRUNC('month', CURRENT_DATE)
+      `);
+      ext = {
+        external_revenue:   Number(Number(extQ.rows[0].rev).toFixed(2)),
+        commission_revenue: Number(Number(extQ.rows[0].com).toFixed(2)),
+        total:              Number((Number(extQ.rows[0].rev)+Number(extQ.rows[0].com)).toFixed(2)),
+      };
+    } catch(e) { ext = null; }
+
   } catch(err) { serverError(res, err, "cash/summary GET"); }
 });
 
