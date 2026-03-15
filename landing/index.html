@@ -59,13 +59,13 @@
     .hbadge-in{background:rgba(245,224,58,.06);border:1px solid rgba(245,224,58,.18);border-radius:18px;padding:22px 28px;text-align:center;backdrop-filter:blur(12px)}
     .hbadge-n{font-family:'Bebas Neue',sans-serif;font-size:56px;line-height:1;color:var(--lemon)}
     .hbadge-l{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:2px;color:var(--ghost);margin-top:4px;text-transform:uppercase}
-    .hpills{display:flex;gap:8px;margin-bottom:32px;opacity:0;animation:slideup .8s ease .2s forwards}
+    .hpills{display:flex;gap:8px;margin-bottom:32px;opacity:0;animation:slideup .8s ease .2s forwards;animation-fill-mode:forwards}
     .pill{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:2px;text-transform:uppercase;padding:6px 14px;border-radius:100px;border:1px solid var(--border2);background:var(--faint2);color:var(--ghost);transition:all .3s}
     .pill.on{border-color:rgba(245,224,58,.45);background:rgba(245,224,58,.08);color:var(--lemon)}
-    h1.ht{font-family:'Bebas Neue',sans-serif;font-size:clamp(68px,12vw,168px);line-height:.86;letter-spacing:-1px;margin-bottom:36px;opacity:0;animation:slideup .95s ease .3s forwards}
+    h1.ht{font-family:'Bebas Neue',sans-serif;font-size:clamp(68px,12vw,168px);line-height:.86;letter-spacing:-1px;margin-bottom:36px;opacity:0;animation:slideup .95s ease .3s forwards;animation-fill-mode:forwards}
     .ht .yl{color:var(--lemon);display:block}
     .ht .ol{display:block;-webkit-text-stroke:1.5px rgba(237,233,224,.55);color:transparent}
-    .hbot{display:flex;align-items:flex-end;justify-content:space-between;gap:40px;opacity:0;animation:slideup .9s ease .55s forwards}
+    .hbot{display:flex;align-items:flex-end;justify-content:space-between;gap:40px;opacity:0;animation:slideup .9s ease .55s forwards;animation-fill-mode:forwards}
     .hsub{font-size:16px;font-weight:400;color:var(--ghost);max-width:420px;line-height:1.75}
     .hsub strong{color:var(--white);font-weight:700}
     .hacts{display:flex;gap:10px;flex-shrink:0}
@@ -314,7 +314,7 @@
     @keyframes slideup{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
     @keyframes slideleft{from{opacity:0;transform:translateX(22px)}to{opacity:1;transform:translateX(0)}}
     @keyframes fadein{from{opacity:0}to{opacity:1}}
-    .rv{opacity:0;transform:translateY(24px);transition:opacity .75s ease,transform .75s ease}
+    .rv{opacity:1;transform:translateY(0);transition:opacity .75s ease,transform .75s ease}.js-loaded .rv{opacity:0;transform:translateY(24px)}.js-loaded .rv.vis{opacity:1;transform:translateY(0)}
     .rv.vis{opacity:1;transform:translateY(0)}
     .d1{transition-delay:.1s}.d2{transition-delay:.2s}.d3{transition-delay:.3s}.d4{transition-delay:.4s}
 
@@ -715,6 +715,22 @@
         </div>
         <div style="width:1px;height:30px;background:var(--border)"></div>
         <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:16px">🇨🇳</span>
+          <div>
+            <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:rgba(237,233,224,.35)">Depósito</div>
+            <div style="font-size:13px;font-weight:600;color:var(--ghost)">Guangzhou, China</div>
+          </div>
+        </div>
+        <div style="width:1px;height:30px;background:var(--border)"></div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:16px">🇪🇺</span>
+          <div>
+            <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:rgba(237,233,224,.35)">Depósito</div>
+            <div style="font-size:13px;font-weight:600;color:var(--ghost)">Europa</div>
+          </div>
+        </div>
+        <div style="width:1px;height:30px;background:var(--border)"></div>
+        <div style="display:flex;align-items:center;gap:10px">
           <span style="font-size:16px">🇦🇷</span>
           <div>
             <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:rgba(237,233,224,.35)">Oficina</div>
@@ -732,6 +748,9 @@
 </footer>
 
 <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+// Add js-loaded for animations
+document.documentElement.classList.add('js-loaded');
+
 // Cursor
 const cur=document.getElementById('cur');
 const curR=document.getElementById('cur-ring');
