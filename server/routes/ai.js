@@ -73,6 +73,23 @@ function sendWhatsApp(phone, message) {
   });
 }
 
+// ── Helper: enviar mensaje WhatsApp al cliente ───────────────────────────────
+function sendWhatsApp(phone, message) {
+  if (!phone) return Promise.resolve();
+  const http = require("http");
+  const jid = phone.replace(/[^0-9]/g, "") + "@s.whatsapp.net";
+  return new Promise((resolve) => {
+    const body = JSON.stringify({ jid, message });
+    const req = http.request({
+      hostname: "localhost", port: 3099, path: "/send", method: "POST",
+      headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) }
+    }, () => resolve());
+    req.on("error", () => resolve());
+    req.write(body);
+    req.end();
+  });
+}
+
 // ── Helper: formatear fechas en español ──────────────────────────────────────
 function fmtDate(v) {
   if (!v) return null;
