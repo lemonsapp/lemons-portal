@@ -816,11 +816,36 @@ router.post("/write/shipment", async (req, res) => {
     } = req.body;
 
     // Validaciones básicas
-    if (!user_client_number || !code || !description || !weight_kg || !origin || !service) {
+    if (!user_client_number || !description || !weight_kg || !origin || !service) {
       return res.status(400).json({
         error: "Faltan campos requeridos",
-        required: ["user_client_number", "code", "description", "weight_kg", "origin", "service"]
+        required: ["user_client_number", "description", "weight_kg", "origin", "service"]
       });
+    }
+
+    // Generar código automáticamente si no viene
+    let finalCode = code;
+    if (!finalCode) {
+      const originPfx  = origin === "CHINA" ? "CHN" : origin === "EUROPA" ? "EUR" : "USA";
+      const servicePfx = origin === "EUROPA" ? "N" : service === "EXPRESS" ? "E" : service === "TECH_PREMIUM" ? "T" : "N";
+      const prefix = `${originPfx}-${servicePfx}-`;
+      const cntQ = await db.query(
+        `SELECT COUNT(*) AS cnt FROM shipments WHERE code LIKE $1`, [`${prefix}%`]
+      );
+      let next = Number(cntQ.rows[0]?.cnt || 0) + 1;
+      let candidate = `${prefix}${String(next).padStart(4, "0")}`;
+      const exists = await db.query(`SELECT id FROM shipments WHERE code = $1`, [candidate]);
+      if (exists.rows[0]) {
+        const maxQ = await db.query(
+          `SELECT code FROM shipments WHERE code LIKE $1 ORDER BY code DESC LIMIT 1`,
+          [`${prefix}%`]
+        );
+        const lastNum = parseInt(
+          (maxQ.rows[0]?.code || `${prefix}0000`).replace(prefix, ""), 10
+        ) || 0;
+        candidate = `${prefix}${String(lastNum + 1).padStart(4, "0")}`;
+      }
+      finalCode = candidate;
     }
 
     const validOrigins  = ["USA", "CHINA", "EUROPA"];
@@ -838,9 +863,9 @@ router.post("/write/shipment", async (req, res) => {
     // Verificar que el código no exista ya
     const codeCheck = await db.query(
       `SELECT id FROM shipments WHERE UPPER(code) = UPPER($1) LIMIT 1`,
-      [code]
+      [finalCode]
     );
-    if (codeCheck.rows[0]) return res.status(409).json({ error: `El código ${code} ya existe en el sistema` });
+    if (codeCheck.rows[0]) return res.status(409).json({ error: `El código ${finalCode} ya existe en el sistema` });
 
     // Obtener tarifas del cliente o defaults
     const ratesQ = await db.query(
@@ -873,7 +898,7 @@ router.post("/write/shipment", async (req, res) => {
       VALUES ($1,$2,$3,$4,'Recibido en depósito',$5,$6,$7,$8,$9,$10,$11)
       RETURNING id, code, status, estimated_usd
     `, [
-      uq.rows[0].id, code.toUpperCase(), description,
+      uq.rows[0].id, finalCode.toUpperCase(), description,
       weight_kg, origin, service,
       clientRate, finalEstimated, dateIn,
       tracking || null, box_code || null
