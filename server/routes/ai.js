@@ -458,6 +458,18 @@ router.get("/dashboard/stats", async (req, res) => {
       WHERE date_in >= DATE_TRUNC('month', CURRENT_DATE)
     `);
 
+    // Profit del mes actual y total histórico (desde pagos registrados)
+    const profitQ = await db.query(`
+      SELECT
+        COALESCE(SUM(profit_usd), 0) AS profit_this_month
+      FROM payments
+      WHERE DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE)
+    `);
+
+    const totalProfitQ = await db.query(`
+      SELECT COALESCE(SUM(profit_usd), 0) AS total_profit FROM payments
+    `);
+
     // Coins en circulación
     const coinsQ = await db.query(`
       SELECT COALESCE(SUM(balance), 0) AS total_coins FROM lemon_coins
@@ -478,14 +490,16 @@ router.get("/dashboard/stats", async (req, res) => {
         delivered: Number(p.delivered),
       },
       totals: {
-        active_clients:  Number(clientsQ.rows[0].active_clients),
-        total_weight_kg: Number(Number(p.total_weight_kg).toFixed(2)),
-        total_revenue:   Number(Number(p.total_revenue).toFixed(2)),
+        active_clients:    Number(clientsQ.rows[0].active_clients),
+        total_weight_kg:   Number(Number(p.total_weight_kg).toFixed(2)),
+        total_revenue:     Number(Number(p.total_revenue).toFixed(2)),
+        total_profit_usd:  Number(Number(totalProfitQ.rows[0].total_profit).toFixed(2)),
         coins_circulating: Number(coinsQ.rows[0].total_coins),
       },
       this_month: {
-        shipments:      Number(m.this_month),
-        revenue_usd:    Number(Number(m.revenue_this_month).toFixed(2)),
+        shipments:    Number(m.this_month),
+        revenue_usd:  Number(Number(m.revenue_this_month).toFixed(2)),
+        profit_usd:   Number(Number(profitQ.rows[0].profit_this_month).toFixed(2)),
       },
     });
   } catch (err) { serverError(res, err, "dashboard/stats"); }
