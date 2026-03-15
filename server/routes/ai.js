@@ -235,7 +235,7 @@ router.get("/clients/:clientNumber", async (req, res) => {
     if (!Number.isFinite(clientNumber)) return res.status(400).json({ error: "Número de cliente inválido" });
 
     const uq = await db.query(`
-      SELECT id, client_number, name, email, role, active, created_at
+      SELECT id, client_number, name, email, role, active, created_at, phone
       FROM users
       WHERE client_number = $1
       LIMIT 1
@@ -271,6 +271,7 @@ router.get("/clients/:clientNumber", async (req, res) => {
         name:             u.name,
         email:            u.email,
         active:           u.active,
+        phone:            u.phone || null,
         member_since:     fmtDate(u.created_at),
         stats: {
           total_shipments: Number(stats.total_shipments),
