@@ -585,4 +585,190 @@ router.get("/summary", authRequired, requireRole(STAFF), async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+
+// ══════════════════════════════════════════════════════════════════
+// PAGO DE CIERRE — descuenta de cuenta(s) y registra en caja
+// ══════════════════════════════════════════════════════════════════
+
+// POST /external/cierres/:id/pay
+// body: { payments: [{ account_id, amount, currency }], notes }
+router.post("/cierres/:id/pay", authRequired, requireRole(STAFF), async (req, res) => {
+  const client = await db.query("SELECT NOW()").then(() => null).catch(() => null); // keep-alive
+  try {
+    const cierreId  = parseInt(req.params.id);
+    const { payments, notes } = req.body;
+
+    if (!Array.isArray(payments) || !payments.length)
+      return res.status(400).json({ error: "Necesitás indicar al menos un pago" });
+
+    // Verificar cierre existe
+    const cq = await db.query(`SELECT * FROM ext_cierres WHERE id=$1`, [cierreId]);
+    if (!cq.rows[0]) return res.status(404).json({ error: "Cierre no encontrado" });
+    const cierre = cq.rows[0];
+
+    // Crear tabla de pagos de cierre si no existe
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS ext_cierre_payments (
+        id          SERIAL PRIMARY KEY,
+        cierre_id   INTEGER NOT NULL REFERENCES ext_cierres(id),
+        account_id  INTEGER REFERENCES accounts(id),
+        amount      NUMERIC(12,2) NOT NULL,
+        currency    TEXT DEFAULT 'USD',
+        notes       TEXT,
+        operator_id INTEGER REFERENCES users(id),
+        created_at  TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    const operator_id = req.user?.id || null;
+    const movementsCreated = [];
+
+    for (const pmt of payments) {
+      const amount     = Number(pmt.amount);
+      const account_id = parseInt(pmt.account_id);
+      const currency   = pmt.currency || 'USD';
+
+      if (!Number.isFinite(amount) || amount <= 0) continue;
+
+      // Registrar pago de cierre
+      await db.query(`
+        INSERT INTO ext_cierre_payments (cierre_id, account_id, amount, currency, notes, operator_id)
+        VALUES ($1,$2,$3,$4,$5,$6)
+      `, [cierreId, account_id || null, amount, currency, notes || null, operator_id]);
+
+      // Descontar de la cuenta si se especificó
+      if (account_id && Number.isFinite(account_id)) {
+        const accQ = await db.query(`SELECT balance, name FROM accounts WHERE id=$1`, [account_id]);
+        if (accQ.rows[0]) {
+          const newBal = Number(accQ.rows[0].balance) - amount;
+          await db.query(`UPDATE accounts SET balance=$1, updated_at=NOW() WHERE id=$2`, [newBal, account_id]);
+          const mv = await db.query(`
+            INSERT INTO account_movements
+              (account_id, operator_id, direction, amount, description, ref_type, ref_id, balance_after)
+            VALUES ($1,$2,'out',$3,$4,'cierre_externo',$5,$6) RETURNING *
+          `, [account_id, operator_id, amount,
+              `Pago cierre externo: ${cierre.label}${notes ? ' — ' + notes : ''}`,
+              cierreId, newBal]);
+          movementsCreated.push(mv.rows[0]);
+        }
+      }
+
+      // Registrar como gasto empresa en caja
+      const expenseR = await db.query(`
+        INSERT INTO expenses
+          (operator_id, type, category, description, amount, currency, date, account_id)
+        VALUES ($1,'empresa','Cargas Externas',$2,$3,$4,CURRENT_DATE,$5) RETURNING *
+      `, [operator_id,
+          `Pago cierre: ${cierre.label}${notes ? ' — ' + notes : ''}`,
+          amount, currency, account_id || null]);
+
+      // Si tiene account_id, el movimiento ya se hizo arriba — no duplicar
+      // Solo registrar el vínculo en account_movements si no se hizo antes
+    }
+
+    // Marcar cierre como pagado (no cerrado, sigue siendo cerrable por separado)
+    const payNote = notes ? '[PAGO REGISTRADO: ' + notes + ']' : '[PAGO REGISTRADO]';
+    await db.query(`
+      UPDATE ext_cierres SET
+        notes = COALESCE(notes,'') || $1,
+        updated_at = NOW()
+      WHERE id=$2
+    `, ['\n' + payNote, cierreId]);
+
+    res.json({ ok: true, movements: movementsCreated });
+  } catch(e) {
+    console.error("[CIERRE PAY]", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /external/cierres/:id/payments — historial de pagos de un cierre
+router.get("/cierres/:id/payments", authRequired, requireRole(STAFF), async (req, res) => {
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS ext_cierre_payments (
+        id SERIAL PRIMARY KEY, cierre_id INTEGER, account_id INTEGER,
+        amount NUMERIC(12,2), currency TEXT DEFAULT 'USD', notes TEXT,
+        operator_id INTEGER, created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    const q = await db.query(`
+      SELECT cp.*, a.name AS account_name, a.currency AS account_currency
+      FROM ext_cierre_payments cp
+      LEFT JOIN accounts a ON a.id = cp.account_id
+      WHERE cp.cierre_id = $1
+      ORDER BY cp.created_at DESC
+    `, [req.params.id]);
+    res.json({ payments: q.rows });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ══════════════════════════════════════════════════════════════════
+// REGISTRAR COSTOS DE ENVÍOS LEMONS EN CAJA
+// POST /external/register-costs — registra los costos del período como gasto empresa
+// ══════════════════════════════════════════════════════════════════
+router.post("/register-costs", authRequired, requireRole(STAFF), async (req, res) => {
+  try {
+    const { date_from, date_to, account_id, cierre_label } = req.body;
+
+    // Obtener costos del operador
+    const costsQ = await db.query(`SELECT usa_normal, china_normal, europa_normal FROM operator_costs LIMIT 1`);
+    const costs  = costsQ.rows[0] || { usa_normal: 0, china_normal: 0, europa_normal: 0 };
+
+    // Obtener envíos del período
+    let shipmentsQ;
+    if (date_from && date_to) {
+      shipmentsQ = await db.query(`
+        SELECT origin, SUM(GREATEST(weight_kg, 1)) AS total_kg
+        FROM shipments
+        WHERE service = 'NORMAL'
+          AND origin IN ('USA','CHINA','EUROPA')
+          AND date_in >= $1::date AND date_in <= $2::date
+        GROUP BY origin
+      `, [date_from, date_to]);
+    } else {
+      return res.status(400).json({ error: "Necesitás date_from y date_to" });
+    }
+
+    const operator_id = req.user?.id || null;
+    const expensesCreated = [];
+
+    for (const row of shipmentsQ.rows) {
+      const kg       = Number(row.total_kg || 0);
+      let costPerKg  = 0;
+      if (row.origin === 'USA')    costPerKg = Number(costs.usa_normal    || 0);
+      if (row.origin === 'CHINA')  costPerKg = Number(costs.china_normal  || 0);
+      if (row.origin === 'EUROPA') costPerKg = Number(costs.europa_normal || 0);
+      const total = Number((kg * costPerKg).toFixed(2));
+      if (!total) continue;
+
+      const desc = `Costo carga ${row.origin} NORMAL — ${kg.toFixed(2)} kg × $${costPerKg}/kg${cierre_label ? ' — ' + cierre_label : ''}`;
+
+      const expR = await db.query(`
+        INSERT INTO expenses (operator_id, type, category, description, amount, currency, date, account_id)
+        VALUES ($1,'empresa','Cargas Externas',$2,$3,'USD',CURRENT_DATE,$4) RETURNING *
+      `, [operator_id, desc, total, account_id || null]);
+
+      // Descontar de cuenta si se especificó
+      if (account_id) {
+        const accQ = await db.query(`SELECT balance FROM accounts WHERE id=$1`, [account_id]);
+        if (accQ.rows[0]) {
+          const newBal = Number(accQ.rows[0].balance) - total;
+          await db.query(`UPDATE accounts SET balance=$1, updated_at=NOW() WHERE id=$2`, [newBal, account_id]);
+          await db.query(`
+            INSERT INTO account_movements (account_id, operator_id, direction, amount, description, ref_type, ref_id, balance_after)
+            VALUES ($1,$2,'out',$3,$4,'expense',$5,$6)
+          `, [account_id, operator_id, total, desc, expR.rows[0].id, newBal]);
+        }
+      }
+      expensesCreated.push(expR.rows[0]);
+    }
+
+    res.json({ ok: true, expenses: expensesCreated, total: expensesCreated.reduce((s,e) => s + Number(e.amount), 0) });
+  } catch(e) {
+    console.error("[REGISTER COSTS]", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;
