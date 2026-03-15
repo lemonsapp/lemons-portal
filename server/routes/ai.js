@@ -1520,7 +1520,7 @@ router.post("/operator/clients", async (req, res) => {
     const nextNumber = Number(maxQ.rows[0].max || 0) + 1;
 
     // Hash del password
-    const bcrypt = require("bcrypt");
+    const bcrypt = require("bcryptjs");
     const hash = await bcrypt.hash(password, 10);
 
     const ins = await db.query(
