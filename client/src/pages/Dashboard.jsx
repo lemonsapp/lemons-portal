@@ -479,6 +479,210 @@ function KanbanCol({ col, rows }) {
   );
 }
 
+// ── P&L Block — diseño simplificado ──────────────────────────────────────────
+function PnlBlock({ monthly, selMonth, setSelMonth }) {
+  const [showDetail, setShowDetail] = useState(false);
+  const m = monthly.find(x => x.month === selMonth) || {};
+
+  const entro  = num(m.total_income);
+  const salio  = num(m.cost_usd) + num(m.empresa_usd) + num(m.personal_usd);
+  const result = num(m.net);
+  const isPos  = result >= 0;
+  const resultColor = isPos ? "#22c55e" : "#ef4444";
+  const resultGlow  = isPos ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)";
+
+  const detalleEntro = [
+    { label: "Cobros paquetes",     value: fmtUsd(m.collected),   color: "#4ade80" },
+    { label: "Ingresos adicionales",value: fmtUsd(m.income_usd),  color: "#60a5fa" },
+  ];
+  const detalleSalio = [
+    { label: "Costo de envíos",     value: fmtUsd(m.cost_usd),    color: "#f87171" },
+    { label: "Gastos empresa USD",  value: fmtUsd(m.empresa_usd), color: "#fb923c" },
+    { label: "Gastos empresa ARS",  value: fmtArs(m.empresa_ars), color: "#fb923c" },
+    { label: "Gastos personales USD",value: fmtUsd(m.personal_usd),color: "#c084fc"},
+    { label: "Gastos personales ARS",value: fmtArs(m.personal_ars),color: "#c084fc"},
+  ];
+
+  return (
+    <div style={{ marginTop: 12, marginBottom: 8 }}>
+      <div style={{
+        background: "rgba(255,255,255,0.04)",
+        border: "1px solid rgba(255,255,255,0.09)",
+        borderRadius: 18, padding: "20px 22px",
+      }}>
+        {/* Header con selector */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 20 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.40)", letterSpacing: "0.5px" }}>
+            📊 RESULTADO FINANCIERO MENSUAL
+          </div>
+          <select
+            className="input"
+            value={selMonth}
+            onChange={e => setSelMonth(e.target.value)}
+            style={{ width: 160 }}
+          >
+            {monthly.map(mx => (
+              <option key={mx.month} value={mx.month}>
+                {new Date(mx.month + "-15").toLocaleString("es-AR", { month: "long", year: "numeric" })}
+              </option>
+            ))}
+            {!monthly.length && <option value={selMonth}>{selMonth}</option>}
+          </select>
+        </div>
+
+        {/* Tres bloques principales: ENTRÓ / SALIÓ / RESULTADO */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 16 }} className="grid3pnl">
+          {/* ENTRÓ */}
+          <div style={{ background: "rgba(34,197,94,0.07)", border: "1px solid rgba(34,197,94,0.20)", borderRadius: 16, padding: "18px 20px" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.40)", marginBottom: 6 }}>💰 ENTRÓ</div>
+            <div style={{ fontSize: 32, fontWeight: 900, color: "#4ade80", letterSpacing: "-1px", lineHeight: 1 }}>
+              {fmtUsd(entro)}
+            </div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.30)", marginTop: 6 }}>
+              cobros + ingresos adicionales
+            </div>
+          </div>
+
+          {/* SALIÓ */}
+          <div style={{ background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.20)", borderRadius: 16, padding: "18px 20px" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.40)", marginBottom: 6 }}>📤 SALIÓ</div>
+            <div style={{ fontSize: 32, fontWeight: 900, color: "#f87171", letterSpacing: "-1px", lineHeight: 1 }}>
+              {fmtUsd(salio)}
+            </div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.30)", marginTop: 6 }}>
+              costo envíos + gastos empresa + personales
+            </div>
+          </div>
+
+          {/* RESULTADO */}
+          <div style={{ background: resultGlow, border: `1px solid ${resultColor}44`, borderRadius: 16, padding: "18px 20px", position: "relative", overflow: "hidden" }}>
+            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: resultColor, borderRadius: "16px 16px 0 0" }} />
+            <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.40)", marginBottom: 6 }}>
+              {isPos ? "✅" : "⚠️"} RESULTADO
+            </div>
+            <div style={{ fontSize: 36, fontWeight: 900, color: resultColor, letterSpacing: "-1px", lineHeight: 1 }}>
+              {fmtUsd(result)}
+            </div>
+            <div style={{ fontSize: 12, color: resultColor, marginTop: 6, fontWeight: 700, opacity: 0.8 }}>
+              {num(m.margin)}% margen
+            </div>
+          </div>
+        </div>
+
+        {/* Toggle detalle */}
+        <button
+          onClick={() => setShowDetail(v => !v)}
+          style={{
+            background: "none", border: "1px solid rgba(255,255,255,0.10)",
+            borderRadius: 10, color: "rgba(255,255,255,0.45)", cursor: "pointer",
+            fontSize: 12, fontWeight: 700, padding: "7px 16px", marginBottom: showDetail ? 16 : 0,
+            transition: "all 0.15s",
+          }}
+        >
+          {showDetail ? "▲ Ocultar detalle" : "▼ Ver detalle"}
+        </button>
+
+        {/* Detalle colapsable */}
+        {showDetail && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }} className="grid2">
+            {/* Detalle entró */}
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(34,197,94,0.70)", marginBottom: 10, letterSpacing: "0.5px" }}>
+                DETALLE DE LO QUE ENTRÓ
+              </div>
+              {detalleEntro.map(d => (
+                <div key={d.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: "rgba(255,255,255,0.03)", borderRadius: 10, marginBottom: 6 }}>
+                  <span style={{ fontSize: 13, color: "rgba(255,255,255,0.55)" }}>{d.label}</span>
+                  <span style={{ fontSize: 14, fontWeight: 800, color: d.color }}>{d.value}</span>
+                </div>
+              ))}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.20)", borderRadius: 10, marginTop: 4 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#4ade80" }}>TOTAL</span>
+                <span style={{ fontSize: 15, fontWeight: 900, color: "#4ade80" }}>{fmtUsd(entro)}</span>
+              </div>
+            </div>
+
+            {/* Detalle salió */}
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(239,68,68,0.70)", marginBottom: 10, letterSpacing: "0.5px" }}>
+                DETALLE DE LO QUE SALIÓ
+              </div>
+              {detalleSalio.map(d => (
+                <div key={d.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: "rgba(255,255,255,0.03)", borderRadius: 10, marginBottom: 6 }}>
+                  <span style={{ fontSize: 13, color: "rgba(255,255,255,0.55)" }}>{d.label}</span>
+                  <span style={{ fontSize: 14, fontWeight: 800, color: d.color }}>{d.value}</span>
+                </div>
+              ))}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.20)", borderRadius: 10, marginTop: 4 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#f87171" }}>TOTAL</span>
+                <span style={{ fontSize: 15, fontWeight: 900, color: "#f87171" }}>{fmtUsd(salio)}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tabla comparativa mes a mes */}
+        <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.30)", letterSpacing: "0.5px", margin: "20px 0 10px" }}>
+          COMPARATIVA MES A MES
+        </div>
+        <div className="tableWrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>MES</th>
+                <th style={{ color: "#4ade80" }}>ENTRÓ</th>
+                <th style={{ color: "#f87171" }}>SALIÓ</th>
+                <th>RESULTADO</th>
+                <th>MARGEN</th>
+              </tr>
+            </thead>
+            <tbody>
+              {monthly.map(mx => {
+                const isSelected = mx.month === selMonth;
+                const mEntro  = num(mx.total_income);
+                const mSalio  = num(mx.cost_usd) + num(mx.empresa_usd) + num(mx.personal_usd);
+                const mResult = num(mx.net);
+                const mPos    = mResult >= 0;
+                return (
+                  <tr key={mx.month}
+                    onClick={() => setSelMonth(mx.month)}
+                    style={{
+                      cursor: "pointer",
+                      background: isSelected ? "rgba(255,210,0,0.06)" : undefined,
+                      outline: isSelected ? "1px solid rgba(255,210,0,0.20)" : undefined,
+                    }}
+                  >
+                    <td style={{ fontWeight: isSelected ? 800 : 600, color: isSelected ? "#ffd200" : undefined, whiteSpace: "nowrap" }}>
+                      {new Date(mx.month + "-15").toLocaleString("es-AR", { month: "short", year: "2-digit" }).toUpperCase()}
+                    </td>
+                    <td style={{ color: "#4ade80", fontWeight: 700 }}>{fmtUsd(mEntro)}</td>
+                    <td style={{ color: "#f87171", fontWeight: 700 }}>{fmtUsd(mSalio)}</td>
+                    <td>
+                      <span style={{ fontWeight: 900, fontSize: 14, color: mPos ? "#22c55e" : "#ef4444" }}>
+                        {fmtUsd(mResult)}
+                      </span>
+                    </td>
+                    <td>
+                      <span style={{
+                        fontSize: 12, fontWeight: 700, padding: "2px 8px", borderRadius: 6,
+                        background: num(mx.margin) >= 30 ? "rgba(34,197,94,0.15)" : num(mx.margin) >= 0 ? "rgba(255,210,0,0.12)" : "rgba(239,68,68,0.12)",
+                        color: num(mx.margin) >= 30 ? "#86efac" : num(mx.margin) >= 0 ? "#ffd200" : "#fca5a5",
+                      }}>{mx.margin}%</span>
+                    </td>
+                  </tr>
+                );
+              })}
+              {!monthly.length && (
+                <tr><td colSpan={5} style={{ textAlign: "center", padding: 20, color: "rgba(255,255,255,0.30)" }}>Sin datos financieros aún.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Componente principal ──────────────────────────────────────────────────────
 export default function Dashboard() {
   const [data, setData]             = useState(null);
@@ -827,126 +1031,7 @@ export default function Dashboard() {
           </div>
 
           {/* ══ P&L MENSUAL ══════════════════════════════════════════════ */}
-          <div style={{ marginTop: 12, marginBottom: 8 }}>
-            <ChartShell title="📊 Resultado Financiero Mensual (P&L)">
-
-              {/* Selector de mes */}
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
-                <select
-                  className="input"
-                  value={selMonth}
-                  onChange={e => setSelMonth(e.target.value)}
-                  style={{ width: 160 }}
-                >
-                  {monthly.map(m => (
-                    <option key={m.month} value={m.month}>
-                      {new Date(m.month + "-15").toLocaleString("es-AR", { month: "long", year: "numeric" })}
-                    </option>
-                  ))}
-                  {!monthly.length && <option value={selMonth}>{selMonth}</option>}
-                </select>
-                <span style={{ fontSize: 12, color: "rgba(255,255,255,0.35)" }}>
-                  {monthly.length} mes{monthly.length !== 1 ? "es" : ""} con datos
-                </span>
-              </div>
-
-              {/* KPIs del mes seleccionado */}
-              {(() => {
-                const m = monthly.find(x => x.month === selMonth) || {};
-                return (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(160px,1fr))", gap: 10, marginBottom: 20 }}>
-                    {[
-                      { label: "Cobros paquetes", value: fmtUsd(m.collected),    color: "#22c55e",  icon: "📦" },
-                      { label: "Costo de env\u00edos", value: fmtUsd(m.cost_usd), color: "#ef4444", icon: "\ud83d\udcc9" },
-                      { label: "Ganancia cobros", value: fmtUsd(m.profit_usd), color: num(m.profit_usd||0)>=0?"#4ade80":"#f97316", icon: "\ud83d\udcc8" },
-                      { label: "Ingresos adicionales", value: fmtUsd(m.income_usd), color: "#3b82f6", icon: "➕" },
-                      { label: "Total ingresos", value: fmtUsd(m.total_income),  color: "#ffd200",  icon: "💰" },
-                      { label: "Gastos empresa USD", value: fmtUsd(m.empresa_usd), color: "#ef4444", icon: "🏢" },
-                      { label: "Gastos empresa ARS", value: fmtArs(m.empresa_ars), color: "#f97316", icon: "🏢" },
-                      { label: "Gastos personales USD", value: fmtUsd(m.personal_usd), color: "#a78bfa", icon: "👤" },
-                      { label: "Gastos personales ARS", value: fmtArs(m.personal_ars), color: "#c084fc", icon: "👤" },
-                      { label: "Ganancia neta USD", value: fmtUsd(m.net),         color: num(m.net) >= 0 ? "#22c55e" : "#ef4444", icon: "📈" },
-                      { label: "Margen", value: `${m.margin ?? 0}%`,             color: num(m.margin) >= 0 ? "#22c55e" : "#ef4444", icon: "%" },
-                    ].map(kpi => (
-                      <div key={kpi.label} style={{
-                        position: "relative", background: "rgba(255,255,255,0.04)",
-                        border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14, padding: "12px 14px", overflow: "hidden",
-                      }}>
-                        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: kpi.color, borderRadius: "14px 14px 0 0" }} />
-                        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", fontWeight: 700, marginBottom: 4, marginTop: 4 }}>
-                          {kpi.icon} {kpi.label.toUpperCase()}
-                        </div>
-                        <div style={{ fontSize: 20, fontWeight: 900, color: kpi.color }}>{kpi.value}</div>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
-
-              {/* Tabla comparativa mes a mes */}
-              <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.40)", letterSpacing: "0.5px", marginBottom: 10 }}>
-                COMPARATIVA MES A MES
-              </div>
-              <div className="tableWrap">
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>MES</th>
-                      <th>COBROS</th>
-                      <th>+ INGRESOS</th>
-                      <th>TOTAL ING.</th>
-                      <th>GASTOS EMP. USD</th>
-                      <th>GASTOS EMP. ARS</th>
-                      <th>GASTOS PERS. USD</th>
-                      <th>GANANCIA NETA</th>
-                      <th>MARGEN</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {monthly.map(m => {
-                      const isSelected = m.month === selMonth;
-                      return (
-                        <tr key={m.month}
-                          onClick={() => setSelMonth(m.month)}
-                          style={{
-                            cursor: "pointer",
-                            background: isSelected ? "rgba(255,210,0,0.06)" : undefined,
-                            outline: isSelected ? "1px solid rgba(255,210,0,0.20)" : undefined,
-                          }}
-                        >
-                          <td style={{ fontWeight: isSelected ? 800 : 600, color: isSelected ? "#ffd200" : undefined, whiteSpace: "nowrap" }}>
-                            {new Date(m.month + "-15").toLocaleString("es-AR", { month: "short", year: "2-digit" }).toUpperCase()}
-                          </td>
-                          <td style={{ color: "#22c55e", fontWeight: 700 }}>{fmtUsd(m.collected)}</td>
-                          <td style={{ color: "#3b82f6", fontWeight: 700 }}>{fmtUsd(m.income_usd)}</td>
-                          <td style={{ color: "#ffd200", fontWeight: 800 }}>{fmtUsd(m.total_income)}</td>
-                          <td style={{ color: "#ef4444" }}>{fmtUsd(m.empresa_usd)}</td>
-                          <td style={{ color: "#f97316" }}>{fmtArs(m.empresa_ars)}</td>
-                          <td style={{ color: "#a78bfa" }}>{fmtUsd(m.personal_usd)}</td>
-                          <td>
-                            <span style={{
-                              fontWeight: 900, fontSize: 14,
-                              color: num(m.net) >= 0 ? "#22c55e" : "#ef4444",
-                            }}>{fmtUsd(m.net)}</span>
-                          </td>
-                          <td>
-                            <span style={{
-                              fontSize: 12, fontWeight: 700, padding: "2px 8px", borderRadius: 6,
-                              background: num(m.margin) >= 30 ? "rgba(34,197,94,0.15)" : num(m.margin) >= 0 ? "rgba(255,210,0,0.12)" : "rgba(239,68,68,0.12)",
-                              color: num(m.margin) >= 30 ? "#86efac" : num(m.margin) >= 0 ? "#ffd200" : "#fca5a5",
-                            }}>{m.margin}%</span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {!monthly.length && (
-                      <tr><td colSpan={9} style={{ textAlign: "center", padding: 20, color: "rgba(255,255,255,0.30)" }}>Sin datos financieros aún.</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </ChartShell>
-          </div>
+          <PnlBlock monthly={monthly} selMonth={selMonth} setSelMonth={setSelMonth} />
 
           {/* Actividad reciente */}
           <div style={{ marginTop: 12, marginBottom: 24 }}>
