@@ -105,6 +105,11 @@ export default function ExternalCargo() {
   const [activeCierre, setActiveCierre] = useState(null);
   const [cierreDetail, setCierreDetail] = useState(null);
   const [dedForm, setDedForm]           = useState({ description:"", amount:"" });
+  const [accounts, setAccounts]         = useState([]);
+  const [cierrePayments, setCierrePayments] = useState([]);
+  const [payForm, setPayForm]           = useState({ account_id:"", amount:"", currency:"USD", notes:"" });
+  const [savingPay, setSavingPay]       = useState(false);
+  const [registeringCosts, setRegisteringCosts] = useState(false);
 
   // ── Loaders ──────────────────────────────────────────────────
   async function loadBoxes() {
@@ -137,7 +142,23 @@ export default function ExternalCargo() {
     setCierreDetail(d);
   }
 
-  useEffect(() => { loadBoxes(); loadCierres(); }, []);
+  async function loadAccounts() {
+    try {
+      const r = await fetch(`${API}/accounts/summary`, { headers: h() });
+      const d = await r.json();
+      setAccounts(d.accounts || []);
+    } catch { /* no-op */ }
+  }
+
+  async function loadCierrePayments(cierreId) {
+    try {
+      const r = await fetch(`${API}/external/cierres/${cierreId}/payments`, { headers: h() });
+      const d = await r.json();
+      setCierrePayments(d.payments || []);
+    } catch { /* no-op */ }
+  }
+
+  useEffect(() => { loadBoxes(); loadCierres(); loadAccounts(); }, []);
 
   // ── Cajas ─────────────────────────────────────────────────────
   async function saveBox() {
@@ -244,7 +265,50 @@ export default function ExternalCargo() {
 
   async function openCierre(cierre) {
     setActiveCierre(cierre);
+    setCierrePayments([]);
     await loadCierreDetail(cierre.id);
+    await loadCierrePayments(cierre.id);
+  }
+
+  async function payCierre() {
+    if (!payForm.account_id || !payForm.amount) return setMsg("Completá cuenta y monto");
+    setSavingPay(true);
+    try {
+      const r = await fetch(`${API}/external/cierres/${activeCierre.id}/pay`, {
+        method:"POST", headers:h(),
+        body:JSON.stringify({
+          payments:[{ account_id:payForm.account_id, amount:Number(payForm.amount), currency:payForm.currency }],
+          notes:payForm.notes,
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) return setMsg(d.error || "Error");
+      setMsg(`✅ Pago registrado — descuento aplicado a la cuenta`);
+      setPayForm({ account_id:"", amount:"", currency:"USD", notes:"" });
+      await loadCierrePayments(activeCierre.id);
+    } catch { setMsg("Error de red"); }
+    finally { setSavingPay(false); }
+  }
+
+  async function registerCosts() {
+    if (!cierreDetail?.cierre?.date_from || !cierreDetail?.cierre?.date_to)
+      return setMsg("El cierre necesita fechas para registrar costos");
+    setRegisteringCosts(true);
+    try {
+      const r = await fetch(`${API}/external/register-costs`, {
+        method:"POST", headers:h(),
+        body:JSON.stringify({
+          date_from: cierreDetail.cierre.date_from,
+          date_to:   cierreDetail.cierre.date_to,
+          cierre_label: activeCierre.label,
+          account_id: payForm.account_id || null,
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) return setMsg(d.error || "Error");
+      setMsg(`✅ Costos registrados en caja — ${fmtUsd(d.total)} USD`);
+    } catch { setMsg("Error de red"); }
+    finally { setRegisteringCosts(false); }
   }
 
   async function addDeduction() {
@@ -541,6 +605,82 @@ export default function ExternalCargo() {
                   </div>
                   <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:6 }}>
                     Negativo (-) para descuento, positivo (+) para adicional
+                  </div>
+                </div>
+
+                {/* ── Panel de pago ── */}
+                <div style={{ marginTop:18, borderTop:"1px solid rgba(255,255,255,0.07)", paddingTop:16 }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:"rgba(255,255,255,0.4)", marginBottom:10 }}>
+                    💳 REGISTRAR PAGO
+                  </div>
+
+                  {/* Historial de pagos */}
+                  {cierrePayments.length > 0 && (
+                    <div style={{ marginBottom:12 }}>
+                      {cierrePayments.map(p => (
+                        <div key={p.id} style={{ display:"flex", justifyContent:"space-between", fontSize:12, padding:"5px 0", borderBottom:"1px solid rgba(255,255,255,0.05)", color:"rgba(255,255,255,0.6)" }}>
+                          <span>💸 {p.account_name || "Sin cuenta"}</span>
+                          <span style={{ color:"#4ade80", fontWeight:700 }}>-{fmtUsd(p.amount)}</span>
+                        </div>
+                      ))}
+                      <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, marginTop:6, fontWeight:800 }}>
+                        <span>Total pagado</span>
+                        <span style={{ color:"#4ade80" }}>{fmtUsd(cierrePayments.reduce((s,p)=>s+Number(p.amount),0))}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={{ display:"flex", gap:8, marginBottom:8, flexWrap:"wrap" }}>
+                    <select
+                      value={payForm.account_id}
+                      onChange={e => setPayForm(f=>({...f, account_id:e.target.value}))}
+                      style={{ ...sel, flex:2, minWidth:140 }}
+                    >
+                      <option value="">Elegir cuenta…</option>
+                      {accounts.map(a => (
+                        <option key={a.id} value={a.id}>
+                          {a.name} ({a.currency} — saldo: {a.currency==="ARS" ? `$${Number(a.balance).toLocaleString("es-AR",{maximumFractionDigits:0})}` : `$${Number(a.balance).toFixed(2)}`})
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="number" placeholder="Monto"
+                      value={payForm.amount}
+                      onChange={e => setPayForm(f=>({...f,amount:e.target.value}))}
+                      style={{ ...inp, width:110 }}
+                    />
+                    <select
+                      value={payForm.currency}
+                      onChange={e => setPayForm(f=>({...f,currency:e.target.value}))}
+                      style={{ ...sel, width:80 }}
+                    >
+                      <option value="USD">USD</option>
+                      <option value="USDT">USDT</option>
+                      <option value="ARS">ARS</option>
+                    </select>
+                  </div>
+                  <input
+                    placeholder="Nota del pago (opcional)"
+                    value={payForm.notes}
+                    onChange={e => setPayForm(f=>({...f,notes:e.target.value}))}
+                    style={{ ...inp, width:"100%", marginBottom:8 }}
+                  />
+                  <div style={{ display:"flex", gap:8 }}>
+                    <button onClick={payCierre} disabled={savingPay} style={{ ...btn(true), flex:1 }}>
+                      {savingPay ? "Registrando…" : "💸 Registrar pago"}
+                    </button>
+                    <button
+                      onClick={registerCosts}
+                      disabled={registeringCosts}
+                      title="Registra los costos de envíos del período como gasto en caja"
+                      style={{ ...btn(false), flex:1, border:"1px solid rgba(99,102,241,0.3)", color:"#a78bfa" }}
+                    >
+                      {registeringCosts ? "Registrando…" : "📊 Registrar costos en caja"}
+                    </button>
+                  </div>
+                  <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:6 }}>
+                    "Registrar pago" descuenta de la cuenta seleccionada y lo anota en gastos empresa.<br/>
+                    "Registrar costos" anota el costo por kg de los envíos del período en la caja.
                   </div>
                 </div>
 
