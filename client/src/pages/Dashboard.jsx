@@ -918,11 +918,11 @@ export default function Dashboard() {
                             {new Date(m.month + "-15").toLocaleString("es-AR", { month: "short", year: "2-digit" }).toUpperCase()}
                           </td>
                           <td style={{ color: "#22c55e", fontWeight: 700 }}>{fmtUsd(m.collected)}</td>
-                          <td style={{ color: "#ef4444", fontWeight: 700 }}>{fmtUsd(m.cost_usd)}</td>
-                          <td style={{ color: num(m.profit_usd)>=0?"#4ade80":"#f97316", fontWeight: 800 }}>{fmtUsd(m.profit_usd)}</td>
                           <td style={{ color: "#3b82f6", fontWeight: 700 }}>{fmtUsd(m.income_usd)}</td>
                           <td style={{ color: "#ffd200", fontWeight: 800 }}>{fmtUsd(m.total_income)}</td>
                           <td style={{ color: "#ef4444" }}>{fmtUsd(m.empresa_usd)}</td>
+                          <td style={{ color: "#f97316" }}>{fmtArs(m.empresa_ars)}</td>
+                          <td style={{ color: "#a78bfa" }}>{fmtUsd(m.personal_usd)}</td>
                           <td>
                             <span style={{
                               fontWeight: 900, fontSize: 14,

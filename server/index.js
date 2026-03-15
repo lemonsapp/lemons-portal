@@ -2456,7 +2456,8 @@ app.get("/cash/monthly", authRequired, requireRole(["operator", "admin"]), async
       const personal_ars = Number(exp.personal_ars || 0);
 
       const total_income = collected + income_usd;
-      const net          = total_income - empresa_usd;
+      // Ganancia neta = ganancia real de cobros (ya descontado costo) + ingresos adicionales - gastos empresa - gastos personales
+      const net          = totalProfit + income_usd - empresa_usd - personal_usd;
       const margin       = total_income > 0 ? (net / total_income * 100) : 0;
 
       return {
