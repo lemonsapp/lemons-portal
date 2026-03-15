@@ -2,7 +2,6 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <!-- Desregistrar Service Workers del portal anterior -->
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(function(registrations) {
@@ -17,21 +16,24 @@
   <title>Lemon's ARG — Courier Internacional</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:ital,wght@0,400;0,600;0,700;0,800;1,700&family=Barlow+Condensed:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:ital,wght@0,300;0,400;0,600;0,700;0,800;1,700&family=Barlow+Condensed:wght@300;400;600;700;800&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --ink:     #080c18;
-      --ink2:    #0d1225;
-      --ink3:    #141930;
+      --ink:     #07090f;
+      --ink2:    #0c0f1c;
+      --ink3:    #121628;
+      --ink4:    #181d35;
       --lemon:   #f5e642;
       --lemon2:  #ffe900;
       --orange:  #ff6b00;
       --orange2: #ff8c2a;
       --white:   #f0eee6;
       --muted:   rgba(240,238,230,0.45);
-      --border:  rgba(240,238,230,0.08);
+      --muted2:  rgba(240,238,230,0.25);
+      --border:  rgba(240,238,230,0.07);
+      --border2: rgba(240,238,230,0.12);
     }
 
     html { scroll-behavior: smooth; }
@@ -46,18 +48,18 @@
 
     /* ── CURSOR ── */
     .cursor {
-      width: 12px; height: 12px;
+      width: 10px; height: 10px;
       background: var(--lemon);
       border-radius: 50%;
       position: fixed; pointer-events: none; z-index: 9999;
       transform: translate(-50%, -50%);
-      transition: width 0.2s, height 0.2s, background 0.2s;
+      transition: width 0.15s, height 0.15s, background 0.15s, opacity 0.15s;
       mix-blend-mode: difference;
     }
-    .cursor.big { width: 40px; height: 40px; }
+    .cursor.big { width: 36px; height: 36px; }
 
     /* ── SCROLLBAR ── */
-    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar { width: 3px; }
     ::-webkit-scrollbar-track { background: var(--ink); }
     ::-webkit-scrollbar-thumb { background: var(--lemon); border-radius: 2px; }
 
@@ -66,595 +68,586 @@
       position: fixed; top: 0; left: 0; right: 0; z-index: 100;
       display: flex; align-items: center; justify-content: space-between;
       padding: 0 5vw;
-      height: 64px;
-      background: rgba(8,12,24,0.85);
-      backdrop-filter: blur(20px);
+      height: 68px;
+      background: rgba(7,9,15,0.7);
+      backdrop-filter: blur(24px);
       border-bottom: 1px solid var(--border);
-      transition: all 0.3s;
+      transition: all 0.4s;
     }
     nav.scrolled {
-      height: 56px;
-      background: rgba(8,12,24,0.98);
+      height: 58px;
+      background: rgba(7,9,15,0.97);
     }
     .nav-logo {
       font-family: 'Bebas Neue', sans-serif;
-      font-size: 26px;
-      letter-spacing: 2px;
-      color: var(--white);
-      text-decoration: none;
-      display: flex; align-items: center; gap: 8px;
+      font-size: 24px; letter-spacing: 3px;
+      color: var(--white); text-decoration: none;
+      display: flex; align-items: center; gap: 10px;
     }
-    .nav-logo span { color: var(--lemon); }
-    .nav-logo em {
-      display: inline-block;
-      width: 8px; height: 8px;
-      background: var(--orange);
-      border-radius: 50%;
-      margin-bottom: 2px;
-      animation: blink 2s ease-in-out infinite;
+    .nav-logo .accent { color: var(--lemon); }
+    .nav-logo .dot {
+      display: inline-block; width: 7px; height: 7px;
+      background: var(--orange); border-radius: 50%;
+      animation: blink 2.5s ease-in-out infinite;
     }
-    @keyframes blink {
-      0%,100% { opacity: 1; } 50% { opacity: 0.3; }
-    }
+    @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.2;} }
+
     .nav-links {
-      display: flex; align-items: center; gap: 32px;
-      list-style: none;
+      display: flex; align-items: center; gap: 36px; list-style: none;
     }
     .nav-links a {
       font-family: 'Barlow Condensed', sans-serif;
-      font-size: 14px; font-weight: 700; letter-spacing: 1.5px;
-      text-transform: uppercase;
-      color: var(--muted);
-      text-decoration: none;
-      transition: color 0.2s;
+      font-size: 13px; font-weight: 700; letter-spacing: 1.8px;
+      text-transform: uppercase; color: var(--muted);
+      text-decoration: none; transition: color 0.2s;
     }
     .nav-links a:hover { color: var(--white); }
     .nav-cta {
       font-family: 'Barlow Condensed', sans-serif;
-      font-size: 13px; font-weight: 800; letter-spacing: 1.5px;
+      font-size: 12px; font-weight: 800; letter-spacing: 1.5px;
       text-transform: uppercase;
-      background: var(--lemon);
-      color: var(--ink);
-      padding: 10px 20px;
-      border-radius: 6px;
-      text-decoration: none;
-      transition: background 0.2s, transform 0.15s;
+      background: var(--lemon); color: var(--ink);
+      padding: 10px 22px; border-radius: 6px;
+      text-decoration: none; transition: all 0.2s;
+      display: flex; align-items: center; gap: 6px;
     }
     .nav-cta:hover { background: var(--lemon2); transform: translateY(-1px); }
 
     .nav-mobile-btn {
-      display: none;
-      flex-direction: column; gap: 5px;
+      display: none; flex-direction: column; gap: 5px;
       background: none; border: none; cursor: pointer; padding: 4px;
     }
     .nav-mobile-btn span {
-      display: block; width: 24px; height: 2px;
-      background: var(--white); border-radius: 2px;
-      transition: all 0.3s;
+      display: block; width: 22px; height: 2px;
+      background: var(--white); border-radius: 2px; transition: all 0.3s;
     }
 
     /* ── HERO ── */
     #hero {
       min-height: 100vh;
       display: flex; flex-direction: column; justify-content: flex-end;
-      padding: 0 5vw 80px;
-      position: relative;
-      overflow: hidden;
+      padding: 0 5vw 90px;
+      position: relative; overflow: hidden;
     }
-
-    .hero-img {
+    .hero-bg-img {
       position: absolute; inset: 0;
-      background: url('./warehouse.png') center center / cover no-repeat;
-      filter: brightness(0.25) saturate(0.8);
+      background: url('./ADUANAS_LOGISTICA.jpg') center 40% / cover no-repeat;
+      filter: brightness(0.2) saturate(0.7);
       transform: scale(1.05);
-      transition: transform 8s ease;
+      transition: transform 10s ease;
     }
-    #hero:hover .hero-img { transform: scale(1); }
-
-    .hero-bg {
+    #hero:hover .hero-bg-img { transform: scale(1); }
+    .hero-overlay {
       position: absolute; inset: 0;
       background:
-        radial-gradient(ellipse 80% 60% at 70% 40%, rgba(255,107,0,0.12) 0%, transparent 60%),
-        radial-gradient(ellipse 60% 80% at 20% 80%, rgba(245,230,66,0.07) 0%, transparent 50%),
-        linear-gradient(180deg, var(--ink) 0%, #0a0f1e 100%);
+        radial-gradient(ellipse 80% 60% at 65% 45%, rgba(255,107,0,0.10) 0%, transparent 65%),
+        radial-gradient(ellipse 50% 70% at 15% 85%, rgba(245,230,66,0.06) 0%, transparent 55%),
+        linear-gradient(180deg, rgba(7,9,15,0.6) 0%, var(--ink) 100%);
     }
-
-    /* Grid lines decoration */
     .hero-grid {
       position: absolute; inset: 0;
       background-image:
-        linear-gradient(rgba(240,238,230,0.025) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(240,238,230,0.025) 1px, transparent 1px);
-      background-size: 80px 80px;
-      mask-image: linear-gradient(180deg, transparent 0%, black 30%, black 70%, transparent 100%);
+        linear-gradient(rgba(240,238,230,0.018) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(240,238,230,0.018) 1px, transparent 1px);
+      background-size: 72px 72px;
+      mask-image: linear-gradient(180deg, transparent 0%, black 25%, black 75%, transparent 100%);
     }
 
-    /* Floating badge top-right */
-    .hero-badge {
-      position: absolute; top: 100px; right: 5vw;
-      display: flex; flex-direction: column; align-items: center;
-      gap: 4px; opacity: 0;
-      animation: fadeSlideLeft 1s ease 0.8s forwards;
+    /* Floating stat top right */
+    .hero-stat-badge {
+      position: absolute; top: 96px; right: 5vw;
+      opacity: 0; animation: fadeLeft 0.9s ease 1s forwards;
     }
-    .hero-badge-ring {
-      width: 90px; height: 90px;
-      border: 1.5px solid rgba(245,230,66,0.3);
-      border-radius: 50%;
-      display: grid; place-items: center;
-      position: relative;
-    }
-    .hero-badge-ring::before {
-      content: '';
-      position: absolute; inset: -8px;
-      border: 1px dashed rgba(245,230,66,0.15);
-      border-radius: 50%;
-      animation: spin 20s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .hero-badge-inner {
+    .hero-stat-inner {
+      background: rgba(245,230,66,0.07);
+      border: 1px solid rgba(245,230,66,0.2);
+      border-radius: 16px;
+      padding: 20px 24px;
       text-align: center;
-      font-family: 'Barlow Condensed', sans-serif;
-      font-size: 11px; font-weight: 800; letter-spacing: 1px;
-      text-transform: uppercase;
-      line-height: 1.3;
+      backdrop-filter: blur(10px);
+    }
+    .hero-stat-num {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 52px; line-height: 1;
       color: var(--lemon);
     }
+    .hero-stat-label {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 11px; font-weight: 700; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--muted);
+      margin-top: 4px;
+    }
 
-    /* Origin pills */
     .hero-origins {
-      display: flex; gap: 10px; margin-bottom: 28px;
-      opacity: 0; animation: fadeSlideUp 0.8s ease 0.2s forwards;
+      display: flex; gap: 8px; margin-bottom: 30px;
+      opacity: 0; animation: fadeUp 0.8s ease 0.2s forwards;
     }
     .origin-pill {
       display: flex; align-items: center; gap: 6px;
       font-family: 'Barlow Condensed', sans-serif;
-      font-size: 12px; font-weight: 700; letter-spacing: 1.5px;
+      font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
       text-transform: uppercase;
-      padding: 6px 14px;
-      border-radius: 100px;
-      border: 1px solid var(--border);
-      background: rgba(255,255,255,0.04);
-      color: var(--muted);
+      padding: 6px 14px; border-radius: 100px;
+      border: 1px solid var(--border2);
+      background: rgba(255,255,255,0.03);
+      color: var(--muted); transition: all 0.3s;
     }
-    .origin-pill .flag { font-size: 14px; }
     .origin-pill.active {
-      border-color: rgba(245,230,66,0.4);
-      background: rgba(245,230,66,0.08);
+      border-color: rgba(245,230,66,0.5);
+      background: rgba(245,230,66,0.09);
       color: var(--lemon);
     }
 
-    .hero-title {
+    h1.hero-title {
       font-family: 'Bebas Neue', sans-serif;
-      font-size: clamp(72px, 12vw, 160px);
-      line-height: 0.88;
-      letter-spacing: -1px;
-      margin-bottom: 32px;
-      opacity: 0; animation: fadeSlideUp 0.9s ease 0.3s forwards;
+      font-size: clamp(68px, 11.5vw, 155px);
+      line-height: 0.87; letter-spacing: -0.5px;
+      margin-bottom: 36px;
+      opacity: 0; animation: fadeUp 0.9s ease 0.3s forwards;
     }
-    .hero-title .line2 { color: var(--lemon); display: block; }
-    .hero-title .line3 {
+    .hero-title .lemon { color: var(--lemon); display: block; }
+    .hero-title .outline {
       display: block;
-      -webkit-text-stroke: 1.5px var(--white);
+      -webkit-text-stroke: 1.5px rgba(240,238,230,0.6);
       color: transparent;
     }
 
     .hero-bottom {
-      display: flex; align-items: flex-end; justify-content: space-between;
-      gap: 40px;
-      opacity: 0; animation: fadeSlideUp 0.9s ease 0.5s forwards;
+      display: flex; align-items: flex-end; justify-content: space-between; gap: 40px;
+      opacity: 0; animation: fadeUp 0.9s ease 0.5s forwards;
     }
     .hero-sub {
-      font-size: 17px; font-weight: 400; color: var(--muted);
-      max-width: 440px; line-height: 1.65;
+      font-size: 16px; font-weight: 400; color: var(--muted);
+      max-width: 420px; line-height: 1.7;
     }
     .hero-sub strong { color: var(--white); font-weight: 700; }
-    .hero-actions { display: flex; gap: 12px; flex-shrink: 0; }
+    .hero-actions { display: flex; gap: 10px; flex-shrink: 0; }
+
     .btn-primary {
       font-family: 'Barlow Condensed', sans-serif;
-      font-size: 15px; font-weight: 800; letter-spacing: 1px;
+      font-size: 14px; font-weight: 800; letter-spacing: 1px;
       text-transform: uppercase;
-      background: var(--lemon);
-      color: var(--ink);
-      padding: 14px 28px;
-      border-radius: 8px;
-      text-decoration: none;
-      border: none; cursor: pointer;
+      background: var(--lemon); color: var(--ink);
+      padding: 14px 28px; border-radius: 8px;
+      text-decoration: none; border: none; cursor: pointer;
       display: inline-flex; align-items: center; gap: 8px;
       transition: all 0.2s;
     }
-    .btn-primary:hover { background: var(--lemon2); transform: translateY(-2px); box-shadow: 0 12px 32px rgba(245,230,66,0.25); }
+    .btn-primary:hover { background: var(--lemon2); transform: translateY(-2px); box-shadow: 0 12px 36px rgba(245,230,66,0.22); }
+
     .btn-secondary {
       font-family: 'Barlow Condensed', sans-serif;
-      font-size: 15px; font-weight: 700; letter-spacing: 1px;
+      font-size: 14px; font-weight: 700; letter-spacing: 1px;
       text-transform: uppercase;
-      background: transparent;
-      color: var(--white);
-      padding: 14px 28px;
-      border-radius: 8px;
-      border: 1.5px solid var(--border);
+      background: transparent; color: var(--white);
+      padding: 14px 28px; border-radius: 8px;
+      border: 1.5px solid var(--border2);
       text-decoration: none;
       display: inline-flex; align-items: center; gap: 8px;
       transition: all 0.2s;
     }
     .btn-secondary:hover { border-color: rgba(240,238,230,0.3); background: rgba(240,238,230,0.04); }
 
-    /* Scroll indicator */
-    .scroll-indicator {
-      position: absolute; bottom: 30px; left: 50%;
+    .scroll-hint {
+      position: absolute; bottom: 28px; left: 50%;
       transform: translateX(-50%);
       display: flex; flex-direction: column; align-items: center; gap: 8px;
-      opacity: 0; animation: fadeIn 1s ease 1.5s forwards;
+      opacity: 0; animation: fadeIn 1s ease 1.8s forwards;
     }
-    .scroll-indicator span {
+    .scroll-hint span {
       font-family: 'Barlow Condensed', sans-serif;
-      font-size: 11px; font-weight: 700; letter-spacing: 2px;
-      text-transform: uppercase; color: var(--muted);
+      font-size: 10px; font-weight: 800; letter-spacing: 3px;
+      text-transform: uppercase; color: var(--muted2);
     }
     .scroll-line {
-      width: 1px; height: 50px;
-      background: linear-gradient(to bottom, var(--muted), transparent);
-      animation: scrollPulse 2s ease-in-out infinite;
+      width: 1px; height: 48px;
+      background: linear-gradient(to bottom, rgba(240,238,230,0.3), transparent);
+      animation: scrollPulse 2.2s ease-in-out infinite;
     }
     @keyframes scrollPulse {
-      0% { transform: scaleY(0); transform-origin: top; opacity: 0; }
-      50% { transform: scaleY(1); opacity: 1; }
-      100% { transform: scaleY(1); transform-origin: bottom; opacity: 0; }
+      0%{transform:scaleY(0);transform-origin:top;opacity:0}
+      50%{transform:scaleY(1);opacity:1}
+      100%{transform:scaleY(1);transform-origin:bottom;opacity:0}
     }
 
     /* ── TICKER ── */
     .ticker {
       background: var(--lemon);
-      overflow: hidden;
-      height: 44px;
+      overflow: hidden; height: 42px;
       display: flex; align-items: center;
     }
     .ticker-track {
-      display: flex; gap: 0;
-      animation: ticker 30s linear infinite;
+      display: flex; animation: ticker 28s linear infinite;
       white-space: nowrap;
     }
-    @keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+    @keyframes ticker { from{transform:translateX(0)} to{transform:translateX(-50%)} }
     .ticker-item {
       font-family: 'Barlow Condensed', sans-serif;
-      font-size: 13px; font-weight: 800; letter-spacing: 2px;
-      text-transform: uppercase;
-      color: var(--ink);
-      padding: 0 24px;
-      display: flex; align-items: center; gap: 16px;
+      font-size: 12px; font-weight: 800; letter-spacing: 2.5px;
+      text-transform: uppercase; color: var(--ink);
+      padding: 0 22px;
+      display: flex; align-items: center; gap: 14px;
     }
-    .ticker-dot {
-      width: 5px; height: 5px;
-      background: rgba(8,12,24,0.35);
-      border-radius: 50%; flex-shrink: 0;
+    .ticker-dot { width: 4px; height: 4px; background: rgba(8,12,24,0.3); border-radius: 50%; flex-shrink:0; }
+
+    /* ── STATS BAR ── */
+    #stats {
+      background: var(--ink2);
+      border-bottom: 1px solid var(--border);
+      padding: 60px 5vw;
+    }
+    .stats-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 2px;
+    }
+    .stat-item {
+      padding: 32px 36px;
+      border-right: 1px solid var(--border);
+      transition: background 0.3s;
+    }
+    .stat-item:last-child { border-right: none; }
+    .stat-item:hover { background: rgba(245,230,66,0.03); }
+    .stat-num {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 64px; line-height: 1;
+      color: var(--lemon); margin-bottom: 4px;
+    }
+    .stat-label {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 12px; font-weight: 700; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--muted);
+      line-height: 1.4;
+    }
+    .stat-sub {
+      font-size: 13px; color: var(--muted2); margin-top: 6px;
     }
 
     /* ── SECTIONS ── */
-    section {
-      padding: 100px 5vw;
-    }
+    section { padding: 100px 5vw; }
     .section-label {
       font-family: 'Barlow Condensed', sans-serif;
       font-size: 11px; font-weight: 800; letter-spacing: 3px;
-      text-transform: uppercase;
-      color: var(--orange);
+      text-transform: uppercase; color: var(--orange);
       margin-bottom: 16px;
       display: flex; align-items: center; gap: 10px;
     }
     .section-label::before {
-      content: '';
-      display: block; width: 32px; height: 2px;
+      content: ''; display: block; width: 28px; height: 2px;
       background: var(--orange);
     }
     .section-title {
       font-family: 'Bebas Neue', sans-serif;
-      font-size: clamp(42px, 6vw, 80px);
-      line-height: 0.95;
-      letter-spacing: 0.5px;
+      font-size: clamp(40px, 6vw, 78px);
+      line-height: 0.94; letter-spacing: 0.5px;
       margin-bottom: 48px;
     }
-    .section-title em {
-      font-style: normal;
-      color: var(--lemon);
-    }
+    .section-title em { font-style: normal; color: var(--lemon); }
 
-    /* ── SERVICES ── */
+    /* ── SERVICIOS ── */
     #servicios { background: var(--ink2); }
-
+    .services-intro {
+      font-size: 15px; color: var(--muted); line-height: 1.75;
+      max-width: 560px; margin-bottom: 48px;
+    }
     .services-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      display: grid; grid-template-columns: repeat(3, 1fr);
       gap: 2px;
     }
     .service-card {
-      background: var(--ink3);
-      padding: 40px 36px;
-      position: relative; overflow: hidden;
-      transition: background 0.3s;
+      background: var(--ink3); padding: 44px 36px;
+      position: relative; overflow: hidden; transition: background 0.3s;
     }
-    .service-card:hover { background: #1a1f38; }
-    .service-card::before {
-      content: '';
-      position: absolute; top: 0; left: 0; right: 0;
-      height: 3px;
-      background: var(--gradient);
+    .service-card:hover { background: var(--ink4); }
+    .service-card::after {
+      content: ''; position: absolute;
+      top: 0; left: 0; right: 0; height: 3px;
+      background: var(--sc, var(--lemon));
       transform: scaleX(0); transform-origin: left;
       transition: transform 0.4s ease;
     }
-    .service-card:hover::before { transform: scaleX(1); }
-    .service-card[data-color="lemon"] { --gradient: linear-gradient(90deg, var(--lemon), var(--orange)); }
-    .service-card[data-color="orange"] { --gradient: linear-gradient(90deg, var(--orange), #ff4500); }
-    .service-card[data-color="blue"] { --gradient: linear-gradient(90deg, #3b82f6, #8b5cf6); }
+    .service-card:hover::after { transform: scaleX(1); }
+    .service-card.usa { --sc: linear-gradient(90deg, var(--lemon), var(--orange)); }
+    .service-card.china { --sc: linear-gradient(90deg, var(--orange), #ff4500); }
+    .service-card.europa { --sc: linear-gradient(90deg, #60a5fa, #818cf8); }
 
-    .service-flag {
-      font-size: 44px; margin-bottom: 20px;
-      display: block;
-      filter: drop-shadow(0 4px 20px rgba(0,0,0,0.5));
-    }
+    .service-flag { font-size: 48px; margin-bottom: 22px; display: block; }
     .service-name {
       font-family: 'Bebas Neue', sans-serif;
-      font-size: 38px; line-height: 1;
-      letter-spacing: 1px;
-      margin-bottom: 6px;
+      font-size: 40px; line-height: 1; letter-spacing: 1px; margin-bottom: 4px;
     }
     .service-sub {
       font-family: 'Barlow Condensed', sans-serif;
-      font-size: 12px; font-weight: 700; letter-spacing: 2px;
+      font-size: 11px; font-weight: 700; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 20px;
+    }
+    .service-timing {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px;
+    }
+    .timing-pill {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 11px; font-weight: 800; letter-spacing: 1px;
       text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 20px;
+      padding: 5px 12px; border-radius: 6px;
+      background: rgba(245,230,66,0.08);
+      border: 1px solid rgba(245,230,66,0.2);
+      color: var(--lemon);
+    }
+    .timing-pill.express {
+      background: rgba(255,107,0,0.1);
+      border-color: rgba(255,107,0,0.3);
+      color: var(--orange2);
     }
     .service-desc {
-      font-size: 14px; color: var(--muted); line-height: 1.7;
-      margin-bottom: 28px;
+      font-size: 14px; color: var(--muted); line-height: 1.75; margin-bottom: 24px;
     }
-    .service-tags {
-      display: flex; flex-wrap: wrap; gap: 6px;
-    }
+    .service-tags { display: flex; flex-wrap: wrap; gap: 6px; }
     .service-tag {
       font-family: 'Barlow Condensed', sans-serif;
       font-size: 11px; font-weight: 700; letter-spacing: 1px;
       text-transform: uppercase;
-      padding: 4px 10px;
-      border-radius: 4px;
-      border: 1px solid var(--border);
-      color: var(--muted);
+      padding: 4px 10px; border-radius: 4px;
+      border: 1px solid var(--border2); color: var(--muted);
     }
     .service-num {
-      position: absolute; bottom: 28px; right: 28px;
+      position: absolute; bottom: 24px; right: 28px;
       font-family: 'Bebas Neue', sans-serif;
-      font-size: 80px; line-height: 1;
-      color: rgba(240,238,230,0.04);
-      pointer-events: none;
+      font-size: 88px; line-height: 1;
+      color: rgba(240,238,230,0.03); pointer-events: none;
     }
+
+    /* ── AVISO IMPORTANTE ── */
+    .important-notice {
+      margin-top: 32px;
+      padding: 28px 32px;
+      background: rgba(255,107,0,0.06);
+      border: 1px solid rgba(255,107,0,0.2);
+      border-radius: 14px;
+      display: flex; align-items: flex-start; gap: 16px;
+    }
+    .notice-icon { font-size: 22px; flex-shrink: 0; margin-top: 2px; }
+    .notice-text { font-size: 14px; color: var(--muted); line-height: 1.7; }
+    .notice-text strong { color: var(--orange2); }
+    .notice-cta {
+      display: inline-flex; align-items: center; gap: 6px;
+      margin-top: 12px;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 13px; font-weight: 800; letter-spacing: 1px;
+      text-transform: uppercase;
+      background: var(--orange); color: #fff;
+      padding: 10px 18px; border-radius: 8px;
+      text-decoration: none; transition: all 0.2s;
+    }
+    .notice-cta:hover { background: var(--orange2); transform: translateY(-1px); }
 
     /* ── COMO FUNCIONA ── */
     #como-funciona { background: var(--ink); }
-
     .steps {
       display: grid; grid-template-columns: repeat(4, 1fr);
-      gap: 0;
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      overflow: hidden;
+      gap: 0; border: 1px solid var(--border); border-radius: 16px; overflow: hidden;
     }
     .step {
       padding: 40px 28px;
       border-right: 1px solid var(--border);
-      position: relative;
-      transition: background 0.3s;
+      position: relative; transition: background 0.3s;
     }
     .step:last-child { border-right: none; }
-    .step:hover { background: rgba(245,230,66,0.03); }
+    .step:hover { background: rgba(245,230,66,0.025); }
     .step-num {
       font-family: 'Bebas Neue', sans-serif;
-      font-size: 13px; letter-spacing: 3px;
-      color: var(--lemon);
+      font-size: 12px; letter-spacing: 3px; color: var(--lemon);
       margin-bottom: 20px;
       display: flex; align-items: center; gap: 8px;
     }
-    .step-num::after {
-      content: ''; flex: 1;
-      height: 1px; background: rgba(245,230,66,0.2);
-    }
-    .step-icon {
-      font-size: 32px; margin-bottom: 16px; display: block;
-    }
+    .step-num::after { content:''; flex:1; height:1px; background:rgba(245,230,66,0.2); }
+    .step-icon { font-size: 30px; margin-bottom: 16px; display: block; }
     .step-title {
       font-family: 'Barlow Condensed', sans-serif;
-      font-size: 18px; font-weight: 800; letter-spacing: 0.5px;
-      text-transform: uppercase;
+      font-size: 17px; font-weight: 800; letter-spacing: 0.5px;
+      text-transform: uppercase; margin-bottom: 10px;
+    }
+    .step-desc { font-size: 13px; color: var(--muted); line-height: 1.7; }
+
+    /* Full-width image section */
+    .full-img-section {
+      margin-top: 48px; border-radius: 20px; overflow: hidden;
+      position: relative; height: 340px;
+    }
+    .full-img-section img {
+      width: 100%; height: 100%;
+      object-fit: cover; object-position: center 30%;
+      filter: brightness(0.6) saturate(0.8);
+      display: block;
+    }
+    .full-img-overlay {
+      position: absolute; inset: 0;
+      background: linear-gradient(90deg, rgba(7,9,15,0.9) 0%, rgba(7,9,15,0.4) 50%, transparent 100%);
+      display: flex; align-items: center; padding: 0 52px;
+    }
+    .full-img-copy {}
+    .full-img-eyebrow {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 11px; font-weight: 800; letter-spacing: 3px;
+      text-transform: uppercase; color: var(--orange);
       margin-bottom: 10px;
     }
-    .step-desc {
-      font-size: 13px; color: var(--muted); line-height: 1.65;
+    .full-img-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(32px, 5vw, 60px); line-height: 0.95;
+      margin-bottom: 16px;
     }
+    .full-img-title span { color: var(--lemon); }
 
     /* ── PRECIOS ── */
     #precios { background: var(--ink2); }
-
-    .pricing-intro {
-      font-size: 16px; color: var(--muted); line-height: 1.7;
-      max-width: 560px; margin-bottom: 48px;
+    .pricing-notice {
+      font-size: 15px; color: var(--muted); line-height: 1.75;
+      max-width: 620px; margin-bottom: 48px;
+      padding: 24px 28px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border2);
+      border-radius: 12px;
+      border-left: 3px solid var(--lemon);
     }
+    .pricing-notice strong { color: var(--white); }
 
     .pricing-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-      gap: 2px;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 2px; margin-bottom: 48px;
     }
     .price-card {
-      background: var(--ink3);
-      padding: 32px 28px;
-      border-radius: 0;
-      position: relative;
-      transition: background 0.25s;
+      background: var(--ink3); padding: 32px 24px;
+      position: relative; transition: background 0.25s;
     }
-    .price-card:first-child { border-radius: 12px 0 0 12px; }
-    .price-card:last-child { border-radius: 0 12px 12px 0; }
-    .price-card:hover { background: #181d30; }
+    .price-card:hover { background: var(--ink4); }
     .price-card.featured {
-      background: rgba(245,230,66,0.07);
+      background: rgba(245,230,66,0.06);
       border: 1px solid rgba(245,230,66,0.2);
-      border-radius: 12px;
-      transform: scale(1.02);
+      border-radius: 4px;
+      transform: scale(1.03);
       z-index: 1;
     }
     .price-badge {
       font-family: 'Barlow Condensed', sans-serif;
       font-size: 10px; font-weight: 800; letter-spacing: 2px;
       text-transform: uppercase;
-      background: var(--lemon);
-      color: var(--ink);
-      padding: 3px 9px;
-      border-radius: 100px;
-      display: inline-block;
-      margin-bottom: 16px;
+      background: var(--lemon); color: var(--ink);
+      padding: 3px 9px; border-radius: 100px;
+      display: inline-block; margin-bottom: 14px;
     }
     .price-origin {
       font-family: 'Barlow Condensed', sans-serif;
-      font-size: 12px; font-weight: 700; letter-spacing: 2px;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 4px;
+      font-size: 11px; font-weight: 700; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 4px;
     }
     .price-service {
       font-family: 'Bebas Neue', sans-serif;
-      font-size: 26px; letter-spacing: 1px;
-      margin-bottom: 16px;
+      font-size: 28px; letter-spacing: 1px; margin-bottom: 8px;
     }
-    .price-amount {
-      margin-bottom: 20px;
+    .price-timing {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 12px; font-weight: 700; letter-spacing: 1px;
+      color: var(--orange2); margin-bottom: 16px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .price-timing::before { content:'⚡'; font-size:14px; }
+    .price-amount { margin-bottom: 16px; }
+    .price-from {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+      text-transform: uppercase; color: var(--muted);
+      display: block; margin-bottom: 2px;
     }
     .price-usd {
       font-family: 'Bebas Neue', sans-serif;
-      font-size: 52px; line-height: 1;
-      color: var(--lemon);
+      font-size: 50px; line-height: 1; color: var(--lemon);
     }
     .price-unit {
       font-family: 'Barlow Condensed', sans-serif;
-      font-size: 13px; color: var(--muted);
-      margin-left: 4px;
+      font-size: 13px; color: var(--muted); margin-left: 3px;
     }
-    .price-note {
-      font-size: 12px; color: var(--muted); line-height: 1.6;
-    }
-    .price-features {
-      list-style: none;
-      margin-top: 20px;
-      display: flex; flex-direction: column; gap: 8px;
-    }
+    .price-features { list-style: none; margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
     .price-features li {
-      font-size: 13px; color: var(--muted);
-      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; color: var(--muted);
+      display: flex; align-items: flex-start; gap: 8px; line-height: 1.5;
     }
-    .price-features li::before {
-      content: '✓';
-      font-weight: 800; color: var(--lemon);
-      font-size: 12px;
-    }
+    .price-features li::before { content:'✓'; font-weight:900; color:var(--lemon); font-size:11px; flex-shrink:0; margin-top:2px; }
 
-    /* Calculadora */
+    /* Pricing disclaimer */
+    .pricing-disclaimer {
+      display: flex; align-items: flex-start; gap: 14px;
+      padding: 20px 24px;
+      background: rgba(255,107,0,0.05);
+      border: 1px solid rgba(255,107,0,0.15);
+      border-radius: 12px;
+      font-size: 13px; color: var(--muted); line-height: 1.7;
+      margin-bottom: 48px;
+    }
+    .pricing-disclaimer .di-icon { font-size: 18px; flex-shrink:0; margin-top:2px; }
+    .pricing-disclaimer strong { color: var(--orange2); }
+
+    /* ── CALCULADORA ── */
     .calc-wrapper {
-      margin-top: 60px;
       background: var(--ink3);
       border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 40px;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 48px;
-      align-items: center;
+      border-radius: 20px; padding: 44px;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 52px; align-items: center;
     }
     .calc-title {
       font-family: 'Bebas Neue', sans-serif;
-      font-size: 36px; letter-spacing: 0.5px;
-      margin-bottom: 8px;
+      font-size: 38px; letter-spacing: 0.5px; margin-bottom: 8px;
     }
     .calc-sub {
-      font-size: 14px; color: var(--muted); line-height: 1.6;
-      margin-bottom: 28px;
+      font-size: 14px; color: var(--muted); line-height: 1.65; margin-bottom: 28px;
     }
-    .calc-fields {
-      display: flex; flex-direction: column; gap: 12px;
-    }
+    .calc-fields { display: flex; flex-direction: column; gap: 14px; }
     .calc-label {
       font-family: 'Barlow Condensed', sans-serif;
       font-size: 11px; font-weight: 800; letter-spacing: 2px;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 6px;
-      display: block;
+      text-transform: uppercase; color: var(--muted);
+      margin-bottom: 6px; display: block;
     }
-    .calc-select, .calc-input {
-      width: 100%;
-      background: rgba(255,255,255,0.05);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      color: var(--white);
-      font-family: 'Barlow', sans-serif;
-      font-size: 15px;
-      padding: 12px 16px;
-      outline: none;
-      appearance: none;
+    .calc-input {
+      width: 100%; background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border2); border-radius: 10px;
+      color: var(--white); font-family: 'Barlow', sans-serif;
+      font-size: 16px; padding: 13px 16px; outline: none;
       transition: border-color 0.2s;
     }
-    .calc-select:focus, .calc-input:focus {
-      border-color: rgba(245,230,66,0.4);
-    }
-
-    /* Custom dropdown */
-    .custom-select-wrapper {
-      position: relative;
-      z-index: 10;
-    }
+    .calc-input:focus { border-color: rgba(245,230,66,0.4); }
+    .custom-select-wrapper { position: relative; z-index: 10; }
     .custom-select-trigger {
-      width: 100%;
-      background: rgba(255,255,255,0.05);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      color: var(--white);
-      font-family: 'Barlow', sans-serif;
-      font-size: 15px;
-      padding: 12px 44px 12px 16px;
-      cursor: pointer;
+      width: 100%; background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border2); border-radius: 10px;
+      color: var(--white); font-family: 'Barlow', sans-serif; font-size: 15px;
+      padding: 13px 44px 13px 16px; cursor: pointer;
       display: flex; align-items: center; gap: 10px;
-      transition: border-color 0.2s, background 0.2s;
-      user-select: none;
+      transition: border-color 0.2s, background 0.2s; user-select: none;
     }
     .custom-select-trigger:hover, .custom-select-wrapper.open .custom-select-trigger {
-      border-color: rgba(245,230,66,0.4);
-      background: rgba(255,255,255,0.07);
+      border-color: rgba(245,230,66,0.4); background: rgba(255,255,255,0.07);
     }
-    .custom-select-trigger .trigger-arrow {
+    .trigger-arrow {
       position: absolute; right: 14px; top: 50%;
-      transform: translateY(-50%);
-      color: var(--muted); font-size: 12px;
-      transition: transform 0.25s;
-      pointer-events: none;
+      transform: translateY(-50%); color: var(--muted); font-size: 11px;
+      transition: transform 0.25s; pointer-events: none;
     }
     .custom-select-wrapper.open .trigger-arrow { transform: translateY(-50%) rotate(180deg); }
-    .custom-select-trigger .trigger-flag { font-size: 18px; flex-shrink: 0; }
+    .trigger-flag { font-size: 18px; flex-shrink: 0; }
     .trigger-info { display: flex; flex-direction: column; }
     .trigger-name { font-weight: 700; font-size: 14px; }
     .trigger-price { font-size: 12px; color: var(--muted); }
-
     .custom-select-dropdown {
       position: absolute; top: calc(100% + 6px); left: 0; right: 0;
-      background: #141930;
-      border: 1px solid rgba(245,230,66,0.2);
-      border-radius: 12px;
-      overflow: hidden;
-      z-index: 50;
-      opacity: 0; transform: translateY(-8px);
-      pointer-events: none;
+      background: #141930; border: 1px solid rgba(245,230,66,0.2);
+      border-radius: 12px; overflow: hidden; z-index: 50;
+      opacity: 0; transform: translateY(-8px); pointer-events: none;
       transition: opacity 0.2s, transform 0.2s;
       box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-      max-height: 320px;
-      overflow-y: auto;
+      max-height: 320px; overflow-y: auto;
     }
     .custom-select-wrapper.open .custom-select-dropdown {
-      opacity: 1; transform: translateY(0);
-      pointer-events: all;
+      opacity: 1; transform: translateY(0); pointer-events: all;
     }
     .dropdown-group-label {
       font-family: 'Barlow Condensed', sans-serif;
@@ -664,153 +657,229 @@
     }
     .dropdown-option {
       display: flex; align-items: center; gap: 12px;
-      padding: 11px 14px;
-      cursor: pointer;
+      padding: 11px 14px; cursor: pointer;
       transition: background 0.15s;
       border-bottom: 1px solid rgba(255,255,255,0.04);
     }
     .dropdown-option:last-child { border-bottom: none; }
     .dropdown-option:hover { background: rgba(245,230,66,0.07); }
-    .dropdown-option.selected { background: rgba(245,230,66,0.10); }
-    .dropdown-option .opt-flag { font-size: 18px; flex-shrink: 0; }
-    .dropdown-option .opt-info { flex: 1; }
-    .dropdown-option .opt-name { font-size: 14px; font-weight: 600; }
-    .dropdown-option .opt-type {
-      font-family: 'Barlow Condensed', sans-serif;
-      font-size: 11px; letter-spacing: 1px; text-transform: uppercase;
-      color: var(--muted);
-    }
-    .dropdown-option .opt-price {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 20px; color: var(--lemon);
-    }
+    .dropdown-option.selected { background: rgba(245,230,66,0.1); }
+    .opt-flag { font-size: 18px; flex-shrink: 0; }
+    .opt-info { flex: 1; }
+    .opt-name { font-size: 14px; font-weight: 600; }
+    .opt-type { font-family: 'Barlow Condensed', sans-serif; font-size: 11px; letter-spacing:1px; text-transform:uppercase; color: var(--muted); }
+    .opt-price { font-family: 'Bebas Neue', sans-serif; font-size: 22px; color: var(--lemon); }
+    .opt-timing { font-family: 'Barlow Condensed', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--orange2); }
+
     .calc-result {
-      text-align: center;
-      padding: 40px;
-      background: rgba(245,230,66,0.05);
-      border: 1px solid rgba(245,230,66,0.15);
-      border-radius: 16px;
+      text-align: center; padding: 44px;
+      background: rgba(245,230,66,0.04);
+      border: 1px solid rgba(245,230,66,0.12);
+      border-radius: 18px;
     }
     .calc-result-label {
       font-family: 'Barlow Condensed', sans-serif;
-      font-size: 12px; font-weight: 800; letter-spacing: 2px;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 12px;
+      font-size: 11px; font-weight: 800; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 10px;
     }
     .calc-result-amount {
       font-family: 'Bebas Neue', sans-serif;
-      font-size: 80px; line-height: 1;
-      color: var(--lemon);
-      margin-bottom: 4px;
+      font-size: 84px; line-height: 1; color: var(--lemon); margin-bottom: 6px;
     }
-    .calc-result-sub {
-      font-size: 13px; color: var(--muted);
+    .calc-result-sub { font-size: 12px; color: var(--muted); line-height: 1.6; }
+    .calc-discount {
+      display: none; margin-top: 12px;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 12px; font-weight: 700; letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 6px 14px; border-radius: 100px;
+      background: rgba(245,230,66,0.1);
+      border: 1px solid rgba(245,230,66,0.25);
+      color: var(--lemon); display: inline-block;
     }
     .calc-btn {
-      margin-top: 16px;
-      width: 100%;
+      margin-top: 16px; width: 100%;
       font-family: 'Barlow Condensed', sans-serif;
-      font-size: 14px; font-weight: 800; letter-spacing: 1.5px;
+      font-size: 13px; font-weight: 800; letter-spacing: 1.5px;
       text-transform: uppercase;
-      background: var(--lemon);
-      color: var(--ink);
-      padding: 14px;
-      border-radius: 10px;
-      border: none; cursor: pointer;
+      background: var(--lemon); color: var(--ink);
+      padding: 14px; border-radius: 10px; border: none; cursor: pointer;
       transition: all 0.2s;
     }
     .calc-btn:hover { background: var(--lemon2); transform: translateY(-1px); }
+    .calc-disclaimer {
+      margin-top: 12px; font-size: 11px; color: var(--muted2);
+      text-align: center; line-height: 1.5;
+    }
+
+    /* ── ADUANAS / PROCESO ── */
+    #aduanas {
+      background: var(--ink);
+      position: relative; overflow: hidden;
+    }
+    .aduanas-img {
+      position: absolute; right: 0; top: 0; bottom: 0; width: 42%;
+      opacity: 0.08;
+    }
+    .aduanas-img img { width: 100%; height: 100%; object-fit: cover; }
+    .aduanas-layout {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: start;
+    }
+    .aduana-points { display: flex; flex-direction: column; gap: 0; margin-top: 8px; }
+    .aduana-point {
+      display: flex; gap: 20px; padding: 24px 0;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.2s;
+    }
+    .aduana-point:last-child { border-bottom: none; }
+    .aduana-point:hover { padding-left: 8px; }
+    .aduana-num {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 36px; line-height: 1; color: rgba(245,230,66,0.25);
+      flex-shrink: 0; width: 36px; text-align: center;
+    }
+    .aduana-content {}
+    .aduana-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 16px; font-weight: 800; letter-spacing: 0.5px;
+      text-transform: uppercase; margin-bottom: 6px;
+    }
+    .aduana-desc { font-size: 13px; color: var(--muted); line-height: 1.7; }
+
+    .aduanas-cta-box {
+      background: var(--ink2);
+      border: 1px solid var(--border2);
+      border-radius: 20px; padding: 36px;
+      position: sticky; top: 88px;
+    }
+    .aduanas-cta-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 32px; letter-spacing: 0.5px; margin-bottom: 12px;
+    }
+    .aduanas-cta-title span { color: var(--lemon); }
+    .aduanas-cta-sub {
+      font-size: 14px; color: var(--muted); line-height: 1.7; margin-bottom: 24px;
+    }
+    .aduanas-cta-img {
+      width: 100%; height: 180px; object-fit: cover;
+      border-radius: 12px; margin-bottom: 24px; opacity: 0.8;
+    }
+    .aduanas-ctas { display: flex; flex-direction: column; gap: 10px; }
+    .acta {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 18px; border-radius: 12px;
+      border: 1px solid var(--border2); background: rgba(255,255,255,0.03);
+      text-decoration: none; color: var(--white);
+      font-size: 14px; font-weight: 600;
+      transition: all 0.25s;
+    }
+    .acta:hover { border-color: rgba(245,230,66,0.3); background: rgba(245,230,66,0.04); transform: translateX(4px); }
+    .acta .acta-icon { font-size: 20px; flex-shrink: 0; }
+    .acta .acta-arrow { margin-left: auto; color: var(--muted); transition: transform 0.2s; }
+    .acta:hover .acta-arrow { transform: translateX(4px); color: var(--lemon); }
 
     /* ── COINS ── */
     #coins {
-      background: var(--ink);
+      background: var(--ink2);
       position: relative; overflow: hidden;
     }
     .coins-bg {
       position: absolute; inset: 0;
-      background: radial-gradient(ellipse 70% 70% at 80% 50%, rgba(245,230,66,0.06) 0%, transparent 60%);
+      background: radial-gradient(ellipse 70% 80% at 85% 50%, rgba(245,230,66,0.04) 0%, transparent 60%);
       pointer-events: none;
     }
     .coins-layout {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 80px;
-      align-items: center;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: start;
     }
-    .coins-content {}
-    .coins-visual {
-      display: flex; flex-direction: column; gap: 12px;
-      position: relative;
+    .coins-intro {
+      font-size: 15px; color: var(--muted); line-height: 1.75;
+      max-width: 480px; margin-bottom: 32px;
     }
-    .tier-card {
-      display: flex; align-items: center; gap: 16px;
-      padding: 20px 24px;
-      border-radius: 14px;
-      border: 1px solid var(--border);
-      background: var(--ink2);
-      transition: all 0.3s;
-      position: relative; overflow: hidden;
+    .coins-promise {
+      padding: 28px 32px;
+      background: rgba(245,230,66,0.05);
+      border: 1px solid rgba(245,230,66,0.15);
+      border-radius: 16px; margin-bottom: 32px;
     }
-    .tier-card::before {
-      content: '';
-      position: absolute; left: 0; top: 0; bottom: 0;
-      width: 3px;
-      background: var(--tc);
-    }
-    .tier-card:hover { transform: translateX(6px); border-color: rgba(240,238,230,0.15); }
-    .tier-card[data-tier="gold"] { --tc: var(--lemon); }
-    .tier-card[data-tier="silver"] { --tc: #c0c0d0; }
-    .tier-card[data-tier="bronze"] { --tc: #cd7f32; }
-    .tier-icon { font-size: 28px; flex-shrink: 0; }
-    .tier-info {}
-    .tier-name {
-      font-family: 'Barlow Condensed', sans-serif;
-      font-size: 16px; font-weight: 800; letter-spacing: 1px;
-      text-transform: uppercase;
-    }
-    .tier-range {
-      font-size: 12px; color: var(--muted);
-    }
-    .tier-perks {
-      margin-left: auto; flex-shrink: 0;
+    .coins-promise-title {
       font-family: 'Bebas Neue', sans-serif;
-      font-size: 22px; color: var(--lemon);
+      font-size: 26px; letter-spacing: 0.5px;
+      color: var(--lemon); margin-bottom: 10px;
     }
-
-    .earn-table {
-      width: 100%; border-collapse: collapse; margin-top: 32px;
+    .coins-promise-text {
+      font-size: 14px; color: var(--muted); line-height: 1.7;
     }
-    .earn-table th {
+    .coins-earn-table {
+      width: 100%; border-collapse: collapse;
+    }
+    .coins-earn-table th {
       font-family: 'Barlow Condensed', sans-serif;
       font-size: 11px; font-weight: 800; letter-spacing: 2px;
-      text-transform: uppercase;
-      color: var(--muted);
+      text-transform: uppercase; color: var(--muted);
       text-align: left; padding: 0 0 12px;
       border-bottom: 1px solid var(--border);
     }
-    .earn-table td {
-      padding: 14px 0;
-      border-bottom: 1px solid var(--border);
+    .coins-earn-table td {
+      padding: 14px 0; border-bottom: 1px solid var(--border);
       font-size: 14px; color: var(--muted);
     }
-    .earn-table td:last-child {
+    .coins-earn-table td:last-child {
       font-family: 'Bebas Neue', sans-serif;
-      font-size: 20px; color: var(--lemon);
-      text-align: right;
+      font-size: 22px; color: var(--lemon); text-align: right;
     }
 
+    .tiers-stack { display: flex; flex-direction: column; gap: 10px; }
+    .tier-card {
+      display: flex; align-items: center; gap: 16px;
+      padding: 20px 24px; border-radius: 14px;
+      border: 1px solid var(--border); background: var(--ink3);
+      transition: all 0.3s; position: relative; overflow: hidden;
+    }
+    .tier-card::before {
+      content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+      background: var(--tc, var(--lemon));
+    }
+    .tier-card:hover { transform: translateX(6px); border-color: var(--border2); }
+    .tier-card.gold { --tc: var(--lemon); }
+    .tier-card.silver { --tc: #c0c0d0; }
+    .tier-card.bronze { --tc: #cd7f32; }
+    .tier-icon { font-size: 28px; flex-shrink: 0; }
+    .tier-name {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 16px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase;
+    }
+    .tier-range { font-size: 12px; color: var(--muted); }
+    .tier-badge {
+      margin-left: auto; flex-shrink: 0;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 20px; color: var(--lemon);
+    }
+
+    .coins-cta-box {
+      margin-top: 20px;
+      padding: 28px;
+      background: var(--ink3);
+      border: 1px solid var(--border2);
+      border-radius: 16px;
+    }
+    .coins-cta-box p { font-size: 13px; color: var(--muted); line-height: 1.6; margin-bottom: 16px; }
+    .coins-cta-box a {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 13px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase;
+      background: var(--lemon); color: var(--ink);
+      padding: 10px 18px; border-radius: 8px;
+      text-decoration: none; transition: all 0.2s;
+    }
+    .coins-cta-box a:hover { background: var(--lemon2); }
+
     /* ── FAQ ── */
-    #faq { background: var(--ink2); }
+    #faq { background: var(--ink3); }
     .faq-list {
-      display: flex; flex-direction: column; gap: 2px;
-      max-width: 780px;
+      display: flex; flex-direction: column; gap: 2px; max-width: 820px;
     }
     .faq-item {
-      background: var(--ink3);
-      border-radius: 0;
-      overflow: hidden;
-      transition: background 0.2s;
+      background: var(--ink2); border-radius: 0; overflow: hidden;
     }
     .faq-item:first-child { border-radius: 12px 12px 0 0; }
     .faq-item:last-child { border-radius: 0 0 12px 12px; }
@@ -824,288 +893,190 @@
       transition: color 0.2s;
     }
     .faq-q:hover { color: var(--lemon); }
-    .faq-icon {
-      font-size: 20px; color: var(--lemon);
-      transition: transform 0.3s;
-      flex-shrink: 0; margin-left: 16px;
-    }
+    .faq-icon { font-size: 20px; color: var(--lemon); transition: transform 0.3s; flex-shrink:0; margin-left:16px; }
     .faq-item.open .faq-icon { transform: rotate(45deg); }
-    .faq-a {
-      max-height: 0; overflow: hidden;
-      transition: max-height 0.4s ease, padding 0.3s;
-    }
+    .faq-a { max-height: 0; overflow: hidden; transition: max-height 0.4s ease; }
     .faq-a-inner {
-      padding: 0 28px 22px;
-      font-size: 14px; color: var(--muted); line-height: 1.75;
+      padding: 0 28px 24px;
+      font-size: 14px; color: var(--muted); line-height: 1.8;
     }
-    .faq-item.open .faq-a { max-height: 300px; }
+    .faq-item.open .faq-a { max-height: 400px; }
 
     /* ── CONTACTO ── */
-    #contacto {
-      background: var(--ink);
-      border-top: 1px solid var(--border);
-    }
+    #contacto { background: var(--ink); border-top: 1px solid var(--border); }
     .contact-layout {
-      display: grid;
-      grid-template-columns: 1.2fr 1fr;
-      gap: 80px;
-      align-items: start;
+      display: grid; grid-template-columns: 1.3fr 1fr; gap: 80px; align-items: start;
     }
-    .contact-big-text {
+    .contact-big-title {
       font-family: 'Bebas Neue', sans-serif;
-      font-size: clamp(52px, 7vw, 100px);
-      line-height: 0.92;
-      letter-spacing: 0.5px;
-      margin-bottom: 32px;
+      font-size: clamp(50px, 7vw, 100px); line-height: 0.92;
+      letter-spacing: 0.5px; margin-bottom: 28px;
     }
-    .contact-big-text em {
-      font-style: normal; color: var(--lemon); display: block;
-    }
+    .contact-big-title em { font-style: normal; color: var(--lemon); display: block; }
     .contact-sub {
-      font-size: 16px; color: var(--muted);
-      line-height: 1.7; max-width: 400px;
+      font-size: 16px; color: var(--muted); line-height: 1.75; max-width: 400px;
     }
-    .contact-channels {
-      display: flex; flex-direction: column; gap: 12px;
-      margin-top: 48px;
-    }
+    .contact-channels { display: flex; flex-direction: column; gap: 10px; margin-top: 48px; }
     .contact-channel {
       display: flex; align-items: center; gap: 16px;
-      padding: 18px 24px;
-      border-radius: 14px;
-      border: 1px solid var(--border);
-      background: var(--ink2);
-      text-decoration: none; color: var(--white);
-      transition: all 0.25s;
+      padding: 18px 22px; border-radius: 14px;
+      border: 1px solid var(--border); background: var(--ink2);
+      text-decoration: none; color: var(--white); transition: all 0.25s;
     }
     .contact-channel:hover {
       border-color: rgba(245,230,66,0.3);
       background: rgba(245,230,66,0.04);
       transform: translateX(4px);
     }
-    .channel-icon {
-      width: 42px; height: 42px;
-      border-radius: 10px;
-      display: grid; place-items: center;
-      font-size: 20px;
-      flex-shrink: 0;
+    .ch-icon {
+      width: 42px; height: 42px; border-radius: 10px;
+      display: grid; place-items: center; font-size: 20px; flex-shrink: 0;
     }
-    .channel-icon.wa { background: rgba(37,211,102,0.15); }
-    .channel-icon.ig { background: rgba(193,53,132,0.15); }
-    .channel-icon.em { background: rgba(245,230,66,0.12); }
-    .channel-info {}
-    .channel-label {
+    .ch-icon.wa { background: rgba(37,211,102,0.12); }
+    .ch-icon.ig { background: rgba(193,53,132,0.12); }
+    .ch-icon.em { background: rgba(245,230,66,0.1); }
+    .ch-label {
       font-family: 'Barlow Condensed', sans-serif;
       font-size: 11px; font-weight: 800; letter-spacing: 2px;
       text-transform: uppercase; color: var(--muted);
     }
-    .channel-value { font-size: 15px; font-weight: 600; }
-    .channel-arrow {
-      margin-left: auto; color: var(--muted); font-size: 18px;
-      transition: transform 0.2s;
-    }
-    .contact-channel:hover .channel-arrow { transform: translateX(4px); color: var(--lemon); }
+    .ch-value { font-size: 15px; font-weight: 600; }
+    .ch-arrow { margin-left: auto; color: var(--muted); font-size: 18px; transition: all 0.2s; }
+    .contact-channel:hover .ch-arrow { transform: translateX(4px); color: var(--lemon); }
 
-    /* Access portal button */
-    .portal-cta {
-      padding: 32px;
-      border-radius: 16px;
-      background: rgba(245,230,66,0.07);
-      border: 1px solid rgba(245,230,66,0.2);
-      margin-top: 12px;
+    .portal-box {
+      padding: 28px; border-radius: 16px;
+      background: rgba(245,230,66,0.06);
+      border: 1px solid rgba(245,230,66,0.18);
+      margin-top: 10px;
     }
-    .portal-cta-title {
+    .portal-box-title {
       font-family: 'Barlow Condensed', sans-serif;
-      font-size: 13px; font-weight: 800; letter-spacing: 2px;
-      text-transform: uppercase; color: var(--lemon);
-      margin-bottom: 8px;
+      font-size: 12px; font-weight: 800; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--lemon); margin-bottom: 8px;
     }
-    .portal-cta-desc {
-      font-size: 14px; color: var(--muted); margin-bottom: 20px; line-height: 1.6;
-    }
-    .portal-cta a {
+    .portal-box p { font-size: 14px; color: var(--muted); margin-bottom: 18px; line-height: 1.6; }
+    .portal-box a {
       display: inline-flex; align-items: center; gap: 8px;
       font-family: 'Barlow Condensed', sans-serif;
-      font-size: 14px; font-weight: 800; letter-spacing: 1px;
+      font-size: 13px; font-weight: 800; letter-spacing: 1px;
       text-transform: uppercase;
       background: var(--lemon); color: var(--ink);
-      padding: 12px 20px; border-radius: 8px;
-      text-decoration: none;
-      transition: all 0.2s;
+      padding: 11px 20px; border-radius: 8px;
+      text-decoration: none; transition: all 0.2s;
     }
-    .portal-cta a:hover { background: var(--lemon2); transform: translateY(-1px); }
+    .portal-box a:hover { background: var(--lemon2); }
 
     /* ── FOOTER ── */
     footer {
-      background: var(--ink);
-      border-top: 1px solid var(--border);
-      padding: 48px 5vw 32px;
+      background: var(--ink2); border-top: 1px solid var(--border);
+      padding: 52px 5vw 32px;
     }
     .footer-top {
       display: flex; align-items: flex-start; justify-content: space-between;
-      gap: 40px;
-      padding-bottom: 40px;
-      border-bottom: 1px solid var(--border);
+      gap: 40px; padding-bottom: 40px; border-bottom: 1px solid var(--border);
     }
-    .footer-brand {}
     .footer-logo {
       font-family: 'Bebas Neue', sans-serif;
-      font-size: 30px; letter-spacing: 2px;
-      color: var(--white);
-      margin-bottom: 8px;
+      font-size: 28px; letter-spacing: 2.5px;
+      margin-bottom: 10px;
     }
     .footer-logo span { color: var(--lemon); }
-    .footer-tagline {
-      font-size: 13px; color: var(--muted); line-height: 1.6;
-      max-width: 260px;
-    }
-    .footer-links {
-      display: flex; gap: 60px;
-    }
-    .footer-col {}
+    .footer-tagline { font-size: 13px; color: var(--muted); line-height: 1.6; max-width: 240px; }
+    .footer-links { display: flex; gap: 56px; }
     .footer-col-title {
       font-family: 'Barlow Condensed', sans-serif;
       font-size: 11px; font-weight: 800; letter-spacing: 2.5px;
-      text-transform: uppercase; color: var(--muted);
-      margin-bottom: 16px;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 16px;
     }
     .footer-col ul { list-style: none; display: flex; flex-direction: column; gap: 10px; }
-    .footer-col a {
-      font-size: 14px; color: var(--muted);
-      text-decoration: none; transition: color 0.2s;
-    }
+    .footer-col a { font-size: 13px; color: var(--muted); text-decoration: none; transition: color 0.2s; }
     .footer-col a:hover { color: var(--white); }
     .footer-bottom {
       display: flex; align-items: center; justify-content: space-between;
-      padding-top: 28px;
-      font-size: 12px; color: var(--muted);
+      padding-top: 28px; font-size: 12px; color: var(--muted2);
     }
 
     /* ── ANIMATIONS ── */
-    @keyframes fadeSlideUp {
-      from { opacity: 0; transform: translateY(30px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-    @keyframes fadeSlideLeft {
-      from { opacity: 0; transform: translateX(20px); }
-      to   { opacity: 1; transform: translateX(0); }
-    }
-    @keyframes fadeIn {
-      from { opacity: 0; } to { opacity: 1; }
-    }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(28px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes fadeLeft { from{opacity:0;transform:translateX(20px)} to{opacity:1;transform:translateX(0)} }
+    @keyframes fadeIn { from{opacity:0} to{opacity:1} }
 
-    .reveal {
-      opacity: 0; transform: translateY(24px);
-      transition: opacity 0.7s ease, transform 0.7s ease;
-    }
-    .reveal.visible {
-      opacity: 1; transform: translateY(0);
-    }
-    .reveal-delay-1 { transition-delay: 0.1s; }
-    .reveal-delay-2 { transition-delay: 0.2s; }
-    .reveal-delay-3 { transition-delay: 0.3s; }
-    .reveal-delay-4 { transition-delay: 0.4s; }
+    .reveal { opacity:0; transform:translateY(22px); transition:opacity 0.7s ease,transform 0.7s ease; }
+    .reveal.visible { opacity:1; transform:translateY(0); }
+    .rd1{transition-delay:0.1s} .rd2{transition-delay:0.2s} .rd3{transition-delay:0.3s} .rd4{transition-delay:0.4s}
 
     /* ── RESPONSIVE ── */
-    @media (max-width: 1024px) {
-      .services-grid { grid-template-columns: 1fr; }
-      .steps { grid-template-columns: 1fr 1fr; }
-      .step { border-bottom: 1px solid var(--border); }
-      .step:nth-child(odd) { border-right: 1px solid var(--border); }
-      .step:nth-child(even) { border-right: none; }
-      .coins-layout { grid-template-columns: 1fr; gap: 48px; }
-      .contact-layout { grid-template-columns: 1fr; gap: 40px; }
-      .calc-wrapper { grid-template-columns: 1fr; gap: 32px; }
+    @media(max-width:1200px){
+      .pricing-grid{grid-template-columns:repeat(3,1fr);}
+      .stats-grid{grid-template-columns:repeat(2,1fr);}
     }
-
-    @media (max-width: 768px) {
-      /* Nav */
-      .nav-links { display: none; }
-      .nav-cta { display: none; }
-      .nav-mobile-btn { display: flex; }
-
-      /* Hero */
-      #hero { padding: 0 5vw 60px; min-height: 100svh; }
-      .hero-badge { display: none; }
-      .hero-title { font-size: clamp(56px, 16vw, 100px); }
-      .hero-origins { flex-wrap: wrap; }
-      .hero-bottom { flex-direction: column; align-items: flex-start; gap: 24px; }
-      .hero-sub { font-size: 15px; }
-      .hero-actions { width: 100%; flex-direction: column; }
-      .btn-primary, .btn-secondary { width: 100%; justify-content: center; padding: 16px; font-size: 16px; }
-
-      /* Sections */
-      section { padding: 64px 5vw; }
-      .section-title { font-size: clamp(36px, 10vw, 60px); margin-bottom: 32px; }
-
-      /* Services */
-      .service-card { padding: 28px 24px; }
-      .service-num { font-size: 60px; }
-
-      /* Steps */
-      .steps { grid-template-columns: 1fr; border-radius: 12px; }
-      .step { border-right: none !important; padding: 28px 24px; }
-      .step:last-child { border-bottom: none; }
-
-      /* Pricing */
-      .pricing-grid { grid-template-columns: 1fr; }
-      .price-card:first-child { border-radius: 12px 12px 0 0; }
-      .price-card:last-child { border-radius: 0 0 12px 12px; }
-      .price-card.featured { transform: none; }
-      .calc-wrapper { padding: 24px; }
-      .calc-result-amount { font-size: 60px; }
-
-      /* Coins */
-      .coins-layout { gap: 32px; }
-      .tier-card { padding: 16px 18px; }
-
-      /* Contact */
-      .contact-big-text { font-size: clamp(40px, 12vw, 72px); }
-      .portal-cta { padding: 24px; }
-
-      /* Footer */
-      .footer-top { flex-direction: column; gap: 32px; }
-      .footer-links { flex-direction: column; gap: 24px; }
-      .footer-bottom { flex-direction: column; gap: 8px; text-align: center; }
-
-      /* FAQ */
-      .faq-q { font-size: 14px; padding: 18px 20px; }
-      .faq-a-inner { padding: 0 20px 18px; }
-
-      /* Ticker */
-      .ticker { height: 38px; }
-      .ticker-item { font-size: 11px; padding: 0 16px; }
-
-      /* Custom select */
-      .custom-select-dropdown { position: fixed; left: 5vw !important; right: 5vw !important; top: auto !important; bottom: 20px; border-radius: 16px; }
+    @media(max-width:1024px){
+      .services-grid{grid-template-columns:1fr;}
+      .steps{grid-template-columns:1fr 1fr;}
+      .step{border-bottom:1px solid var(--border);}
+      .step:nth-child(odd){border-right:1px solid var(--border);}
+      .step:nth-child(even){border-right:none;}
+      .aduanas-layout{grid-template-columns:1fr;gap:48px;}
+      .coins-layout{grid-template-columns:1fr;gap:48px;}
+      .contact-layout{grid-template-columns:1fr;gap:40px;}
+      .calc-wrapper{grid-template-columns:1fr;gap:32px;}
+      .aduanas-cta-box{position:static;}
     }
-
-    @media (max-width: 480px) {
-      nav { padding: 0 4vw; }
-      .hero-title { font-size: clamp(48px, 18vw, 80px); }
-      .section-title { font-size: clamp(32px, 11vw, 50px); }
-      .earn-table th, .earn-table td { font-size: 12px; padding: 10px 0; }
+    @media(max-width:768px){
+      .nav-links,.nav-cta{display:none;}
+      .nav-mobile-btn{display:flex;}
+      #hero{padding:0 5vw 64px;min-height:100svh;}
+      .hero-stat-badge{display:none;}
+      h1.hero-title{font-size:clamp(54px,16vw,96px);}
+      .hero-origins{flex-wrap:wrap;}
+      .hero-bottom{flex-direction:column;align-items:flex-start;gap:24px;}
+      .hero-actions{width:100%;flex-direction:column;}
+      .btn-primary,.btn-secondary{width:100%;justify-content:center;padding:16px;font-size:15px;}
+      section{padding:64px 5vw;}
+      .section-title{font-size:clamp(34px,10vw,58px);margin-bottom:32px;}
+      .steps{grid-template-columns:1fr;border-radius:12px;}
+      .step{border-right:none!important;padding:26px 22px;}
+      .step:last-child{border-bottom:none;}
+      .pricing-grid{grid-template-columns:1fr;}
+      .price-card.featured{transform:none;}
+      .calc-wrapper{padding:24px;}
+      .calc-result-amount{font-size:64px;}
+      .stats-grid{grid-template-columns:1fr 1fr;}
+      .stat-num{font-size:48px;}
+      .contact-big-title{font-size:clamp(42px,12vw,72px);}
+      .footer-top{flex-direction:column;gap:32px;}
+      .footer-links{flex-direction:column;gap:24px;}
+      .footer-bottom{flex-direction:column;gap:8px;text-align:center;}
+      .faq-q{font-size:14px;padding:18px 20px;}
+      .faq-a-inner{padding:0 20px 20px;}
+      .full-img-section{height:260px;}
+      .full-img-overlay{padding:0 28px;}
+    }
+    @media(max-width:480px){
+      nav{padding:0 4vw;}
+      h1.hero-title{font-size:clamp(46px,18vw,78px);}
+      .stat-num{font-size:40px;}
     }
   </style>
 </head>
 <body>
 
-  <!-- Custom cursor -->
   <div class="cursor" id="cursor"></div>
 
   <!-- ── NAV ── -->
   <nav id="nav">
     <a href="#" class="nav-logo">
-      LEMON<span>'S</span> <em></em> ARG
+      LEMON<span class="accent">'S</span>&nbsp;<span class="dot"></span>&nbsp;ARG
     </a>
     <ul class="nav-links">
       <li><a href="#servicios">Servicios</a></li>
-      <li><a href="#como-funciona">Cómo funciona</a></li>
       <li><a href="#precios">Precios</a></li>
+      <li><a href="#aduanas">Aduanas</a></li>
       <li><a href="#coins">Coins</a></li>
       <li><a href="#faq">FAQ</a></li>
     </ul>
-    <a href="https://app.lemonsarg.com" class="nav-cta">Acceder al portal →</a>
+    <a href="https://app.lemonsarg.com" class="nav-cta">Portal →</a>
     <button class="nav-mobile-btn" id="mobileBtn" aria-label="Menú">
       <span></span><span></span><span></span>
     </button>
@@ -1113,41 +1084,42 @@
 
   <!-- ── HERO ── -->
   <section id="hero">
-    <div class="hero-img"></div>
-    <div class="hero-bg"></div>
+    <div class="hero-bg-img"></div>
+    <div class="hero-overlay"></div>
     <div class="hero-grid"></div>
 
-    <div class="hero-badge">
-      <div class="hero-badge-ring">
-        <div class="hero-badge-inner">Gestión<br/>Aduanera<br/>incluida</div>
+    <div class="hero-stat-badge">
+      <div class="hero-stat-inner">
+        <div class="hero-stat-num">+3000</div>
+        <div class="hero-stat-label">Envíos<br/>Concretados</div>
       </div>
     </div>
 
     <div class="hero-origins">
-      <div class="origin-pill active"><span class="flag">🇺🇸</span> Estados Unidos</div>
-      <div class="origin-pill"><span class="flag">🇨🇳</span> China</div>
-      <div class="origin-pill"><span class="flag">🇪🇺</span> Europa</div>
+      <div class="origin-pill active"><span>🇺🇸</span> USA</div>
+      <div class="origin-pill"><span>🇨🇳</span> China</div>
+      <div class="origin-pill"><span>🇪🇺</span> Europa</div>
     </div>
 
     <h1 class="hero-title">
       TRAEMOS<br/>
-      <span class="line2">LO QUE</span>
-      <span class="line3">QUERÉS</span>
+      <span class="lemon">LO QUE</span>
+      <span class="outline">QUERÉS</span>
     </h1>
 
     <div class="hero-bottom">
       <p class="hero-sub">
-        Courier internacional con <strong>depósito propio en USA, China y Europa</strong>.
-        Importá tus compras o carga comercial. Entrega en todo el país,
-        gestión aduanera incluida.
+        Courier internacional con <strong>depósitos propios en USA, China y Europa</strong>.
+        Importá tus compras o carga comercial. Te acompañamos en todo el proceso,
+        desde la compra hasta la entrega en tu puerta.
       </p>
       <div class="hero-actions">
-        <a href="https://wa.me/5491157479346" class="btn-primary">💬 Consultarnos</a>
-        <a href="#precios" class="btn-secondary">Ver precios →</a>
+        <a href="https://wa.me/5491157479346" class="btn-primary">💬 Cotizá ahora</a>
+        <a href="#servicios" class="btn-secondary">Conocé más →</a>
       </div>
     </div>
 
-    <div class="scroll-indicator">
+    <div class="scroll-hint">
       <span>Scroll</span>
       <div class="scroll-line"></div>
     </div>
@@ -1155,8 +1127,32 @@
 
   <!-- ── TICKER ── -->
   <div class="ticker">
-    <div class="ticker-track" id="ticker">
-      <!-- duplicado para loop continuo -->
+    <div class="ticker-track" id="ticker"></div>
+  </div>
+
+  <!-- ── STATS ── -->
+  <div id="stats">
+    <div class="stats-grid">
+      <div class="stat-item reveal">
+        <div class="stat-num">+3000</div>
+        <div class="stat-label">Envíos<br/>Concretados</div>
+        <div class="stat-sub">Desde 2022 hasta hoy</div>
+      </div>
+      <div class="stat-item reveal rd1">
+        <div class="stat-num">+400</div>
+        <div class="stat-label">Clientes<br/>Activos</div>
+        <div class="stat-sub">En todo el país</div>
+      </div>
+      <div class="stat-item reveal rd2">
+        <div class="stat-num">3</div>
+        <div class="stat-label">Continentes<br/>Cubiertos</div>
+        <div class="stat-sub">USA · China · Europa</div>
+      </div>
+      <div class="stat-item reveal rd3">
+        <div class="stat-num">2</div>
+        <div class="stat-label">Años de<br/>Experiencia</div>
+        <div class="stat-sub">Courier internacional fuerte</div>
+      </div>
     </div>
   </div>
 
@@ -1164,55 +1160,84 @@
   <section id="servicios">
     <div class="section-label reveal">Servicios</div>
     <h2 class="section-title reveal">DESDE CUALQUIER<br/><em>RINCÓN DEL MUNDO</em></h2>
+    <p class="services-intro reveal">
+      Trabajamos con depósitos propios en tres continentes. Cada importación es diferente —
+      el producto, el régimen y el destino definen la operación. Siempre te asesoramos antes de arrancar.
+    </p>
     <div class="services-grid">
-      <div class="service-card reveal" data-color="lemon">
+      <div class="service-card usa reveal">
         <span class="service-flag">🇺🇸</span>
         <div class="service-name">Estados Unidos</div>
-        <div class="service-sub">Normal · Express</div>
+        <div class="service-sub">Miami · Depósito propio</div>
+        <div class="service-timing">
+          <span class="timing-pill">Normal · 7-10 días</span>
+          <span class="timing-pill express">Express · 72 hs</span>
+        </div>
         <p class="service-desc">
-          Depósito propio en Miami. Recibimos tus compras de Amazon, eBay,
-          tiendas de ropa, tecnología, repuestos y más.
-          Tres modalidades de servicio según urgencia y tipo de producto.
+          Recibimos tus compras en nuestro depósito en Miami. Amazon, eBay, marcas de ropa, tecnología,
+          repuestos, insumos comerciales y más. Con la modalidad Express tenés tu paquete
+          en Argentina en 72 horas hábiles desde que entra al depósito.
         </p>
         <div class="service-tags">
           <span class="service-tag">🛍️ Compras online</span>
           <span class="service-tag">📱 Tecnología</span>
           <span class="service-tag">👟 Ropa & calzado</span>
           <span class="service-tag">🔧 Repuestos</span>
+          <span class="service-tag">📦 Carga comercial</span>
         </div>
         <div class="service-num">01</div>
       </div>
-      <div class="service-card reveal reveal-delay-1" data-color="orange">
+      <div class="service-card china reveal rd1">
         <span class="service-flag">🇨🇳</span>
         <div class="service-name">China</div>
-        <div class="service-sub">Normal · Express</div>
+        <div class="service-sub">Guangzhou · Depósito propio</div>
+        <div class="service-timing">
+          <span class="timing-pill">Normal · 18 días</span>
+          <span class="timing-pill express">Express · 7 días</span>
+        </div>
         <p class="service-desc">
-          Directo desde fábricas y mayoristas. Ideal para importar mercadería
-          comercial, productos electrónicos, accesorios y artículos de
-          Alibaba, Shein y más.
+          Directo desde fábricas y mayoristas en China. Ideal para importar mercadería comercial,
+          electrónica, accesorios, indumentaria y artículos de Alibaba, Shein o cualquier proveedor.
+          El servicio Express reduce los tiempos a la mitad.
         </p>
         <div class="service-tags">
-          <span class="service-tag">🏭 Mercadería comercial</span>
+          <span class="service-tag">🏭 Mercadería mayorista</span>
           <span class="service-tag">⚡ Electrónica</span>
-          <span class="service-tag">📦 Mayorista</span>
+          <span class="service-tag">👗 Indumentaria</span>
+          <span class="service-tag">📦 Alibaba / Shein</span>
         </div>
         <div class="service-num">02</div>
       </div>
-      <div class="service-card reveal reveal-delay-2" data-color="blue">
+      <div class="service-card europa reveal rd2">
         <span class="service-flag">🇪🇺</span>
         <div class="service-name">Europa</div>
-        <div class="service-sub">Normal</div>
+        <div class="service-sub">España y toda Europa</div>
+        <div class="service-timing">
+          <span class="timing-pill">Normal · 18-20 días</span>
+        </div>
         <p class="service-desc">
-          Traemos paquetes desde España y el resto de Europa. Perfumería,
-          moda, productos exclusivos y cualquier compra online que quieras
-          traer al país.
+          Traemos paquetes desde España y toda Europa. Perfumería, moda, productos exclusivos,
+          vinos, repuestos específicos o cualquier compra en tiendas europeas que quieras
+          traer a Argentina con toda la documentación en regla.
         </p>
         <div class="service-tags">
           <span class="service-tag">🌹 Perfumería</span>
           <span class="service-tag">👗 Moda europea</span>
           <span class="service-tag">🍷 Exclusivos</span>
+          <span class="service-tag">🔩 Repuestos</span>
         </div>
         <div class="service-num">03</div>
+      </div>
+    </div>
+
+    <div class="important-notice reveal">
+      <div class="notice-icon">⚠️</div>
+      <div class="notice-text">
+        <strong>Cada importación es única.</strong> El tipo de producto, el régimen aduanero y los aranceles
+        aplicables varían en cada caso. Antes de comprar, <strong>siempre consultanos</strong> para que puedas
+        importar de la manera más conveniente y sin sorpresas.
+        <br/>
+        <a href="https://wa.me/5491157479346" class="notice-cta">💬 Consultar antes de comprar →</a>
       </div>
     </div>
   </section>
@@ -1224,51 +1249,39 @@
     <div class="steps">
       <div class="step reveal">
         <div class="step-num">01</div>
-        <span class="step-icon">🛒</span>
-        <div class="step-title">Elegí tu tienda</div>
-        <p class="step-desc">Comprá en cualquier tienda online del exterior. Si no tenés métodos de pago internacionales, nosotros te ayudamos con la gestión.</p>
+        <span class="step-icon">💬</span>
+        <div class="step-title">Consultanos primero</div>
+        <p class="step-desc">Antes de comprar, hablamos. Evaluamos qué tipo de producto es, qué régimen aplica y cuál es la mejor forma de ingresarlo al país.</p>
       </div>
-      <div class="step reveal reveal-delay-1">
+      <div class="step reveal rd1">
         <div class="step-num">02</div>
-        <span class="step-icon">📨</span>
-        <div class="step-title">Pre-alertanos</div>
-        <p class="step-desc">Envianos la factura o invoice y el número de tracking. Recibimos tu paquete en nuestro depósito y te avisamos al instante.</p>
+        <span class="step-icon">🛒</span>
+        <div class="step-title">Comprás con seguridad</div>
+        <p class="step-desc">Una vez alineados, comprás en tu tienda online y enviás a nuestro depósito. También podemos ayudarte con la gestión de pago si no tenés tarjeta internacional.</p>
       </div>
-      <div class="step reveal reveal-delay-2">
+      <div class="step reveal rd2">
         <div class="step-num">03</div>
         <span class="step-icon">✈️</span>
-        <div class="step-title">Viaja a Argentina</div>
-        <p class="step-desc">Tu paquete sale de nuestro depósito con toda la documentación aduanera. Seguí el estado en tiempo real desde tu portal.</p>
+        <div class="step-title">Viaja y se gestiona</div>
+        <p class="step-desc">Recibimos, consolidamos y despachamos. Gestionamos toda la documentación aduanera de forma conjunta con vos para que el proceso sea fluido y claro.</p>
       </div>
-      <div class="step reveal reveal-delay-3">
+      <div class="step reveal rd3">
         <div class="step-num">04</div>
         <span class="step-icon">🏠</span>
-        <div class="step-title">Recibís en casa</div>
-        <p class="step-desc">Entregamos en tu puerta en todo el país. Coordinamos horario y método de pago. Así de fácil.</p>
+        <div class="step-title">Lo recibís en casa</div>
+        <p class="step-desc">Entregamos en todo el país. GBA sin costo adicional, interior con flete según destino. Seguí todo en tiempo real desde tu portal.</p>
       </div>
     </div>
 
-    <!-- Imagen delivery -->
-    <div class="reveal" style="margin-top: 40px; border-radius: 20px; overflow: hidden; position: relative; height: 320px;">
-      <img src="./delivery.png" alt="Entrega de paquetes" style="
-        width: 100%; height: 100%; object-fit: cover; object-position: center 30%;
-        filter: brightness(0.7) saturate(0.9);
-        display: block;
-      " />
-      <div style="
-        position: absolute; inset: 0;
-        background: linear-gradient(90deg, rgba(8,12,24,0.85) 0%, rgba(8,12,24,0.2) 60%, transparent 100%);
-        display: flex; align-items: center; padding: 0 48px;
-      ">
-        <div>
-          <div style="font-family:'Barlow Condensed',sans-serif; font-size:11px; font-weight:800; letter-spacing:3px; text-transform:uppercase; color:var(--orange); margin-bottom:10px;">Puerta a puerta</div>
-          <div style="font-family:'Bebas Neue',sans-serif; font-size:clamp(32px,5vw,56px); line-height:0.95; margin-bottom:14px;">ENTREGAMOS<br/><span style="color:var(--lemon)">EN TODO</span><br/>EL PAÍS</div>
-          <a href="https://wa.me/5491157479346" style="
-            display:inline-flex; align-items:center; gap:8px;
-            font-family:'Barlow Condensed',sans-serif; font-size:14px; font-weight:800; letter-spacing:1px; text-transform:uppercase;
-            background:var(--lemon); color:var(--ink); padding:12px 22px; border-radius:8px; text-decoration:none;
-            transition:all 0.2s;
-          ">💬 Consultanos →</a>
+    <div class="full-img-section reveal" style="margin-top:48px;">
+      <img src="./LOGISTICA_FUTURISTA.jpg" alt="Logística internacional Lemon's" />
+      <div class="full-img-overlay">
+        <div class="full-img-copy">
+          <div class="full-img-eyebrow">Puerta a puerta</div>
+          <div class="full-img-title">ENTREGAMOS<br/><span>EN TODO</span><br/>EL PAÍS</div>
+          <a href="https://wa.me/5491157479346" style="display:inline-flex;align-items:center;gap:8px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;letter-spacing:1px;text-transform:uppercase;background:var(--lemon);color:var(--ink);padding:12px 22px;border-radius:8px;text-decoration:none;transition:all 0.2s;">
+            💬 Consultanos →
+          </a>
         </div>
       </div>
     </div>
@@ -1277,73 +1290,97 @@
   <!-- ── PRECIOS ── -->
   <section id="precios">
     <div class="section-label reveal">Tarifas</div>
-    <h2 class="section-title reveal">PRECIOS<br/><em>TRANSPARENTES</em></h2>
-    <p class="pricing-intro reveal">
-      Cobramemos por kilogramo de peso. Sin costos ocultos. La gestión aduanera está siempre incluida.
-      Peso mínimo facturable: 1 kg.
-    </p>
+    <h2 class="section-title reveal">REFERENCIA<br/><em>DE PRECIOS</em></h2>
+
+    <div class="pricing-notice reveal">
+      <strong>Importante:</strong> Los valores por kilogramo son de referencia. El precio final de tu importación
+      depende del tipo de producto, el régimen de ingreso, los aranceles aplicables y el volumen.
+      Siempre cotizamos de forma personalizada. <strong>Consultanos antes de comprar.</strong>
+    </div>
 
     <div class="pricing-grid reveal">
       <div class="price-card">
         <div class="price-origin">🇺🇸 USA</div>
         <div class="price-service">Normal</div>
+        <div class="price-timing">7 a 10 días hábiles</div>
         <div class="price-amount">
+          <span class="price-from">Desde</span>
           <span class="price-usd">$45</span><span class="price-unit">USD/kg</span>
         </div>
         <ul class="price-features">
-          <li>Gestión aduanera incluida</li>
-          <li>Entrega en todo el país</li>
+          <li>Asesoramiento incluido</li>
+          <li>Gestión aduanera conjunta</li>
           <li>Tracking en tiempo real</li>
+          <li>Entrega en todo el país</li>
         </ul>
       </div>
       <div class="price-card featured">
         <div class="price-badge">⚡ Más rápido</div>
         <div class="price-origin">🇺🇸 USA</div>
         <div class="price-service">Express</div>
+        <div class="price-timing">72 horas hábiles</div>
         <div class="price-amount">
+          <span class="price-from">Desde</span>
           <span class="price-usd">$55</span><span class="price-unit">USD/kg</span>
         </div>
         <ul class="price-features">
           <li>Prioridad en despacho</li>
-          <li>Tiempos reducidos</li>
-          <li>Seguimiento premium</li>
+          <li>Tiempos mínimos garantizados</li>
+          <li>Seguimiento prioritario</li>
+          <li>Ideal para urgencias</li>
         </ul>
       </div>
       <div class="price-card">
         <div class="price-origin">🇨🇳 China</div>
         <div class="price-service">Normal</div>
+        <div class="price-timing">~18 días hábiles</div>
         <div class="price-amount">
+          <span class="price-from">Desde</span>
           <span class="price-usd">$58</span><span class="price-unit">USD/kg</span>
         </div>
         <ul class="price-features">
           <li>Directo desde fábrica</li>
           <li>Consolidación de envíos</li>
-          <li>Gestión incluida</li>
+          <li>Gestión conjunta incluida</li>
         </ul>
       </div>
       <div class="price-card">
         <div class="price-origin">🇨🇳 China</div>
         <div class="price-service">Express</div>
+        <div class="price-timing">~7 días hábiles</div>
         <div class="price-amount">
+          <span class="price-from">Desde</span>
           <span class="price-usd">$68</span><span class="price-unit">USD/kg</span>
         </div>
         <ul class="price-features">
           <li>Despacho prioritario</li>
           <li>Tiempos optimizados</li>
-          <li>Ideal para reposición</li>
+          <li>Ideal para reposición urgente</li>
         </ul>
       </div>
       <div class="price-card">
         <div class="price-origin">🇪🇺 Europa</div>
         <div class="price-service">Normal</div>
+        <div class="price-timing">18 a 20 días hábiles</div>
         <div class="price-amount">
+          <span class="price-from">Desde</span>
           <span class="price-usd">$58</span><span class="price-unit">USD/kg</span>
         </div>
         <ul class="price-features">
           <li>España y toda Europa</li>
-          <li>Gestión incluida</li>
+          <li>Gestión conjunta incluida</li>
           <li>Entrega a domicilio</li>
         </ul>
+      </div>
+    </div>
+
+    <div class="pricing-disclaimer reveal">
+      <div class="di-icon">📋</div>
+      <div>
+        <strong>Precio mínimo facturable: 1 kg.</strong> Los volúmenes grandes tienen tarifas diferenciadas —
+        a mayor cantidad, mejor precio por kilo. Enviamos a todo el país: GBA sin cargo adicional,
+        interior con costo de flete según destino vía logísticas nacionales.
+        <strong>Para carga comercial o volúmenes importantes, consultanos para una cotización personalizada.</strong>
       </div>
     </div>
 
@@ -1351,46 +1388,49 @@
     <div class="calc-wrapper reveal">
       <div>
         <div class="calc-title">Calculá tu envío</div>
-        <p class="calc-sub">Estimá el costo de tu importación al instante. El resultado es una estimación basada en tarifas estándar.</p>
+        <p class="calc-sub">
+          Estimación orientativa según tarifas de referencia. El costo final puede variar
+          según el tipo de producto y régimen. A mayor volumen, mejor tarifa.
+        </p>
         <div class="calc-fields">
           <div>
-            <label class="calc-label">Origen</label>
+            <label class="calc-label">Origen y servicio</label>
             <div class="custom-select-wrapper" id="originSelect">
               <div class="custom-select-trigger" onclick="toggleSelect()">
                 <span class="trigger-flag">🇺🇸</span>
                 <div class="trigger-info">
                   <span class="trigger-name">USA — Normal</span>
-                  <span class="trigger-price">$45 USD/kg</span>
+                  <span class="trigger-price">Desde $45 USD/kg · 7-10 días</span>
                 </div>
                 <span class="trigger-arrow">▼</span>
               </div>
               <div class="custom-select-dropdown">
                 <div class="dropdown-group-label">🇺🇸 Estados Unidos</div>
-                <div class="dropdown-option selected" data-rate="45" data-flag="🇺🇸" data-name="USA — Normal" data-price="$45 USD/kg" onclick="selectOption(this)">
+                <div class="dropdown-option selected" data-rate="45" data-flag="🇺🇸" data-name="USA — Normal" data-price="Desde $45 USD/kg · 7-10 días" onclick="selectOption(this)">
                   <span class="opt-flag">🇺🇸</span>
-                  <div class="opt-info"><div class="opt-name">Normal</div><div class="opt-type">Estándar</div></div>
+                  <div class="opt-info"><div class="opt-name">Normal</div><div class="opt-type opt-timing">7 a 10 días</div></div>
                   <span class="opt-price">$45</span>
                 </div>
-                <div class="dropdown-option" data-rate="55" data-flag="🇺🇸" data-name="USA — Express" data-price="$55 USD/kg" onclick="selectOption(this)">
+                <div class="dropdown-option" data-rate="55" data-flag="🇺🇸" data-name="USA — Express" data-price="Desde $55 USD/kg · 72 hs" onclick="selectOption(this)">
                   <span class="opt-flag">🇺🇸</span>
-                  <div class="opt-info"><div class="opt-name">Express</div><div class="opt-type">⚡ Más rápido</div></div>
+                  <div class="opt-info"><div class="opt-name">Express ⚡</div><div class="opt-type opt-timing">72 horas</div></div>
                   <span class="opt-price">$55</span>
                 </div>
                 <div class="dropdown-group-label">🇨🇳 China</div>
-                <div class="dropdown-option" data-rate="58" data-flag="🇨🇳" data-name="China — Normal" data-price="$58 USD/kg" onclick="selectOption(this)">
+                <div class="dropdown-option" data-rate="58" data-flag="🇨🇳" data-name="China — Normal" data-price="Desde $58 USD/kg · 18 días" onclick="selectOption(this)">
                   <span class="opt-flag">🇨🇳</span>
-                  <div class="opt-info"><div class="opt-name">Normal</div><div class="opt-type">Estándar</div></div>
+                  <div class="opt-info"><div class="opt-name">Normal</div><div class="opt-type opt-timing">~18 días</div></div>
                   <span class="opt-price">$58</span>
                 </div>
-                <div class="dropdown-option" data-rate="68" data-flag="🇨🇳" data-name="China — Express" data-price="$68 USD/kg" onclick="selectOption(this)">
+                <div class="dropdown-option" data-rate="68" data-flag="🇨🇳" data-name="China — Express" data-price="Desde $68 USD/kg · 7 días" onclick="selectOption(this)">
                   <span class="opt-flag">🇨🇳</span>
-                  <div class="opt-info"><div class="opt-name">Express</div><div class="opt-type">⚡ Más rápido</div></div>
+                  <div class="opt-info"><div class="opt-name">Express ⚡</div><div class="opt-type opt-timing">~7 días</div></div>
                   <span class="opt-price">$68</span>
                 </div>
                 <div class="dropdown-group-label">🇪🇺 Europa</div>
-                <div class="dropdown-option" data-rate="58" data-flag="🇪🇺" data-name="Europa — Normal" data-price="$58 USD/kg" onclick="selectOption(this)">
+                <div class="dropdown-option" data-rate="58" data-flag="🇪🇺" data-name="Europa — Normal" data-price="Desde $58 USD/kg · 18-20 días" onclick="selectOption(this)">
                   <span class="opt-flag">🇪🇺</span>
-                  <div class="opt-info"><div class="opt-name">Normal</div><div class="opt-type">España y Europa</div></div>
+                  <div class="opt-info"><div class="opt-name">Normal</div><div class="opt-type opt-timing">18 a 20 días</div></div>
                   <span class="opt-price">$58</span>
                 </div>
               </div>
@@ -1400,13 +1440,90 @@
             <label class="calc-label">Peso estimado (kg)</label>
             <input class="calc-input" type="number" id="calcWeight" placeholder="Ej: 3.5" min="0.1" step="0.1" />
           </div>
-          <button class="calc-btn" onclick="calcular()">Calcular estimado →</button>
+          <button class="calc-btn" onclick="calcular()">Ver estimación →</button>
+          <p class="calc-disclaimer">* Precio orientativo. Consultanos para una cotización exacta según tu producto.</p>
         </div>
       </div>
       <div class="calc-result" id="calcResult">
-        <div class="calc-result-label">Costo estimado</div>
+        <div class="calc-result-label">Estimación de referencia</div>
         <div class="calc-result-amount" id="calcAmount">—</div>
-        <div class="calc-result-sub" id="calcSub">Ingresá los datos para calcular</div>
+        <div class="calc-result-sub" id="calcSub">Ingresá los datos para estimar</div>
+        <div class="calc-discount" id="calcDiscount"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── ADUANAS ── -->
+  <section id="aduanas">
+    <div style="position:absolute;right:0;top:0;bottom:0;width:42%;opacity:0.06;pointer-events:none;overflow:hidden;">
+      <img src="./BARCO_MUNDIAL.jpg" alt="" style="width:100%;height:100%;object-fit:cover;" />
+    </div>
+    <div class="aduanas-layout">
+      <div>
+        <div class="section-label reveal">Gestión Aduanera</div>
+        <h2 class="section-title reveal">IMPORTAR<br/><em>BIEN HECHO</em></h2>
+        <p style="font-size:15px;color:var(--muted);line-height:1.75;max-width:480px;margin-bottom:40px;" class="reveal">
+          Importar en Argentina requiere conocimiento, documentación y criterio.
+          No hacemos las cosas "por vos" — las hacemos <strong style="color:var(--white)">junto a vos</strong>,
+          para que entiendas el proceso y puedas repetirlo con confianza.
+        </p>
+        <div class="aduana-points reveal">
+          <div class="aduana-point">
+            <div class="aduana-num">01</div>
+            <div class="aduana-content">
+              <div class="aduana-title">Análisis previo del producto</div>
+              <p class="aduana-desc">Antes de importar evaluamos qué régimen aplica a tu mercadería, qué aranceles pueden corresponder y cuál es la mejor forma de ingresar el producto al país.</p>
+            </div>
+          </div>
+          <div class="aduana-point">
+            <div class="aduana-num">02</div>
+            <div class="aduana-content">
+              <div class="aduana-title">Documentación en conjunto</div>
+              <p class="aduana-desc">Trabajamos con vos en toda la documentación: facturas, certificados, descripción del producto y todo lo que aduana requiera. Sin sorpresas de último momento.</p>
+            </div>
+          </div>
+          <div class="aduana-point">
+            <div class="aduana-num">03</div>
+            <div class="aduana-content">
+              <div class="aduana-title">Seguimiento en tiempo real</div>
+              <p class="aduana-desc">Accedés al portal y ves el estado de tu envío en cada etapa: desde que llega a nuestro depósito hasta que lo tenés en mano. Te avisamos en cada cambio.</p>
+            </div>
+          </div>
+          <div class="aduana-point">
+            <div class="aduana-num">04</div>
+            <div class="aduana-content">
+              <div class="aduana-title">Entrega final</div>
+              <p class="aduana-desc">Una vez liberado en aduana, coordinamos la entrega. GBA directo, interior del país vía logísticas nacionales. Siempre con seguimiento hasta la entrega final.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="aduanas-cta-box reveal">
+          <div class="aduanas-cta-title">¿PRIMERA VEZ<br/><span>IMPORTANDO?</span></div>
+          <img src="./BARCO_MUNDIAL.jpg" alt="Logística mundial" class="aduanas-cta-img" />
+          <p class="aduanas-cta-sub">
+            No importa si nunca lo hiciste antes. Te explicamos todo desde cero y te guiamos en cada paso.
+            Trabajamos con particulares, emprendedores y empresas.
+          </p>
+          <div class="aduanas-ctas">
+            <a href="https://wa.me/5491157479346" class="acta">
+              <span class="acta-icon">💬</span>
+              Consultanos por WhatsApp
+              <span class="acta-arrow">→</span>
+            </a>
+            <a href="https://instagram.com/lemonsarg" class="acta" target="_blank">
+              <span class="acta-icon">📸</span>
+              Seguinos en Instagram
+              <span class="acta-arrow">→</span>
+            </a>
+            <a href="https://app.lemonsarg.com" class="acta">
+              <span class="acta-icon">🍋</span>
+              Acceder al portal
+              <span class="acta-arrow">→</span>
+            </a>
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -1415,95 +1532,87 @@
   <section id="coins">
     <div class="coins-bg"></div>
     <div class="coins-layout">
-      <div class="coins-content">
+      <div>
         <div class="section-label reveal">Programa de fidelidad</div>
         <h2 class="section-title reveal">LEMON<br/><em>COINS 🍋</em></h2>
-        <p style="font-size:15px; color:var(--muted); line-height:1.75; max-width:460px;" class="reveal">
-          Cada envío suma coins. Acumulás según el peso y el valor de tus importaciones.
-          Canjeá por descuentos, kilos gratis o envíos completos sin costo.
+        <p class="coins-intro reveal">
+          Cada envío acumula Lemon Coins automáticamente. Cuanto más importás con nosotros,
+          más acumulás — y los premios son realmente buenos para quienes siguen eligiendo Lemon's.
         </p>
-        <table class="earn-table reveal" style="margin-top:32px;">
+
+        <div class="coins-promise reveal">
+          <div class="coins-promise-title">¿Para qué sirven los Coins?</div>
+          <p class="coins-promise-text">
+            Los Lemon Coins se canjean por beneficios reales en tus próximas importaciones:
+            descuentos en USD, kilogramos gratis o incluso envíos completos sin costo.
+            Los clientes activos acumulan rápido y los premios son significativos.
+          </p>
+        </div>
+
+        <table class="coins-earn-table reveal">
           <thead>
             <tr>
-              <th>Por cada</th>
-              <th style="text-align:right">Ganás</th>
+              <th>Cuándo ganás</th>
+              <th style="text-align:right">Coins</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td>1 kg de peso del envío</td>
-              <td>3 🍋</td>
+              <td>Por cada kg de peso del envío</td>
+              <td>3 🍋 / kg</td>
             </tr>
             <tr>
               <td>Envío mayor a USD 500</td>
               <td>+10 🍋</td>
             </tr>
             <tr>
-              <td>Tu primer envío (único)</td>
+              <td>Tu primer envío (única vez)</td>
               <td>+15 🍋</td>
             </tr>
           </tbody>
         </table>
-        <div style="margin-top:32px; display:flex; flex-wrap:wrap; gap:12px;" class="reveal">
-          <div style="padding:14px 20px; border-radius:12px; background:rgba(255,255,255,0.04); border:1px solid var(--border); font-size:13px; color:var(--muted);">
-            <strong style="color:var(--lemon); font-family:'Bebas Neue',sans-serif; font-size:20px; display:block;">500 🍋</strong>
-            USD 8 de descuento
-          </div>
-          <div style="padding:14px 20px; border-radius:12px; background:rgba(255,255,255,0.04); border:1px solid var(--border); font-size:13px; color:var(--muted);">
-            <strong style="color:var(--lemon); font-family:'Bebas Neue',sans-serif; font-size:20px; display:block;">1.000 🍋</strong>
-            USD 15 de descuento
-          </div>
-          <div style="padding:14px 20px; border-radius:12px; background:rgba(255,255,255,0.04); border:1px solid var(--border); font-size:13px; color:var(--muted);">
-            <strong style="color:var(--lemon); font-family:'Bebas Neue',sans-serif; font-size:20px; display:block;">5.000 🍋</strong>
-            5 kg gratis
-          </div>
-          <div style="padding:14px 20px; border-radius:12px; background:rgba(255,255,255,0.04); border:1px solid var(--border); font-size:13px; color:var(--muted);">
-            <strong style="color:var(--lemon); font-family:'Bebas Neue',sans-serif; font-size:20px; display:block;">10.000 🍋</strong>
-            Envío gratis
-          </div>
-        </div>
       </div>
 
-      <div class="coins-visual reveal">
-        <div class="tier-card" data-tier="gold">
-          <div class="tier-icon">🥇</div>
-          <div class="tier-info">
-            <div class="tier-name">Oro</div>
-            <div class="tier-range">1.500+ coins</div>
+      <div>
+        <div class="tiers-stack reveal">
+          <div class="tier-card gold">
+            <div class="tier-icon">🥇</div>
+            <div>
+              <div class="tier-name">Oro</div>
+              <div class="tier-range">1.500+ coins · Beneficios máximos</div>
+            </div>
+            <div class="tier-badge">ELITE</div>
           </div>
-          <div class="tier-perks">ELITE</div>
-        </div>
-        <div class="tier-card" data-tier="silver">
-          <div class="tier-icon">🥈</div>
-          <div class="tier-info">
-            <div class="tier-name">Plata</div>
-            <div class="tier-range">500 – 1.499 coins</div>
+          <div class="tier-card silver">
+            <div class="tier-icon">🥈</div>
+            <div>
+              <div class="tier-name">Plata</div>
+              <div class="tier-range">500 – 1.499 coins</div>
+            </div>
+            <div class="tier-badge">VIP</div>
           </div>
-          <div class="tier-perks">VIP</div>
-        </div>
-        <div class="tier-card" data-tier="bronze">
-          <div class="tier-icon">🥉</div>
-          <div class="tier-info">
-            <div class="tier-name">Bronce</div>
-            <div class="tier-range">0 – 499 coins</div>
+          <div class="tier-card bronze">
+            <div class="tier-icon">🥉</div>
+            <div>
+              <div class="tier-name">Bronce</div>
+              <div class="tier-range">0 – 499 coins</div>
+            </div>
+            <div class="tier-badge">MEMBER</div>
           </div>
-          <div class="tier-perks">MEMBER</div>
         </div>
 
-        <div style="margin-top:20px; padding:28px; background:var(--ink2); border-radius:16px; border:1px solid var(--border);">
-          <div style="font-family:'Barlow Condensed',sans-serif; font-size:11px; font-weight:800; letter-spacing:2px; text-transform:uppercase; color:var(--muted); margin-bottom:12px;">
-            Ya sos cliente?
-          </div>
-          <p style="font-size:13px; color:var(--muted); line-height:1.6; margin-bottom:16px;">
-            Accedé al portal para ver tu saldo de Lemon Coins, historial de envíos y canjear recompensas.
+        <div class="coins-cta-box reveal" style="margin-top:16px;">
+          <p>¿Ya sos cliente? Accedé al portal para ver tu saldo de Lemon Coins,
+          historial de importaciones y canjear tus premios.</p>
+          <a href="https://app.lemonsarg.com/coins">🍋 Ver mis Coins →</a>
+        </div>
+
+        <div style="margin-top:16px;padding:20px 24px;background:rgba(255,255,255,0.03);border:1px solid var(--border2);border-radius:14px;" class="reveal">
+          <p style="font-size:13px;color:var(--muted);line-height:1.6;">
+            💡 <strong style="color:var(--white)">¿No tenés cuenta?</strong>
+            Los clientes de Lemon's acceden automáticamente al programa de Coins desde su primer envío.
+            <a href="https://wa.me/5491157479346" style="color:var(--lemon);font-weight:700;text-decoration:none;">Consultanos para empezar →</a>
           </p>
-          <a href="https://app.lemonsarg.com/coins" style="
-            display:inline-flex; align-items:center; gap:6px;
-            font-family:'Barlow Condensed',sans-serif; font-size:13px; font-weight:800; letter-spacing:1px; text-transform:uppercase;
-            background:var(--lemon); color:var(--ink);
-            padding:10px 18px; border-radius:8px; text-decoration:none;
-            transition:all 0.2s;
-          ">🍋 Ver mis coins →</a>
         </div>
       </div>
     </div>
@@ -1512,7 +1621,7 @@
   <!-- ── FAQ ── -->
   <section id="faq">
     <div class="section-label reveal">Preguntas frecuentes</div>
-    <h2 class="section-title reveal">LO QUE<br/><em>MÁS NOS PREGUNTAN</em></h2>
+    <h2 class="section-title reveal">LO QUE MÁS<br/><em>NOS PREGUNTAN</em></h2>
     <div class="faq-list reveal">
       <div class="faq-item">
         <button class="faq-q" onclick="toggleFaq(this)">
@@ -1521,8 +1630,10 @@
         </button>
         <div class="faq-a">
           <div class="faq-a-inner">
-            Podés traer casi cualquier cosa: ropa, calzado, tecnología, repuestos, electrodomésticos, perfumes, accesorios, mercadería comercial y más.
-            Hay restricciones aduaneras para ciertos productos (armas, medicamentos, etc.). Si tenés dudas sobre un artículo específico, consultanos por WhatsApp.
+            Es una pregunta que depende mucho del producto y del uso. Ropa, calzado, electrónica, repuestos,
+            electrodomésticos, perfumes, accesorios, mercadería comercial y muchos productos más.
+            Hay restricciones aduaneras para ciertos artículos (medicamentos, armas, ciertos alimentos, etc.).
+            La mejor forma de saberlo es consultarnos antes de comprar — así definimos el régimen correcto y si aplica.
           </div>
         </div>
       </div>
@@ -1533,8 +1644,13 @@
         </button>
         <div class="faq-a">
           <div class="faq-a-inner">
-            Los tiempos varían según el origen y la modalidad. USA Normal: 15-25 días hábiles. USA Express: 8-14 días. China: 25-40 días. Europa: 20-35 días.
-            Los tiempos son estimativos y pueden variar por aduanas o temporadas de alta demanda.
+            USA Normal: 7 a 10 días hábiles desde que entra al depósito.
+            USA Express: 72 horas hábiles.
+            China Normal: aproximadamente 18 días hábiles.
+            China Express: aproximadamente 7 días hábiles.
+            Europa: 18 a 20 días hábiles.
+            Estos son tiempos estimativos desde que el paquete llega a nuestro depósito en destino.
+            El trámite aduanero y la logística interna pueden sumar algunos días en casos puntuales.
           </div>
         </div>
       </div>
@@ -1545,8 +1661,12 @@
         </button>
         <div class="faq-a">
           <div class="faq-a-inner">
-            Nosotros nos encargamos de toda la documentación: declaración de importación, DGA, pago de aranceles cuando corresponde y liberación en aduana.
-            Vos solo esperás la entrega. No necesitás saber nada de trámites aduaneros.
+            Te acompañamos en todo el proceso de documentación e ingreso al país.
+            Trabajamos junto a vos para que la declaración, el tipo de régimen y los trámites estén en orden.
+            Nos encargamos de guiarte en cada paso — pero es importante que sepas que importar
+            en Argentina siempre involucra trámites y aranceles que se definen caso por caso.
+            No somos un servicio "mágico" sin trámites — somos un equipo que hace que el proceso sea
+            lo más claro y eficiente posible.
           </div>
         </div>
       </div>
@@ -1557,8 +1677,10 @@
         </button>
         <div class="faq-a">
           <div class="faq-a-inner">
-            El costo se calcula por kilogramo de peso real o volumétrico (el que sea mayor). El peso mínimo facturable es 1 kg.
-            Usá nuestra calculadora para tener un estimado. Para cargas grandes o comerciales, consultanos para una cotización personalizada.
+            El precio base se calcula por kilogramo (peso mínimo: 1 kg). A mayor volumen, mejor tarifa por kilo.
+            Al precio por kg hay que sumar los aranceles y derechos aduaneros que correspondan según el producto
+            y el régimen — esos se determinan caso por caso. Por eso siempre recomendamos cotizar antes de comprar.
+            Usá la calculadora de la página como referencia, y luego hablamos para ajustar el número real.
           </div>
         </div>
       </div>
@@ -1569,8 +1691,10 @@
         </button>
         <div class="faq-a">
           <div class="faq-a-inner">
-            Sí. Entregamos en todo Argentina. El costo del flete interno está incluido para el área del GBA.
-            Para el interior del país puede aplicar un costo adicional dependiendo de la localidad. Consultanos.
+            Sí. Entregamos en todo Argentina. Primero importamos hacia Argentina, y una vez que la mercadería
+            está en el país se despacha al destino final. El flete al GBA no tiene costo adicional.
+            Para el interior del país se suma el costo de logística nacional según la localidad y el peso.
+            Trabajamos con las principales empresas de logística del país.
           </div>
         </div>
       </div>
@@ -1581,8 +1705,24 @@
         </button>
         <div class="faq-a">
           <div class="faq-a-inner">
-            Todos nuestros clientes tienen acceso al portal de seguimiento en app.lemonsarg.com donde pueden ver el estado actualizado de cada envío en tiempo real.
-            También enviamos notificaciones automáticas por email en cada cambio de estado.
+            Todos los clientes tienen acceso al portal en app.lemonsarg.com donde pueden ver el estado
+            actualizado de cada envío en tiempo real. También enviamos notificaciones automáticas
+            por WhatsApp en cada cambio de estado: cuando llega al depósito, cuando sale, cuando está
+            en tránsito, cuando está listo para entrega y cuando se entrega.
+          </div>
+        </div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">
+          ¿Puedo importar para mi negocio o emprendimiento?
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-a">
+          <div class="faq-a-inner">
+            Sí, trabajamos con particulares, emprendedores y empresas. Para carga comercial o volúmenes
+            frecuentes tenemos tarifas diferenciadas y un servicio más personalizado.
+            Si estás pensando en importar para revender o para tu negocio, hablemos antes de arrancar —
+            hay que definir bien el régimen y la forma más conveniente de hacerlo.
           </div>
         </div>
       </div>
@@ -1593,44 +1733,45 @@
   <section id="contacto">
     <div class="contact-layout">
       <div>
-        <h2 class="contact-big-text reveal">
+        <h2 class="contact-big-title reveal">
           ¿LISTA<br/>TU COMPRA?
           <em>HABLEMOS.</em>
         </h2>
         <p class="contact-sub reveal">
-          Respondemos rápido. Ya sea para una compra personal, carga comercial o cualquier consulta sobre el proceso.
+          Respondemos rápido. Sea para una compra personal, carga comercial o cualquier consulta
+          sobre el proceso de importación — siempre consultanos antes de comprar.
         </p>
       </div>
       <div>
         <div class="contact-channels reveal">
           <a href="https://wa.me/5491157479346" class="contact-channel" target="_blank">
-            <div class="channel-icon wa">💬</div>
-            <div class="channel-info">
-              <div class="channel-label">WhatsApp</div>
-              <div class="channel-value">+54 9 11 5747-9346</div>
+            <div class="ch-icon wa">💬</div>
+            <div>
+              <div class="ch-label">WhatsApp</div>
+              <div class="ch-value">+54 9 11 5747-9346</div>
             </div>
-            <div class="channel-arrow">→</div>
+            <div class="ch-arrow">→</div>
           </a>
           <a href="https://instagram.com/lemonsarg" class="contact-channel" target="_blank">
-            <div class="channel-icon ig">📸</div>
-            <div class="channel-info">
-              <div class="channel-label">Instagram</div>
-              <div class="channel-value">@lemonsarg</div>
+            <div class="ch-icon ig">📸</div>
+            <div>
+              <div class="ch-label">Instagram</div>
+              <div class="ch-value">@lemonsarg</div>
             </div>
-            <div class="channel-arrow">→</div>
+            <div class="ch-arrow">→</div>
           </a>
           <a href="mailto:contacto@lemonsarg.com" class="contact-channel">
-            <div class="channel-icon em">✉️</div>
-            <div class="channel-info">
-              <div class="channel-label">Email</div>
-              <div class="channel-value">contacto@lemonsarg.com</div>
+            <div class="ch-icon em">✉️</div>
+            <div>
+              <div class="ch-label">Email</div>
+              <div class="ch-value">contacto@lemonsarg.com</div>
             </div>
-            <div class="channel-arrow">→</div>
+            <div class="ch-arrow">→</div>
           </a>
         </div>
-        <div class="portal-cta reveal reveal-delay-2">
-          <div class="portal-cta-title">¿Ya sos cliente?</div>
-          <p class="portal-cta-desc">Accedé al portal para ver tus envíos, estado en tiempo real y tus Lemon Coins.</p>
+        <div class="portal-box reveal rd2">
+          <div class="portal-box-title">¿Ya sos cliente?</div>
+          <p>Accedé al portal para ver tus envíos en tiempo real, tu saldo de Lemon Coins y gestionar tus importaciones.</p>
           <a href="https://app.lemonsarg.com">Ir al portal →</a>
         </div>
       </div>
@@ -1640,7 +1781,7 @@
   <!-- ── FOOTER ── -->
   <footer>
     <div class="footer-top">
-      <div class="footer-brand">
+      <div>
         <div class="footer-logo">LEMON<span>'S</span> ARG</div>
         <p class="footer-tagline">Courier internacional. Traemos lo que querés desde USA, China y Europa hacia Argentina.</p>
       </div>
@@ -1658,6 +1799,7 @@
           <ul>
             <li><a href="#como-funciona">Cómo funciona</a></li>
             <li><a href="#precios">Precios</a></li>
+            <li><a href="#aduanas">Gestión Aduanera</a></li>
             <li><a href="#coins">Lemon Coins</a></li>
             <li><a href="#faq">FAQ</a></li>
           </ul>
@@ -1667,15 +1809,15 @@
           <ul>
             <li><a href="https://app.lemonsarg.com">Iniciar sesión</a></li>
             <li><a href="https://app.lemonsarg.com/coins">Mis Coins</a></li>
+            <li><a href="https://wa.me/5491157479346">WhatsApp</a></li>
+            <li><a href="https://instagram.com/lemonsarg">Instagram</a></li>
           </ul>
         </div>
       </div>
     </div>
     <div class="footer-bottom">
-      <span>© 2025 Lemon's ARG. Todos los derechos reservados.</span>
-      <span style="display:flex; align-items:center; gap:6px;">
-        Hecho con 🍋 en Argentina
-      </span>
+      <span>© 2026 Lemon's ARG. Todos los derechos reservados.</span>
+      <span>Hecho con 🍋 en Argentina</span>
     </div>
   </footer>
 
@@ -1686,31 +1828,30 @@
       cursor.style.left = e.clientX + 'px';
       cursor.style.top = e.clientY + 'px';
     });
-    document.querySelectorAll('a, button').forEach(el => {
+    document.querySelectorAll('a,button').forEach(el => {
       el.addEventListener('mouseenter', () => cursor.classList.add('big'));
       el.addEventListener('mouseleave', () => cursor.classList.remove('big'));
     });
 
     // ── Nav scroll ──
     const nav = document.getElementById('nav');
-    window.addEventListener('scroll', () => {
-      nav.classList.toggle('scrolled', window.scrollY > 40);
-    });
+    window.addEventListener('scroll', () => nav.classList.toggle('scrolled', window.scrollY > 40));
 
     // ── Ticker ──
     const items = [
-      '🇺🇸 USA', '🇨🇳 China', '🇪🇺 Europa',
-      '✈️ Courier Internacional', '📦 Puerta a Puerta',
-      '🍋 Lemon Coins', '⚡ Express Available', '🔒 Gestión Aduanera',
+      '🇺🇸 USA Express 72hs', '🇨🇳 China Normal 18 días',
+      '🇪🇺 Europa 18-20 días', '✈️ Courier Internacional',
+      '📦 Puerta a Puerta', '🍋 Lemon Coins', '⚡ Express Disponible',
+      '📋 Gestión Aduanera Conjunta', '+3000 Envíos', '+400 Clientes',
     ];
     const ticker = document.getElementById('ticker');
-    const doubled = [...items, ...items, ...items, ...items];
+    const doubled = [...items,...items,...items,...items];
     ticker.innerHTML = doubled.map(t => `<div class="ticker-item"><span class="ticker-dot"></span>${t}</div>`).join('');
 
     // ── Scroll reveal ──
     const obs = new IntersectionObserver(entries => {
-      entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
-    }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+      entries.forEach(e => { if(e.isIntersecting) e.target.classList.add('visible'); });
+    }, { threshold: 0.08, rootMargin: '0px 0px -30px 0px' });
     document.querySelectorAll('.reveal').forEach(el => obs.observe(el));
 
     // ── FAQ ──
@@ -1718,7 +1859,7 @@
       const item = btn.closest('.faq-item');
       const isOpen = item.classList.contains('open');
       document.querySelectorAll('.faq-item.open').forEach(i => i.classList.remove('open'));
-      if (!isOpen) item.classList.add('open');
+      if(!isOpen) item.classList.add('open');
     }
 
     // ── Custom select ──
@@ -1738,61 +1879,80 @@
       calcular();
     }
     document.addEventListener('click', (e) => {
-      if (!e.target.closest('#originSelect')) {
-        document.getElementById('originSelect').classList.remove('open');
-      }
+      if(!e.target.closest('#originSelect')) document.getElementById('originSelect').classList.remove('open');
     });
 
-    // ── Calculadora ──
+    // ── Calculadora con descuentos por volumen ──
+    function getDiscount(kg) {
+      if(kg >= 100) return { disc: 7, label: '−$7/kg por volumen +100kg' };
+      if(kg >= 50)  return { disc: 5, label: '−$5/kg por volumen +50kg' };
+      if(kg >= 10)  return { disc: 3, label: '−$3/kg por volumen +10kg' };
+      return { disc: 0, label: '' };
+    }
+
     function calcular() {
       const weight = parseFloat(document.getElementById('calcWeight').value);
       const amt = document.getElementById('calcAmount');
       const sub = document.getElementById('calcSub');
-      if (!weight || weight <= 0) {
+      const disc = document.getElementById('calcDiscount');
+
+      if(!weight || weight <= 0) {
         amt.textContent = '—';
-        sub.textContent = 'Ingresá el peso para calcular';
+        sub.textContent = 'Ingresá el peso para estimar';
+        disc.style.display = 'none';
         return;
       }
+
       const billable = Math.max(weight, 1);
-      const total = (billable * selectedRate).toFixed(2);
+      const { disc: discount, label } = getDiscount(billable);
+      const effectiveRate = selectedRate - discount;
+      const total = (billable * effectiveRate).toFixed(2);
+
       amt.textContent = `USD ${total}`;
-      sub.textContent = `${billable} kg × $${selectedRate}/kg${weight < 1 ? ' (mín. 1 kg)' : ''}`;
+      sub.textContent = `${billable} kg × $${effectiveRate}/kg${weight < 1 ? ' (mín. 1 kg)' : ''}`;
+
+      if(discount > 0) {
+        disc.textContent = `✓ Descuento aplicado: ${label}`;
+        disc.style.display = 'inline-block';
+      } else {
+        disc.style.display = 'none';
+      }
     }
     document.getElementById('calcWeight').addEventListener('input', calcular);
 
-    // ── Mobile menu (simple toggle) ──
-    document.getElementById('mobileBtn').addEventListener('click', () => {
-      const links = document.querySelector('.nav-links');
-      if (!links) return;
-      const isOpen = links.style.display === 'flex';
-      links.style.cssText = isOpen ? '' : `
-        display: flex; flex-direction: column;
-        position: fixed; top: 64px; left: 0; right: 0;
-        background: rgba(8,12,24,0.98); backdrop-filter: blur(20px);
-        padding: 24px 5vw 32px; gap: 20px; border-bottom: 1px solid rgba(240,238,230,0.08);
-        z-index: 99;
-      `;
-      // Add portal + WA links on mobile if not present
-      if (!isOpen && !document.getElementById('mobile-extra')) {
-        const extra = document.createElement('div');
-        extra.id = 'mobile-extra';
-        extra.style.cssText = 'display:flex;flex-direction:column;gap:10px;margin-top:8px;padding-top:16px;border-top:1px solid rgba(240,238,230,0.08)';
-        extra.innerHTML = `
-          <a href="https://wa.me/5491157479346" style="display:flex;align-items:center;gap:8px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:800;letter-spacing:1px;text-transform:uppercase;background:rgba(37,211,102,0.15);color:#25d366;padding:12px 16px;border-radius:10px;text-decoration:none;">💬 WhatsApp</a>
-          <a href="https://app.lemonsarg.com" style="display:flex;align-items:center;gap:8px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:800;letter-spacing:1px;text-transform:uppercase;background:rgba(245,230,66,0.12);color:#f5e642;padding:12px 16px;border-radius:10px;text-decoration:none;">🍋 Acceder al portal</a>
-        `;
-        links.appendChild(extra);
-      }
-    });
-
-    // ── Hero origin pills animation ──
+    // ── Hero origin pills ──
     const pills = document.querySelectorAll('.origin-pill');
     let current = 0;
     setInterval(() => {
       pills.forEach(p => p.classList.remove('active'));
       current = (current + 1) % pills.length;
       pills[current].classList.add('active');
-    }, 2000);
+    }, 2200);
+
+    // ── Mobile menu ──
+    document.getElementById('mobileBtn').addEventListener('click', () => {
+      const links = document.querySelector('.nav-links');
+      if(!links) return;
+      const isOpen = links.style.display === 'flex';
+      links.style.cssText = isOpen ? '' : `
+        display:flex;flex-direction:column;
+        position:fixed;top:68px;left:0;right:0;
+        background:rgba(7,9,15,0.98);backdrop-filter:blur(20px);
+        padding:24px 5vw 32px;gap:20px;
+        border-bottom:1px solid rgba(240,238,230,0.08);
+        z-index:99;
+      `;
+      if(!isOpen && !document.getElementById('mob-extra')) {
+        const extra = document.createElement('div');
+        extra.id = 'mob-extra';
+        extra.style.cssText = 'display:flex;flex-direction:column;gap:10px;margin-top:8px;padding-top:16px;border-top:1px solid rgba(240,238,230,0.08)';
+        extra.innerHTML = `
+          <a href="https://wa.me/5491157479346" style="display:flex;align-items:center;gap:8px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;letter-spacing:1px;text-transform:uppercase;background:rgba(37,211,102,0.12);color:#25d366;padding:12px 16px;border-radius:10px;text-decoration:none;">💬 WhatsApp</a>
+          <a href="https://app.lemonsarg.com" style="display:flex;align-items:center;gap:8px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;letter-spacing:1px;text-transform:uppercase;background:rgba(245,230,66,0.1);color:#f5e642;padding:12px 16px;border-radius:10px;text-decoration:none;">🍋 Acceder al portal</a>
+        `;
+        links.appendChild(extra);
+      }
+    });
   </script>
 </body>
 </html>
