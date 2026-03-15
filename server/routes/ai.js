@@ -1769,4 +1769,25 @@ router.patch("/operator/clients/:clientNumber/phone", async (req, res) => {
   } catch(err) { serverError(res, err, "operator/clients/:clientNumber/phone PATCH"); }
 });
 
+
+// ── GET /api/ai/shipments/recent-updates — cambios de estado recientes ────────
+router.get("/shipments/recent-updates", async (req, res) => {
+  try {
+    const minutes = parseInt(req.query.minutes) || 5;
+    const q = await db.query(`
+      SELECT
+        se.shipment_id, se.old_status, se.new_status, se.created_at,
+        s.code, s.description,
+        u.name AS client_name, u.client_number, u.phone
+      FROM shipment_events se
+      JOIN shipments s ON s.id = se.shipment_id
+      JOIN users u ON u.id = s.user_id
+      WHERE se.created_at >= NOW() - ($1 || ' minutes')::interval
+        AND se.new_status IN ('En tránsito','Listo para entrega','Entregado')
+      ORDER BY se.created_at DESC
+    `, [minutes]);
+    res.json({ updates: q.rows, total: q.rows.length });
+  } catch(err) { serverError(res, err, "shipments/recent-updates"); }
+});
+
 module.exports = router;
