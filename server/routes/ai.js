@@ -1516,7 +1516,7 @@ router.post("/operator/clients", async (req, res) => {
     if (emailCheck.rows[0]) return res.status(409).json({ error: `El email ${email} ya está registrado` });
 
     // Obtener próximo client_number
-    const maxQ = await db.query(`SELECT MAX(client_number) AS max FROM users`);
+    const maxQ = await db.query(`SELECT MAX(client_number) AS max FROM users WHERE client_number < 9999`);
     const nextNumber = Number(maxQ.rows[0].max || 0) + 1;
 
     // Hash del password
