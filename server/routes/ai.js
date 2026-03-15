@@ -475,6 +475,9 @@ router.get("/dashboard/stats", async (req, res) => {
       SELECT COALESCE(SUM(balance), 0) AS total_coins FROM lemon_coins
     `);
 
+    // Tipo de cambio
+    const fxQ = await db.query(`SELECT value FROM app_settings WHERE key='fx_usd_ars' LIMIT 1`);
+
     const p = pipelineQ.rows[0];
     const m = monthQ.rows[0];
 
@@ -495,6 +498,7 @@ router.get("/dashboard/stats", async (req, res) => {
         total_revenue:     Number(Number(p.total_revenue).toFixed(2)),
         total_profit_usd:  Number(Number(totalProfitQ.rows[0].total_profit).toFixed(2)),
         coins_circulating: Number(coinsQ.rows[0].total_coins),
+        fx_usd_ars:        fxQ.rows[0] ? Number(fxQ.rows[0].value) : null,
       },
       this_month: {
         shipments:    Number(m.this_month),
@@ -1657,6 +1661,28 @@ router.patch("/notifications/:id", async (req, res) => {
     if (!q.rows[0]) return res.status(404).json({ error: "Notificación no encontrada" });
     res.json({ ok: true, notification: q.rows[0] });
   } catch(err) { serverError(res, err, "notifications/:id PATCH"); }
+});
+
+
+// ── PATCH /api/ai/operator/clients/:clientNumber/phone — guardar teléfono ────
+router.patch("/operator/clients/:clientNumber/phone", async (req, res) => {
+  try {
+    const clientNumber = parseInt(req.params.clientNumber);
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ error: "Requerido: phone" });
+
+    // Agregar columna si no existe
+    await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT`).catch(() => {});
+
+    const q = await db.query(
+      `UPDATE users SET phone=$1 WHERE client_number=$2 RETURNING client_number, name, phone`,
+      [phone, clientNumber]
+    );
+    if (!q.rows[0]) return res.status(404).json({ error: `Cliente #${clientNumber} no encontrado` });
+
+    console.log(`[AI WRITE] Teléfono actualizado: cliente #${clientNumber} → ${phone}`);
+    res.json({ ok: true, client: q.rows[0] });
+  } catch(err) { serverError(res, err, "operator/clients/:clientNumber/phone PATCH"); }
 });
 
 module.exports = router;
