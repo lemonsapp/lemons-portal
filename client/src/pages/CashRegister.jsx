@@ -263,6 +263,12 @@ function CobrosTab() {
         <KpiCard icon="💰" label="Total cobrado"
           value={fmtUsd(Object.values(histTotals).reduce((a, b) => a + b, 0))}
           sub="Todos los métodos" accent="linear-gradient(90deg,#ffd200,#ff8a00)" />
+        <KpiCard icon="📉" label="Costo total"
+          value={fmtUsd(history.reduce((a,h) => a + num(h.cost_usd||0), 0))}
+          sub="Costo real envíos" accent="#ef4444" />
+        <KpiCard icon="📈" label="Ganancia neta"
+          value={fmtUsd(history.reduce((a,h) => a + num(h.profit_usd||0), 0))}
+          sub="Cobrado − costo" accent="#22c55e" />
       </div>
 
       <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 18, padding: "16px 18px" }}>
@@ -444,7 +450,7 @@ function CobrosTab() {
             <thead>
               <tr>
                 <th>FECHA</th><th>CLIENTE</th><th>PAQUETES</th><th>MÉTODO</th>
-                <th>MONTO USD</th><th>EQUIV. PESOS</th><th>NOTAS</th><th>PDF</th><th>ANULAR</th>
+                <th>MONTO USD</th><th>COSTO</th><th>GANANCIA</th><th>EQUIV. PESOS</th><th>NOTAS</th><th>PDF</th><th>ANULAR</th>
               </tr>
             </thead>
             <tbody>
@@ -468,6 +474,8 @@ function CobrosTab() {
                   </td>
                   <td><MethodBadge method={h.method} /></td>
                   <td><b style={{ color: "#22c55e" }}>{fmtUsd(h.amount_usd)}</b></td>
+                  <td><b style={{ color: "#ef4444" }}>{fmtUsd(h.cost_usd || 0)}</b></td>
+                  <td><b style={{ color: num(h.profit_usd||0) >= 0 ? "#4ade80" : "#f97316" }}>{fmtUsd(h.profit_usd || 0)}</b></td>
                   <td style={{ fontSize: 12, color: "rgba(255,255,255,0.55)" }}>
                     {h.amount_ars ? `${fmtArs(h.amount_ars)} @ $${num(h.exchange_rate).toLocaleString("es-AR")}` : "-"}
                   </td>
@@ -489,7 +497,7 @@ function CobrosTab() {
                 </tr>
               ))}
               {!history.length && (
-                <tr><td colSpan={9} style={{ textAlign: "center", padding: 24, color: "rgba(255,255,255,0.30)", fontSize: 13 }}>Sin cobros en el período.</td></tr>
+                <tr><td colSpan={11} style={{ textAlign: "center", padding: 24, color: "rgba(255,255,255,0.30)", fontSize: 13 }}>Sin cobros en el período.</td></tr>
               )}
             </tbody>
           </table>
