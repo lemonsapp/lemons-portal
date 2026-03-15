@@ -1205,4 +1205,458 @@ router.post("/write/income", async (req, res) => {
   } catch (err) { serverError(res, err, "write/income POST"); }
 });
 
+
+// ══════════════════════════════════════════════════════════════════════════════
+// COINS
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── GET /api/ai/coins/redemptions — canjes pendientes ────────────────────────
+router.get("/coins/redemptions", async (req, res) => {
+  try {
+    const q = await db.query(`
+      SELECT cr.*, u.name, u.client_number,
+             lc.balance AS current_balance
+      FROM coin_redemptions cr
+      JOIN users u ON u.id = cr.user_id
+      JOIN lemon_coins lc ON lc.user_id = cr.user_id
+      WHERE cr.status = 'pending'
+      ORDER BY cr.created_at ASC
+    `);
+    res.json({ redemptions: q.rows, total: q.rows.length });
+  } catch(err) { serverError(res, err, "coins/redemptions"); }
+});
+
+// ── PATCH /api/ai/coins/redemptions/:id — aplicar o cancelar canje ───────────
+router.patch("/coins/redemptions/:id", async (req, res) => {
+  try {
+    const { status, shipment_code } = req.body;
+    if (!["applied","cancelled"].includes(status))
+      return res.status(400).json({ error: "status inválido: applied | cancelled" });
+
+    const redQ = await db.query(`SELECT * FROM coin_redemptions WHERE id=$1`, [req.params.id]);
+    const red = redQ.rows[0];
+    if (!red) return res.status(404).json({ error: "Canje no encontrado" });
+
+    let shipment_id = null;
+    if (shipment_code) {
+      const sq = await db.query(`SELECT id FROM shipments WHERE UPPER(code)=UPPER($1) LIMIT 1`, [shipment_code]);
+      shipment_id = sq.rows[0]?.id || null;
+    }
+
+    if (status === "cancelled" && red.status === "pending") {
+      await db.query(
+        `UPDATE lemon_coins SET balance=balance+$1, updated_at=NOW() WHERE user_id=$2`,
+        [red.coins_spent, red.user_id]
+      );
+      await db.query(
+        `INSERT INTO coin_transactions (user_id,type,amount,reason) VALUES ($1,'adjust',$2,'Devolución por canje cancelado')`,
+        [red.user_id, red.coins_spent]
+      );
+    }
+
+    await db.query(
+      `UPDATE coin_redemptions SET status=$1, shipment_id=COALESCE($2,shipment_id) WHERE id=$3`,
+      [status, shipment_id, req.params.id]
+    );
+
+    console.log(`[AI WRITE] Canje ${req.params.id} → ${status}`);
+    res.json({ ok: true, message: `Canje ${req.params.id} marcado como ${status}` });
+  } catch(err) { serverError(res, err, "coins/redemptions/:id PATCH"); }
+});
+
+// ── POST /api/ai/coins/adjust — ajuste manual de coins ───────────────────────
+router.post("/coins/adjust", async (req, res) => {
+  try {
+    const { client_number, amount, reason } = req.body;
+    if (!client_number || !amount || !reason)
+      return res.status(400).json({ error: "Requeridos: client_number, amount, reason" });
+
+    const uq = await db.query(`SELECT id, name FROM users WHERE client_number=$1 LIMIT 1`, [client_number]);
+    if (!uq.rows[0]) return res.status(404).json({ error: `Cliente #${client_number} no encontrado` });
+    const user = uq.rows[0];
+
+    await db.query(
+      `INSERT INTO lemon_coins (user_id,balance,total_earned) VALUES ($1,0,0) ON CONFLICT (user_id) DO NOTHING`,
+      [user.id]
+    );
+    await db.query(
+      `UPDATE lemon_coins SET balance=GREATEST(0,balance+$1),
+       total_earned=CASE WHEN $1>0 THEN total_earned+$1 ELSE total_earned END,
+       updated_at=NOW() WHERE user_id=$2`,
+      [amount, user.id]
+    );
+    await db.query(
+      `INSERT INTO coin_transactions (user_id,type,amount,reason) VALUES ($1,'adjust',$2,$3)`,
+      [user.id, amount, reason]
+    );
+    const updQ = await db.query(`SELECT balance FROM lemon_coins WHERE user_id=$1`, [user.id]);
+
+    console.log(`[AI WRITE] Ajuste coins: cliente #${client_number} ${amount > 0 ? "+" : ""}${amount}`);
+    res.json({ ok: true, client: user.name, client_number, new_balance: Number(updQ.rows[0].balance) });
+  } catch(err) { serverError(res, err, "coins/adjust POST"); }
+});
+
+// ── POST /api/ai/coins/grant — otorgar coins por envío ───────────────────────
+router.post("/coins/grant", async (req, res) => {
+  try {
+    const { client_number, shipment_code } = req.body;
+    if (!client_number || !shipment_code)
+      return res.status(400).json({ error: "Requeridos: client_number, shipment_code" });
+
+    const uq = await db.query(`SELECT id, name FROM users WHERE client_number=$1 LIMIT 1`, [client_number]);
+    if (!uq.rows[0]) return res.status(404).json({ error: `Cliente #${client_number} no encontrado` });
+
+    const shipQ = await db.query(
+      `SELECT s.*, u.first_shipment_bonus_given FROM shipments s JOIN users u ON u.id=s.user_id
+       WHERE UPPER(s.code)=UPPER($1) LIMIT 1`, [shipment_code]
+    );
+    const ship = shipQ.rows[0];
+    if (!ship) return res.status(404).json({ error: `Envío ${shipment_code} no encontrado` });
+
+    const existQ = await db.query(
+      `SELECT id FROM coin_transactions WHERE shipment_id=$1 AND type='earn' LIMIT 1`, [ship.id]
+    );
+    if (existQ.rows[0]) return res.json({ ok: false, message: "Ya se otorgaron coins por este envío" });
+
+    const kg = parseFloat(ship.weight_kg || 0);
+    const usd = parseFloat(ship.estimated_usd || 0);
+    const coinsByKg = Math.floor(kg * 3);
+    const coinsBig  = usd >= 500 ? 10 : 0;
+    const total = coinsByKg + coinsBig;
+    if (total <= 0) return res.json({ ok: false, message: "El envío no genera coins" });
+
+    await db.query(
+      `INSERT INTO lemon_coins (user_id,balance,total_earned) VALUES ($1,0,0) ON CONFLICT (user_id) DO NOTHING`,
+      [uq.rows[0].id]
+    );
+    await db.query(
+      `INSERT INTO coin_transactions (user_id,type,amount,reason,shipment_id) VALUES ($1,'earn',$2,$3,$4)`,
+      [uq.rows[0].id, total, `Envío completado — ${coinsByKg} por kg${coinsBig ? ", 10 bonus grande" : ""}`, ship.id]
+    );
+    await db.query(
+      `UPDATE lemon_coins SET balance=balance+$1,total_earned=total_earned+$1,updated_at=NOW() WHERE user_id=$2`,
+      [total, uq.rows[0].id]
+    );
+    const updQ = await db.query(`SELECT balance FROM lemon_coins WHERE user_id=$1`, [uq.rows[0].id]);
+
+    console.log(`[AI WRITE] Coins otorgados: ${total} a cliente #${client_number} por ${shipment_code}`);
+    res.json({ ok: true, earned: total, new_balance: Number(updQ.rows[0].balance) });
+  } catch(err) { serverError(res, err, "coins/grant POST"); }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CARGAS EXTERNAS
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── GET /api/ai/external/boxes — listar cajas ────────────────────────────────
+router.get("/external/boxes", async (req, res) => {
+  try {
+    const q = await db.query(`
+      SELECT b.*, COUNT(i.id) AS items_count, COALESCE(SUM(i.weight_kg),0) AS items_kg
+      FROM ext_boxes b
+      LEFT JOIN ext_items i ON i.box_id = b.id
+      GROUP BY b.id ORDER BY b.created_at DESC LIMIT 50
+    `);
+    res.json({ boxes: q.rows, total: q.rows.length });
+  } catch(err) { serverError(res, err, "external/boxes GET"); }
+});
+
+// ── POST /api/ai/external/boxes — crear caja ─────────────────────────────────
+router.post("/external/boxes", async (req, res) => {
+  try {
+    const { box_number, date_received, total_kg, notes, cierre_id } = req.body;
+    if (!box_number) return res.status(400).json({ error: "Requerido: box_number" });
+
+    const ins = await db.query(
+      `INSERT INTO ext_boxes (box_number, date_received, total_kg, notes, cierre_id)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [box_number, date_received || new Date(), total_kg || 0, notes || null, cierre_id || null]
+    );
+    console.log(`[AI WRITE] Caja creada: ${box_number}`);
+    res.status(201).json({ ok: true, box: ins.rows[0] });
+  } catch(err) { serverError(res, err, "external/boxes POST"); }
+});
+
+// ── PATCH /api/ai/external/boxes/:id — editar caja ───────────────────────────
+router.patch("/external/boxes/:id", async (req, res) => {
+  try {
+    const { box_number, total_kg, notes, cierre_id } = req.body;
+    const q = await db.query(
+      `UPDATE ext_boxes SET
+        box_number = COALESCE($1, box_number),
+        total_kg   = COALESCE($2, total_kg),
+        notes      = COALESCE($3, notes),
+        cierre_id  = COALESCE($4, cierre_id),
+        updated_at = NOW()
+       WHERE id=$5 RETURNING *`,
+      [box_number||null, total_kg||null, notes||null, cierre_id||null, req.params.id]
+    );
+    if (!q.rows[0]) return res.status(404).json({ error: "Caja no encontrada" });
+    res.json({ ok: true, box: q.rows[0] });
+  } catch(err) { serverError(res, err, "external/boxes/:id PATCH"); }
+});
+
+// ── POST /api/ai/external/boxes/:boxId/items — agregar item a caja ───────────
+router.post("/external/boxes/:boxId/items", async (req, res) => {
+  try {
+    const { client_name, tracking, weight_kg, tariff_per_kg, is_commission, notes } = req.body;
+    if (!client_name || !weight_kg)
+      return res.status(400).json({ error: "Requeridos: client_name, weight_kg" });
+
+    const boxQ = await db.query(`SELECT id, box_number FROM ext_boxes WHERE id=$1`, [req.params.boxId]);
+    if (!boxQ.rows[0]) return res.status(404).json({ error: "Caja no encontrada" });
+
+    const ins = await db.query(
+      `INSERT INTO ext_items (box_id, client_name, tracking, weight_kg, tariff_per_kg, is_commission, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [req.params.boxId, client_name, tracking||null, weight_kg,
+       tariff_per_kg||2, is_commission||false, notes||null]
+    );
+    console.log(`[AI WRITE] Item agregado a caja ${boxQ.rows[0].box_number}: ${client_name} ${weight_kg}kg`);
+    res.status(201).json({ ok: true, item: ins.rows[0] });
+  } catch(err) { serverError(res, err, "external/boxes/:boxId/items POST"); }
+});
+
+// ── GET /api/ai/external/cierres — listar todos los cierres ──────────────────
+router.get("/external/cierres", async (req, res) => {
+  try {
+    const q = await db.query(`SELECT * FROM ext_cierres ORDER BY created_at DESC`);
+    res.json({ cierres: q.rows, total: q.rows.length });
+  } catch(err) { serverError(res, err, "external/cierres GET"); }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CAJA — TIPO DE CAMBIO Y FONDOS
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── GET /api/ai/cash/fx — tipo de cambio actual ───────────────────────────────
+router.get("/cash/fx", async (req, res) => {
+  try {
+    const q = await db.query(`SELECT value FROM app_settings WHERE key='fx_usd_ars' LIMIT 1`);
+    res.json({ fx_usd_ars: q.rows[0] ? Number(q.rows[0].value) : null });
+  } catch(err) { serverError(res, err, "cash/fx GET"); }
+});
+
+// ── PUT /api/ai/cash/fx — actualizar tipo de cambio ──────────────────────────
+router.put("/cash/fx", async (req, res) => {
+  try {
+    const { value } = req.body;
+    if (!value || isNaN(value)) return res.status(400).json({ error: "Requerido: value (número)" });
+    await db.query(
+      `INSERT INTO app_settings (key,value,updated_at) VALUES ('fx_usd_ars',$1,NOW())
+       ON CONFLICT (key) DO UPDATE SET value=$1, updated_at=NOW()`,
+      [String(value)]
+    );
+    console.log(`[AI WRITE] Tipo de cambio actualizado: $${value}`);
+    res.json({ ok: true, fx_usd_ars: Number(value) });
+  } catch(err) { serverError(res, err, "cash/fx PUT"); }
+});
+
+// ── GET /api/ai/cash/accounts — fondos y cuentas ─────────────────────────────
+router.get("/cash/accounts", async (req, res) => {
+  try {
+    const q = await db.query(`SELECT * FROM accounts WHERE active=true ORDER BY name`);
+    const total = q.rows.reduce((a, r) => a + Number(r.balance || 0), 0);
+    res.json({ accounts: q.rows, total_usd: Number(total.toFixed(2)) });
+  } catch(err) { serverError(res, err, "cash/accounts GET"); }
+});
+
+// ── GET /api/ai/cash/summary — resumen mensual ───────────────────────────────
+router.get("/cash/summary", async (req, res) => {
+  try {
+    const paymentsQ = await db.query(`
+      SELECT COALESCE(SUM(amount_usd),0) AS revenue,
+             COALESCE(SUM(cost_usd),0)   AS cost,
+             COALESCE(SUM(profit_usd),0) AS profit,
+             COUNT(*) AS count
+      FROM payments
+      WHERE DATE_TRUNC('month',created_at) = DATE_TRUNC('month',CURRENT_DATE)
+    `);
+    const expensesQ = await db.query(`
+      SELECT COALESCE(SUM(CASE WHEN currency='USD' THEN amount ELSE 0 END),0) AS total_usd
+      FROM expenses
+      WHERE DATE_TRUNC('month',date) = DATE_TRUNC('month',CURRENT_DATE)
+    `);
+    const incomeQ = await db.query(`
+      SELECT COALESCE(SUM(CASE WHEN currency='USD' THEN amount ELSE 0 END),0) AS total_usd
+      FROM additional_income
+      WHERE DATE_TRUNC('month',date) = DATE_TRUNC('month',CURRENT_DATE)
+    `);
+    const p = paymentsQ.rows[0];
+    res.json({
+      this_month: {
+        revenue_usd:  Number(Number(p.revenue).toFixed(2)),
+        cost_usd:     Number(Number(p.cost).toFixed(2)),
+        profit_usd:   Number(Number(p.profit).toFixed(2)),
+        payments:     Number(p.count),
+        expenses_usd: Number(Number(expensesQ.rows[0].total_usd).toFixed(2)),
+        income_usd:   Number(Number(incomeQ.rows[0].total_usd).toFixed(2)),
+      }
+    });
+  } catch(err) { serverError(res, err, "cash/summary GET"); }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// OPERADOR — CLIENTES
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── POST /api/ai/operator/clients — crear cliente ────────────────────────────
+router.post("/operator/clients", async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+    if (!name || !email || !password)
+      return res.status(400).json({ error: "Requeridos: name, email, password" });
+
+    // Verificar que el email no exista
+    const emailCheck = await db.query(`SELECT id FROM users WHERE email=$1 LIMIT 1`, [email]);
+    if (emailCheck.rows[0]) return res.status(409).json({ error: `El email ${email} ya está registrado` });
+
+    // Obtener próximo client_number
+    const maxQ = await db.query(`SELECT MAX(client_number) AS max FROM users`);
+    const nextNumber = Number(maxQ.rows[0].max || 0) + 1;
+
+    // Hash del password
+    const bcrypt = require("bcrypt");
+    const hash = await bcrypt.hash(password, 10);
+
+    const ins = await db.query(
+      `INSERT INTO users (client_number, name, email, password_hash, role, active)
+       VALUES ($1,$2,$3,$4,'client',true) RETURNING id, client_number, name, email`,
+      [nextNumber, name, email, hash]
+    );
+
+    console.log(`[AI WRITE] Cliente creado: #${nextNumber} ${name}`);
+    res.status(201).json({ ok: true, client: ins.rows[0] });
+  } catch(err) { serverError(res, err, "operator/clients POST"); }
+});
+
+// ── PATCH /api/ai/operator/clients/:clientNumber — editar cliente ─────────────
+router.patch("/operator/clients/:clientNumber", async (req, res) => {
+  try {
+    const clientNumber = parseInt(req.params.clientNumber);
+    const { name, email, active } = req.body;
+
+    const uq = await db.query(`SELECT id FROM users WHERE client_number=$1 LIMIT 1`, [clientNumber]);
+    if (!uq.rows[0]) return res.status(404).json({ error: `Cliente #${clientNumber} no encontrado` });
+
+    const q = await db.query(
+      `UPDATE users SET
+        name   = COALESCE($1, name),
+        email  = COALESCE($2, email),
+        active = COALESCE($3, active)
+       WHERE client_number=$4 RETURNING client_number, name, email, active`,
+      [name||null, email||null, active !== undefined ? active : null, clientNumber]
+    );
+    console.log(`[AI WRITE] Cliente #${clientNumber} actualizado`);
+    res.json({ ok: true, client: q.rows[0] });
+  } catch(err) { serverError(res, err, "operator/clients/:clientNumber PATCH"); }
+});
+
+// ── PUT /api/ai/operator/clients/:clientNumber/rates — tarifas del cliente ───
+router.put("/operator/clients/:clientNumber/rates", async (req, res) => {
+  try {
+    const clientNumber = parseInt(req.params.clientNumber);
+    const { usa_normal, usa_express, usa_tech_premium, china_normal, china_express, europa_normal } = req.body;
+
+    const uq = await db.query(`SELECT id FROM users WHERE client_number=$1 LIMIT 1`, [clientNumber]);
+    if (!uq.rows[0]) return res.status(404).json({ error: `Cliente #${clientNumber} no encontrado` });
+
+    await db.query(
+      `INSERT INTO client_rates (user_id, usa_normal, usa_express, usa_tech_premium, china_normal, china_express, europa_normal)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)
+       ON CONFLICT (user_id) DO UPDATE SET
+         usa_normal        = COALESCE($2, client_rates.usa_normal),
+         usa_express       = COALESCE($3, client_rates.usa_express),
+         usa_tech_premium  = COALESCE($4, client_rates.usa_tech_premium),
+         china_normal      = COALESCE($5, client_rates.china_normal),
+         china_express     = COALESCE($6, client_rates.china_express),
+         europa_normal     = COALESCE($7, client_rates.europa_normal),
+         updated_at        = NOW()`,
+      [uq.rows[0].id, usa_normal||null, usa_express||null, usa_tech_premium||null,
+       china_normal||null, china_express||null, europa_normal||null]
+    );
+    console.log(`[AI WRITE] Tarifas actualizadas para cliente #${clientNumber}`);
+    res.json({ ok: true, message: `Tarifas del cliente #${clientNumber} actualizadas` });
+  } catch(err) { serverError(res, err, "operator/clients/:clientNumber/rates PUT"); }
+});
+
+// ── PUT /api/ai/operator/costs — costos reales del operador ──────────────────
+router.put("/operator/costs", async (req, res) => {
+  try {
+    const { usa_normal, usa_express, usa_tech_premium, china_normal, china_express, europa_normal } = req.body;
+    await db.query(
+      `INSERT INTO operator_costs (id, usa_normal, usa_express, usa_tech_premium, china_normal, china_express, europa_normal)
+       VALUES (1,$1,$2,$3,$4,$5,$6)
+       ON CONFLICT (id) DO UPDATE SET
+         usa_normal        = COALESCE($1, operator_costs.usa_normal),
+         usa_express       = COALESCE($2, operator_costs.usa_express),
+         usa_tech_premium  = COALESCE($3, operator_costs.usa_tech_premium),
+         china_normal      = COALESCE($4, operator_costs.china_normal),
+         china_express     = COALESCE($5, operator_costs.china_express),
+         europa_normal     = COALESCE($6, operator_costs.europa_normal),
+         updated_at        = NOW()`,
+      [usa_normal||null, usa_express||null, usa_tech_premium||null,
+       china_normal||null, china_express||null, europa_normal||null]
+    );
+    console.log(`[AI WRITE] Costos del operador actualizados`);
+    res.json({ ok: true, message: "Costos actualizados" });
+  } catch(err) { serverError(res, err, "operator/costs PUT"); }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// NOTIFICACIONES LIMÓN
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── GET /api/ai/notifications — listar todas ─────────────────────────────────
+router.get("/notifications", async (req, res) => {
+  try {
+    const q = await db.query(`SELECT * FROM lemon_notifications ORDER BY created_at DESC`);
+    res.json({ notifications: q.rows, total: q.rows.length });
+  } catch(err) { serverError(res, err, "notifications GET"); }
+});
+
+// ── POST /api/ai/notifications — crear notificación ──────────────────────────
+router.post("/notifications", async (req, res) => {
+  try {
+    const { message, emoji, type, target_role } = req.body;
+    if (!message?.trim()) return res.status(400).json({ error: "Requerido: message" });
+
+    // Desactivar anteriores del mismo target
+    await db.query(
+      `UPDATE lemon_notifications SET active=FALSE WHERE target_role=$1 OR target_role='all'`,
+      [target_role || "all"]
+    );
+
+    const ins = await db.query(
+      `INSERT INTO lemon_notifications (message, emoji, type, target_role, active)
+       VALUES ($1,$2,$3,$4,TRUE) RETURNING *`,
+      [message.trim(), emoji||"🍋", type||"info", target_role||"all"]
+    );
+    console.log(`[AI WRITE] Notificación creada: ${message.substring(0,50)}`);
+    res.status(201).json({ ok: true, notification: ins.rows[0] });
+  } catch(err) { serverError(res, err, "notifications POST"); }
+});
+
+// ── PATCH /api/ai/notifications/:id — editar / activar / desactivar ──────────
+router.patch("/notifications/:id", async (req, res) => {
+  try {
+    const { message, emoji, type, active, target_role } = req.body;
+    const q = await db.query(
+      `UPDATE lemon_notifications SET
+        message     = COALESCE($1, message),
+        emoji       = COALESCE($2, emoji),
+        type        = COALESCE($3, type),
+        active      = COALESCE($4, active),
+        target_role = COALESCE($5, target_role),
+        updated_at  = NOW()
+       WHERE id=$6 RETURNING *`,
+      [message||null, emoji||null, type||null,
+       active !== undefined ? active : null,
+       target_role||null, req.params.id]
+    );
+    if (!q.rows[0]) return res.status(404).json({ error: "Notificación no encontrada" });
+    res.json({ ok: true, notification: q.rows[0] });
+  } catch(err) { serverError(res, err, "notifications/:id PATCH"); }
+});
+
 module.exports = router;
