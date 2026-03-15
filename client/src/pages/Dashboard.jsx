@@ -857,6 +857,8 @@ export default function Dashboard() {
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(160px,1fr))", gap: 10, marginBottom: 20 }}>
                     {[
                       { label: "Cobros paquetes", value: fmtUsd(m.collected),    color: "#22c55e",  icon: "📦" },
+                      { label: "Costo de env\u00edos", value: fmtUsd(m.cost_usd), color: "#ef4444", icon: "\ud83d\udcc9" },
+                      { label: "Ganancia cobros", value: fmtUsd(m.profit_usd), color: num(m.profit_usd||0)>=0?"#4ade80":"#f97316", icon: "\ud83d\udcc8" },
                       { label: "Ingresos adicionales", value: fmtUsd(m.income_usd), color: "#3b82f6", icon: "➕" },
                       { label: "Total ingresos", value: fmtUsd(m.total_income),  color: "#ffd200",  icon: "💰" },
                       { label: "Gastos empresa USD", value: fmtUsd(m.empresa_usd), color: "#ef4444", icon: "🏢" },
@@ -916,11 +918,11 @@ export default function Dashboard() {
                             {new Date(m.month + "-15").toLocaleString("es-AR", { month: "short", year: "2-digit" }).toUpperCase()}
                           </td>
                           <td style={{ color: "#22c55e", fontWeight: 700 }}>{fmtUsd(m.collected)}</td>
+                          <td style={{ color: "#ef4444", fontWeight: 700 }}>{fmtUsd(m.cost_usd)}</td>
+                          <td style={{ color: num(m.profit_usd)>=0?"#4ade80":"#f97316", fontWeight: 800 }}>{fmtUsd(m.profit_usd)}</td>
                           <td style={{ color: "#3b82f6", fontWeight: 700 }}>{fmtUsd(m.income_usd)}</td>
                           <td style={{ color: "#ffd200", fontWeight: 800 }}>{fmtUsd(m.total_income)}</td>
                           <td style={{ color: "#ef4444" }}>{fmtUsd(m.empresa_usd)}</td>
-                          <td style={{ color: "#f97316", fontSize: 12 }}>{fmtArs(m.empresa_ars)}</td>
-                          <td style={{ color: "#a78bfa", fontSize: 12 }}>{fmtUsd(m.personal_usd)}</td>
                           <td>
                             <span style={{
                               fontWeight: 900, fontSize: 14,

@@ -1673,7 +1673,8 @@ app.post("/cash/payments", authRequired, requireRole(["operator", "admin"]), asy
     const operator_id = req.user?.id || null;
 
     const sq = await db.query(
-      `SELECT id, estimated_usd FROM shipments WHERE id = ANY($1::int[]) AND user_id = $2`,
+      `SELECT s.id, s.estimated_usd, s.weight_kg, s.origin, s.service
+       FROM shipments s WHERE s.id = ANY($1::int[]) AND s.user_id = $2`,
       [shipment_ids, user_id]
     );
     if (sq.rows.length !== shipment_ids.length) {
@@ -1681,20 +1682,52 @@ app.post("/cash/payments", authRequired, requireRole(["operator", "admin"]), asy
     }
     const total_usd = sq.rows.reduce((a, r) => a + Number(r.estimated_usd || 0), 0);
 
+    // Obtener costos del operador para calcular costo real y ganancia
+    const costsQ = await db.query(`SELECT usa_normal, usa_express, usa_tech_premium, china_normal, china_express, europa_normal FROM operator_costs LIMIT 1`);
+    const oc = costsQ.rows[0] || {};
+    function getCostPerKg(origin, service) {
+      if (origin === 'USA' && service === 'NORMAL')       return Number(oc.usa_normal       || 0);
+      if (origin === 'USA' && service === 'EXPRESS')      return Number(oc.usa_express      || 0);
+      if (origin === 'USA' && service === 'TECH_PREMIUM') return Number(oc.usa_tech_premium || 0);
+      if (origin === 'CHINA' && service === 'NORMAL')     return Number(oc.china_normal     || 0);
+      if (origin === 'CHINA' && service === 'EXPRESS')    return Number(oc.china_express    || 0);
+      if (origin === 'EUROPA') return Number(oc.europa_normal || 0);
+      return 0;
+    }
+    const total_cost = sq.rows.reduce((a, r) => {
+      const kg       = Math.max(Number(r.weight_kg || 0), 1);
+      const costPerKg = getCostPerKg(r.origin, r.service);
+      return a + (kg * costPerKg);
+    }, 0);
+    const total_profit = total_usd - total_cost;
+
     const client = await db.pool ? db.pool.connect() : null;
     try {
+      // Agregar columnas cost_usd y profit_usd si no existen
+      await db.query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS cost_usd NUMERIC(12,2) DEFAULT 0`).catch(() => {});
+      await db.query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS profit_usd NUMERIC(12,2) DEFAULT 0`).catch(() => {});
+
       const payRes = await db.query(
-        `INSERT INTO payments (user_id, operator_id, amount_usd, method, exchange_rate, amount_ars, notes)
-         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-        [user_id, operator_id, total_usd, method, exchange_rate ?? null, amount_ars ?? null, notes ?? null]
+        `INSERT INTO payments (user_id, operator_id, amount_usd, method, exchange_rate, amount_ars, notes, cost_usd, profit_usd)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+        [user_id, operator_id, total_usd, method, exchange_rate ?? null, amount_ars ?? null, notes ?? null,
+         Number(total_cost.toFixed(2)), Number(total_profit.toFixed(2))]
       );
       const payment = payRes.rows[0];
 
       for (const sid of shipment_ids) {
         const shipAmt = sq.rows.find(r => r.id === sid)?.estimated_usd || 0;
+        const shipRow = sq.rows.find(r => r.id === sid);
+        const shipKg  = Math.max(Number(shipRow?.weight_kg || 0), 1);
+        const shipCostPerKg = getCostPerKg(shipRow?.origin, shipRow?.service);
+        const shipCost   = Number((shipKg * shipCostPerKg).toFixed(2));
+        const shipProfit = Number((Number(shipAmt) - shipCost).toFixed(2));
+        // Add columns if needed
+        await db.query(`ALTER TABLE payment_items ADD COLUMN IF NOT EXISTS cost_usd NUMERIC(12,2) DEFAULT 0`).catch(() => {});
+        await db.query(`ALTER TABLE payment_items ADD COLUMN IF NOT EXISTS profit_usd NUMERIC(12,2) DEFAULT 0`).catch(() => {});
         await db.query(
-          `INSERT INTO payment_items (payment_id, shipment_id, amount_usd) VALUES ($1, $2, $3)`,
-          [payment.id, sid, shipAmt]
+          `INSERT INTO payment_items (payment_id, shipment_id, amount_usd, cost_usd, profit_usd) VALUES ($1, $2, $3, $4, $5)`,
+          [payment.id, sid, shipAmt, shipCost, shipProfit]
         );
         const prevQ = await db.query(`SELECT status FROM shipments WHERE id=$1`, [sid]);
         const prevStatus = prevQ.rows[0]?.status || null;
@@ -1781,7 +1814,10 @@ app.get("/cash/payments", authRequired, requireRole(["operator", "admin"]), asyn
 
     const q = await db.query(`
       SELECT
-        p.id, p.amount_usd, p.method, p.exchange_rate, p.amount_ars,
+        p.id, p.amount_usd,
+        COALESCE(p.cost_usd, 0)   AS cost_usd,
+        COALESCE(p.profit_usd, 0) AS profit_usd,
+        p.method, p.exchange_rate, p.amount_ars,
         p.notes, p.created_at,
         u.client_number, u.name AS client_name,
         op.name AS operator_name,
@@ -1789,6 +1825,8 @@ app.get("/cash/payments", authRequired, requireRole(["operator", "admin"]), asyn
           SELECT json_agg(json_build_object(
             'shipment_id', pi2.shipment_id,
             'amount_usd',  pi2.amount_usd,
+            'cost_usd',    COALESCE(pi2.cost_usd, 0),
+            'profit_usd',  COALESCE(pi2.profit_usd, 0),
             'code',        s.code,
             'description', s.description
           ))
@@ -2290,8 +2328,14 @@ app.delete("/cash/income/:id", authRequired, requireRole(["operator", "admin"]),
 app.get("/cash/monthly", authRequired, requireRole(["operator", "admin"]), async (req, res) => {
   try {
     const paymentsQ = await db.query(`
-      SELECT TO_CHAR(created_at, 'YYYY-MM') AS month, COALESCE(SUM(amount_usd), 0) AS collected
-      FROM payments GROUP BY TO_CHAR(created_at, 'YYYY-MM') ORDER BY month DESC LIMIT 24
+      SELECT
+        TO_CHAR(created_at, 'YYYY-MM') AS month,
+        COALESCE(SUM(amount_usd), 0)                  AS collected,
+        COALESCE(SUM(COALESCE(cost_usd, 0)), 0)       AS total_cost,
+        COALESCE(SUM(COALESCE(profit_usd, 0)), 0)     AS total_profit
+      FROM payments
+      GROUP BY TO_CHAR(created_at, 'YYYY-MM')
+      ORDER BY month DESC LIMIT 24
     `);
 
     const expensesQ = await db.query(`
@@ -2320,6 +2364,8 @@ app.get("/cash/monthly", authRequired, requireRole(["operator", "admin"]), async
       const pay = paymentsQ.rows.find(r => r.month === month) || {};
       const exp = expensesQ.rows.find(r => r.month === month) || {};
       const inc = incomeQ.rows.find(r => r.month === month) || {};
+      const totalCost   = Number(pay.total_cost   || 0);
+      const totalProfit = Number(pay.total_profit || 0);
 
       const collected    = Number(pay.collected    || 0);
       const income_usd   = Number(inc.income_usd   || 0);
@@ -2337,6 +2383,9 @@ app.get("/cash/monthly", authRequired, requireRole(["operator", "admin"]), async
         income_ars:   Number(inc.income_ars   || 0),
         empresa_usd, empresa_ars, personal_usd, personal_ars,
         total_income, net, margin: Number(margin.toFixed(1)),
+        // Desglose costo/ganancia de cobros
+        cost_usd:   Number(totalCost.toFixed(2)),
+        profit_usd: Number(totalProfit.toFixed(2)),
       };
     });
 
