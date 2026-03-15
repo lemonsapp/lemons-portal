@@ -80,6 +80,17 @@ const JWT_SECRET = process.env.JWT_SECRET || "dev_secret_change_me";
 app.get("/", (req, res) => res.send("LEMON's API OK ✅ — probá /health"));
 app.get("/health", (req, res) => res.json({ ok: true }));
 
+// ── Auto-migración al arrancar ────────────────────────────────────────────────
+(async () => {
+  try {
+    await db.query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS cost_usd NUMERIC(12,2) DEFAULT 0`);
+    await db.query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS profit_usd NUMERIC(12,2) DEFAULT 0`);
+    await db.query(`ALTER TABLE payment_items ADD COLUMN IF NOT EXISTS cost_usd NUMERIC(12,2) DEFAULT 0`);
+    await db.query(`ALTER TABLE payment_items ADD COLUMN IF NOT EXISTS profit_usd NUMERIC(12,2) DEFAULT 0`);
+    console.log("[MIGRATION] cost_usd/profit_usd columns ready");
+  } catch(e) { console.error("[MIGRATION ERROR]", e.message); }
+})();
+
 // ── Migración: recalcular cost_usd y profit_usd en pagos existentes ──────────
 app.post("/admin/recalc-payment-costs", authRequired, requireRole(["admin"]), async (req, res) => {
   try {
