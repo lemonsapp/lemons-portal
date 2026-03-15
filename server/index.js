@@ -80,6 +80,76 @@ const JWT_SECRET = process.env.JWT_SECRET || "dev_secret_change_me";
 app.get("/", (req, res) => res.send("LEMON's API OK ✅ — probá /health"));
 app.get("/health", (req, res) => res.json({ ok: true }));
 
+// ── Migración: recalcular cost_usd y profit_usd en pagos existentes ──────────
+app.post("/admin/recalc-payment-costs", authRequired, requireRole(["admin"]), async (req, res) => {
+  try {
+    // Asegurar columnas existen
+    await db.query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS cost_usd NUMERIC(12,2) DEFAULT 0`);
+    await db.query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS profit_usd NUMERIC(12,2) DEFAULT 0`);
+    await db.query(`ALTER TABLE payment_items ADD COLUMN IF NOT EXISTS cost_usd NUMERIC(12,2) DEFAULT 0`);
+    await db.query(`ALTER TABLE payment_items ADD COLUMN IF NOT EXISTS profit_usd NUMERIC(12,2) DEFAULT 0`);
+
+    // Obtener costos del operador
+    const costsQ = await db.query(`SELECT usa_normal, usa_express, usa_tech_premium, china_normal, china_express, europa_normal FROM operator_costs LIMIT 1`);
+    const oc = costsQ.rows[0] || {};
+    function getCostPerKg(origin, service) {
+      if (origin === 'USA' && service === 'NORMAL')       return Number(oc.usa_normal       || 0);
+      if (origin === 'USA' && service === 'EXPRESS')      return Number(oc.usa_express      || 0);
+      if (origin === 'USA' && service === 'TECH_PREMIUM') return Number(oc.usa_tech_premium || 0);
+      if (origin === 'CHINA' && service === 'NORMAL')     return Number(oc.china_normal     || 0);
+      if (origin === 'CHINA' && service === 'EXPRESS')    return Number(oc.china_express    || 0);
+      if (origin === 'EUROPA') return Number(oc.europa_normal || 0);
+      return 0;
+    }
+
+    // Obtener todos los payment_items con datos del envío
+    const itemsQ = await db.query(`
+      SELECT pi.id AS item_id, pi.payment_id, pi.amount_usd,
+             s.weight_kg, s.origin, s.service
+      FROM payment_items pi
+      JOIN shipments s ON s.id = pi.shipment_id
+      WHERE pi.cost_usd IS NULL OR pi.cost_usd = 0
+    `);
+
+    let updated = 0;
+    const paymentTotals = {};
+
+    for (const item of itemsQ.rows) {
+      const kg = Math.max(Number(item.weight_kg || 0), 1);
+      const costPerKg = getCostPerKg(item.origin, item.service);
+      const cost   = Number((kg * costPerKg).toFixed(2));
+      const profit = Number((Number(item.amount_usd) - cost).toFixed(2));
+
+      await db.query(
+        `UPDATE payment_items SET cost_usd=$1, profit_usd=$2 WHERE id=$3`,
+        [cost, profit, item.item_id]
+      );
+
+      if (!paymentTotals[item.payment_id]) {
+        paymentTotals[item.payment_id] = { cost: 0, profit: 0 };
+      }
+      paymentTotals[item.payment_id].cost   += cost;
+      paymentTotals[item.payment_id].profit += profit;
+      updated++;
+    }
+
+    // Actualizar totales en payments
+    let paymentsUpdated = 0;
+    for (const [paymentId, totals] of Object.entries(paymentTotals)) {
+      await db.query(
+        `UPDATE payments SET cost_usd=$1, profit_usd=$2 WHERE id=$3`,
+        [Number(totals.cost.toFixed(2)), Number(totals.profit.toFixed(2)), paymentId]
+      );
+      paymentsUpdated++;
+    }
+
+    res.json({ ok: true, items_updated: updated, payments_updated: paymentsUpdated });
+  } catch(err) {
+    console.error("[RECALC]", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ==================== TARIFAS (defaults + helpers) ====================
 
 const DEFAULT_RATES = {
