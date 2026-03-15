@@ -1005,4 +1005,204 @@ router.patch("/write/shipment/:code", async (req, res) => {
   } catch (err) { serverError(res, err, "write/shipment PATCH"); }
 });
 
+
+// ── POST /api/ai/write/payment — registrar cobro ─────────────────────────────
+router.post("/write/payment", async (req, res) => {
+  try {
+    const { client_number, shipment_codes, method, exchange_rate, amount_ars, notes, account_id } = req.body;
+
+    if (!client_number || !shipment_codes?.length || !method) {
+      return res.status(400).json({
+        error: "Faltan campos requeridos",
+        required: ["client_number", "shipment_codes (array)", "method"],
+        valid_methods: ["USD_CASH", "USDT", "ARS_TRANSFER", "ARS_CASH"]
+      });
+    }
+
+    const validMethods = ["USD_CASH", "USDT", "ARS_TRANSFER", "ARS_CASH"];
+    if (!validMethods.includes(method)) {
+      return res.status(400).json({ error: `Método inválido. Válidos: ${validMethods.join(", ")}` });
+    }
+
+    // Buscar cliente
+    const uq = await db.query(
+      `SELECT id, name FROM users WHERE client_number = $1 AND active = true LIMIT 1`,
+      [client_number]
+    );
+    if (!uq.rows[0]) return res.status(404).json({ error: `Cliente #${client_number} no encontrado` });
+    const user = uq.rows[0];
+
+    // Buscar envíos por código
+    const sq = await db.query(
+      `SELECT s.id, s.code, s.estimated_usd, s.weight_kg, s.origin, s.service, s.status
+       FROM shipments s
+       WHERE UPPER(s.code) = ANY($1::text[]) AND s.user_id = $2`,
+      [shipment_codes.map(c => c.toUpperCase()), user.id]
+    );
+    if (sq.rows.length !== shipment_codes.length) {
+      const found = sq.rows.map(r => r.code);
+      const missing = shipment_codes.filter(c => !found.includes(c.toUpperCase()));
+      return res.status(400).json({ error: `Envíos no encontrados o no pertenecen al cliente: ${missing.join(", ")}` });
+    }
+
+    const total_usd = sq.rows.reduce((a, r) => a + Number(r.estimated_usd || 0), 0);
+
+    // Calcular costos y ganancia
+    const costsQ = await db.query(`SELECT * FROM operator_costs LIMIT 1`);
+    const oc = costsQ.rows[0] || {};
+    function getCostPerKg(origin, service) {
+      if (origin === 'USA' && service === 'NORMAL')       return Number(oc.usa_normal       || 0);
+      if (origin === 'USA' && service === 'EXPRESS')      return Number(oc.usa_express      || 0);
+      if (origin === 'USA' && service === 'TECH_PREMIUM') return Number(oc.usa_tech_premium || 0);
+      if (origin === 'CHINA' && service === 'NORMAL')     return Number(oc.china_normal     || 0);
+      if (origin === 'CHINA' && service === 'EXPRESS')    return Number(oc.china_express    || 0);
+      if (origin === 'EUROPA') return Number(oc.europa_normal || 0);
+      return 0;
+    }
+    const total_cost = sq.rows.reduce((a, r) => {
+      const kg = Math.max(Number(r.weight_kg || 0), 1);
+      return a + (kg * getCostPerKg(r.origin, r.service));
+    }, 0);
+    const total_profit = total_usd - total_cost;
+
+    // Crear pago
+    const payRes = await db.query(
+      `INSERT INTO payments (user_id, operator_id, amount_usd, method, exchange_rate, amount_ars, notes, cost_usd, profit_usd)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      [user.id, null, total_usd, method, exchange_rate ?? null, amount_ars ?? null,
+       notes ?? null, Number(total_cost.toFixed(2)), Number(total_profit.toFixed(2))]
+    );
+    const payment = payRes.rows[0];
+
+    // Crear payment_items y marcar envíos como entregados
+    for (const s of sq.rows) {
+      const kg = Math.max(Number(s.weight_kg || 0), 1);
+      const shipCost   = Number((kg * getCostPerKg(s.origin, s.service)).toFixed(2));
+      const shipProfit = Number((Number(s.estimated_usd) - shipCost).toFixed(2));
+      await db.query(
+        `INSERT INTO payment_items (payment_id, shipment_id, amount_usd, cost_usd, profit_usd) VALUES ($1,$2,$3,$4,$5)`,
+        [payment.id, s.id, s.estimated_usd, shipCost, shipProfit]
+      );
+      if (s.status !== "Entregado") {
+        await db.query(`UPDATE shipments SET status='Entregado', delivered_at=NOW(), updated_at=NOW() WHERE id=$1`, [s.id]);
+        await db.query(
+          `INSERT INTO shipment_events (shipment_id, old_status, new_status) VALUES ($1,$2,'Entregado')`,
+          [s.id, s.status]
+        );
+      }
+    }
+
+    // Acreditar en cuenta si viene account_id
+    if (account_id) {
+      const accQ = await db.query(`SELECT balance FROM accounts WHERE id=$1`, [account_id]);
+      if (accQ.rows[0]) {
+        const newBal = Number(accQ.rows[0].balance) + total_usd;
+        await db.query(`UPDATE accounts SET balance=$1, updated_at=NOW() WHERE id=$2`, [newBal, account_id]);
+        await db.query(
+          `INSERT INTO account_movements (account_id, operator_id, direction, amount, description, ref_type, ref_id, balance_after)
+           VALUES ($1, $2, 'in', $3, $4, 'payment', $5, $6)`,
+          [account_id, null, total_usd, `Cobro cliente #${client_number}`, payment.id, newBal]
+        );
+      }
+    }
+
+    console.log(`[AI WRITE] Cobro registrado: $${total_usd} USD — cliente #${client_number}`);
+
+    res.status(201).json({
+      ok: true,
+      message: `Cobro registrado correctamente`,
+      payment: {
+        id:           payment.id,
+        client:       user.name,
+        client_number,
+        amount_usd:   Number(total_usd.toFixed(2)),
+        profit_usd:   Number(total_profit.toFixed(2)),
+        method,
+        shipments:    sq.rows.map(s => s.code),
+      }
+    });
+  } catch (err) { serverError(res, err, "write/payment POST"); }
+});
+
+// ── POST /api/ai/write/expense — cargar gasto ────────────────────────────────
+router.post("/write/expense", async (req, res) => {
+  try {
+    const { type, category, description, amount, currency, date, account_id } = req.body;
+
+    if (!type || !category || !description || !amount || !currency) {
+      return res.status(400).json({
+        error: "Faltan campos requeridos",
+        required: ["type", "category", "description", "amount", "currency"],
+        valid_types: ["empresa", "personal"],
+        valid_currencies: ["USD", "ARS", "USDT"]
+      });
+    }
+
+    if (!["empresa", "personal"].includes(type)) {
+      return res.status(400).json({ error: "type inválido. Válidos: empresa, personal" });
+    }
+
+    const expDate = date ? new Date(date) : new Date();
+
+    const ins = await db.query(
+      `INSERT INTO expenses (operator_id, type, category, description, amount, currency, date, account_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+      [null, type, category, description, amount, currency, expDate, account_id ?? null]
+    );
+
+    // Debitar de cuenta si viene account_id
+    if (account_id) {
+      const accQ = await db.query(`SELECT balance FROM accounts WHERE id=$1`, [account_id]);
+      if (accQ.rows[0]) {
+        const newBal = Number(accQ.rows[0].balance) - Number(amount);
+        await db.query(`UPDATE accounts SET balance=$1, updated_at=NOW() WHERE id=$2`, [newBal, account_id]);
+        await db.query(
+          `INSERT INTO account_movements (account_id, operator_id, direction, amount, description, ref_type, ref_id, balance_after)
+           VALUES ($1,$2,'out',$3,$4,'expense',$5,$6)`,
+          [account_id, null, amount, description, ins.rows[0].id, newBal]
+        );
+      }
+    }
+
+    console.log(`[AI WRITE] Gasto cargado: ${description} — ${amount} ${currency}`);
+
+    res.status(201).json({
+      ok: true,
+      message: `Gasto registrado correctamente`,
+      expense: { id: ins.rows[0].id, type, category, description, amount: Number(amount), currency }
+    });
+  } catch (err) { serverError(res, err, "write/expense POST"); }
+});
+
+// ── POST /api/ai/write/income — cargar ingreso adicional ─────────────────────
+router.post("/write/income", async (req, res) => {
+  try {
+    const { category, description, amount, currency, date } = req.body;
+
+    if (!category || !description || !amount || !currency) {
+      return res.status(400).json({
+        error: "Faltan campos requeridos",
+        required: ["category", "description", "amount", "currency"],
+        valid_currencies: ["USD", "ARS", "USDT"]
+      });
+    }
+
+    const incDate = date ? new Date(date) : new Date();
+
+    const ins = await db.query(
+      `INSERT INTO additional_income (operator_id, category, description, amount, currency, date)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+      [null, category, description, amount, currency, incDate]
+    );
+
+    console.log(`[AI WRITE] Ingreso cargado: ${description} — ${amount} ${currency}`);
+
+    res.status(201).json({
+      ok: true,
+      message: `Ingreso registrado correctamente`,
+      income: { id: ins.rows[0].id, category, description, amount: Number(amount), currency }
+    });
+  } catch (err) { serverError(res, err, "write/income POST"); }
+});
+
 module.exports = router;
