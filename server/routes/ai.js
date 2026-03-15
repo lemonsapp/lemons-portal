@@ -801,4 +801,183 @@ router.get("/ask/client/:clientNumber", async (req, res) => {
   } catch (err) { serverError(res, err, "ask/client/:clientNumber"); }
 });
 
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ESCRITURA — Solo para agente IA autorizado
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── POST /api/ai/write/shipment — crear envío ─────────────────────────────────
+router.post("/write/shipment", async (req, res) => {
+  try {
+    const {
+      user_client_number, code, description,
+      weight_kg, origin, service, tracking,
+      box_code, rate_usd_per_kg, estimated_usd, date_in
+    } = req.body;
+
+    // Validaciones básicas
+    if (!user_client_number || !code || !description || !weight_kg || !origin || !service) {
+      return res.status(400).json({
+        error: "Faltan campos requeridos",
+        required: ["user_client_number", "code", "description", "weight_kg", "origin", "service"]
+      });
+    }
+
+    const validOrigins  = ["USA", "CHINA", "EUROPA"];
+    const validServices = ["NORMAL", "EXPRESS", "TECH_PREMIUM"];
+    if (!validOrigins.includes(origin))  return res.status(400).json({ error: `origin inválido. Válidos: ${validOrigins.join(", ")}` });
+    if (!validServices.includes(service)) return res.status(400).json({ error: `service inválido. Válidos: ${validServices.join(", ")}` });
+
+    // Buscar usuario
+    const uq = await db.query(
+      `SELECT id, name FROM users WHERE client_number = $1 AND active = true LIMIT 1`,
+      [user_client_number]
+    );
+    if (!uq.rows[0]) return res.status(404).json({ error: `Cliente #${user_client_number} no encontrado o inactivo` });
+
+    // Verificar que el código no exista ya
+    const codeCheck = await db.query(
+      `SELECT id FROM shipments WHERE UPPER(code) = UPPER($1) LIMIT 1`,
+      [code]
+    );
+    if (codeCheck.rows[0]) return res.status(409).json({ error: `El código ${code} ya existe en el sistema` });
+
+    // Obtener tarifas del cliente o defaults
+    const ratesQ = await db.query(
+      `SELECT * FROM client_rates WHERE user_id = $1 LIMIT 1`,
+      [uq.rows[0].id]
+    );
+    const costsQ = await db.query(`SELECT * FROM operator_costs WHERE id = 1 LIMIT 1`);
+
+    const defaultRates = {
+      USA_NORMAL: 45, USA_EXPRESS: 55, USA_TECH_PREMIUM: 75,
+      CHINA_NORMAL: 58, CHINA_EXPRESS: 68, EUROPA_NORMAL: 58
+    };
+    const key = `${origin}_${service}`.replace("-", "_");
+    const clientRate = rate_usd_per_kg || (ratesQ.rows[0]?.[key.toLowerCase()] ?? defaultRates[key] ?? 45);
+
+    // Calcular estimated_usd si no viene
+    const peso = Math.max(Number(weight_kg), 1);
+    let descuento = 0;
+    if (peso >= 100) descuento = 7;
+    else if (peso >= 50) descuento = 5;
+    else if (peso >= 10) descuento = 3;
+    const finalEstimated = estimated_usd ?? Number((peso * (clientRate - descuento)).toFixed(2));
+
+    const dateIn = date_in ? new Date(date_in) : new Date();
+
+    const ins = await db.query(`
+      INSERT INTO shipments
+        (user_id, code, description, weight_kg, status, origin, service,
+         rate_usd_per_kg, estimated_usd, date_in, tracking, box_code)
+      VALUES ($1,$2,$3,$4,'Recibido en depósito',$5,$6,$7,$8,$9,$10,$11)
+      RETURNING id, code, status, estimated_usd
+    `, [
+      uq.rows[0].id, code.toUpperCase(), description,
+      weight_kg, origin, service,
+      clientRate, finalEstimated, dateIn,
+      tracking || null, box_code || null
+    ]);
+
+    const created = ins.rows[0];
+    console.log(`[AI WRITE] Envío creado: ${created.code} para cliente #${user_client_number}`);
+
+    res.status(201).json({
+      ok: true,
+      message: `Envío ${created.code} creado correctamente`,
+      shipment: {
+        id:            created.id,
+        code:          created.code,
+        status:        created.status,
+        estimated_usd: Number(created.estimated_usd),
+        client:        uq.rows[0].name,
+      }
+    });
+  } catch (err) { serverError(res, err, "write/shipment POST"); }
+});
+
+// ── PATCH /api/ai/write/shipment/:code — editar envío o cambiar estado ────────
+router.patch("/write/shipment/:code", async (req, res) => {
+  try {
+    const { code } = req.params;
+    const {
+      status, description, weight_kg,
+      tracking, box_code, estimated_usd
+    } = req.body;
+
+    const validStatuses = [
+      "Recibido en depósito", "En preparación",
+      "Despachado", "En tránsito",
+      "Listo para entrega", "Entregado"
+    ];
+
+    if (status && !validStatuses.includes(status)) {
+      return res.status(400).json({
+        error: `Status inválido`,
+        valid: validStatuses
+      });
+    }
+
+    // Buscar el envío
+    const sq = await db.query(
+      `SELECT id, status, code FROM shipments WHERE UPPER(code) = UPPER($1) LIMIT 1`,
+      [code.trim()]
+    );
+    if (!sq.rows[0]) return res.status(404).json({ error: `Envío ${code} no encontrado` });
+
+    const shipment = sq.rows[0];
+    const oldStatus = shipment.status;
+
+    // Armar campos a actualizar dinámicamente
+    const fields = [];
+    const vals   = [];
+    let i = 1;
+
+    if (status)        { fields.push(`status = $${i++}`);        vals.push(status); }
+    if (description)   { fields.push(`description = $${i++}`);   vals.push(description); }
+    if (weight_kg)     { fields.push(`weight_kg = $${i++}`);     vals.push(weight_kg); }
+    if (tracking)      { fields.push(`tracking = $${i++}`);      vals.push(tracking); }
+    if (box_code)      { fields.push(`box_code = $${i++}`);      vals.push(box_code); }
+    if (estimated_usd) { fields.push(`estimated_usd = $${i++}`); vals.push(estimated_usd); }
+    if (status === "Entregado") {
+      fields.push(`delivered_at = $${i++}`);
+      vals.push(new Date());
+    }
+
+    fields.push(`updated_at = $${i++}`);
+    vals.push(new Date());
+
+    if (fields.length === 1) {
+      return res.status(400).json({ error: "No hay campos para actualizar" });
+    }
+
+    vals.push(shipment.id);
+    await db.query(
+      `UPDATE shipments SET ${fields.join(", ")} WHERE id = $${i}`,
+      vals
+    );
+
+    // Registrar evento si cambió el estado
+    if (status && status !== oldStatus) {
+      await db.query(
+        `INSERT INTO shipment_events (shipment_id, old_status, new_status) VALUES ($1, $2, $3)`,
+        [shipment.id, oldStatus, status]
+      );
+    }
+
+    console.log(`[AI WRITE] Envío ${shipment.code} actualizado — status: ${oldStatus} → ${status || oldStatus}`);
+
+    res.json({
+      ok: true,
+      message: `Envío ${shipment.code} actualizado correctamente`,
+      updated: {
+        code:       shipment.code,
+        old_status: oldStatus,
+        new_status: status || oldStatus,
+        fields_updated: fields.length - 1,
+      }
+    });
+  } catch (err) { serverError(res, err, "write/shipment PATCH"); }
+});
+
 module.exports = router;
