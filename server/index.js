@@ -13,6 +13,7 @@ const { sendEmail } = require("./mailer"); // ✅ mails
 const coinsRouter         = require("./routes/coins");         // ✅ Lemon Coins
 const externalRouter      = require("./routes/external");      // ✅ Cargas Externas
 const notificationsRouter = require("./routes/notifications"); // ✅ Notificaciones LIMÓN
+const aiRouter            = require("./routes/ai");            // 🤖 AI Agent API
 
 const app = express();
 
@@ -30,6 +31,15 @@ app.use(rateLimit({
   legacyHeaders: false,
   message: { error: "Demasiadas solicitudes. Intentá de nuevo en 15 minutos." },
 }));
+
+// ── Rate limiting para el agente de IA (por IP del servidor OpenClaw) ──
+const aiLimiter = rateLimit({
+  windowMs: 60 * 1000,  // 1 minuto
+  max: 120,              // 120 req/min (2 por segundo) — suficiente para el agente
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "AI rate limit exceeded. Wait 1 minute." },
+});
 
 // ── Rate limiting estricto para auth ──
 const authLimiter = rateLimit({
@@ -2456,8 +2466,7 @@ app.get("/cash/monthly", authRequired, requireRole(["operator", "admin"]), async
       const personal_ars = Number(exp.personal_ars || 0);
 
       const total_income = collected + income_usd;
-      // Ganancia neta = ganancia real de cobros (ya descontado costo) + ingresos adicionales - gastos empresa - gastos personales
-      const net          = totalProfit + income_usd - empresa_usd - personal_usd;
+      const net          = total_income - empresa_usd;
       const margin       = total_income > 0 ? (net / total_income * 100) : 0;
 
       return {
@@ -2576,6 +2585,7 @@ app.get(
 app.use("/coins",         coinsRouter);
 app.use("/external",      externalRouter);
 app.use("/notifications", notificationsRouter);
+app.use("/api/ai",        aiLimiter, aiRouter); // 🤖 AI Agent — protegido por API key
 
 // ── Reclamar bonus primer envío (cliente) ──────────────────────────
 app.post("/coins/claim-first-bonus", authRequired, async (req, res) => {
