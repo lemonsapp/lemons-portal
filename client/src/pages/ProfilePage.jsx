@@ -50,7 +50,7 @@ function ItemCard({ item, owned, equipped, onBuy, onEquip, loading }) {
   return (
     <div style={{
       background: owned ? rarity.bg : "rgba(255,255,255,.03)",
-      border: `1px solid ${owned ? rarity.border : "rgba(237,233,224,.08)"}`,
+      border: "1px solid " + (owned ? rarity.border : "rgba(237,233,224,.08)"),
       borderRadius: 14, padding: "18px 16px",
       position: "relative", overflow: "hidden",
       transition: "all .25s",
@@ -296,7 +296,7 @@ function ItemCard({ item, owned, equipped, onBuy, onEquip, loading }) {
   return (
     <div style={{
       background: owned ? rarity.bg : "rgba(255,255,255,.03)",
-      border: `1px solid ${owned ? rarity.border : "rgba(237,233,224,.08)"}`,
+      border: "1px solid " + (owned ? rarity.border : "rgba(237,233,224,.08)"),
       borderRadius: 14, padding: "18px 16px",
       position: "relative", overflow: "hidden",
       transition: "all .25s",
