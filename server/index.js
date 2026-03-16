@@ -14,6 +14,7 @@ const coinsRouter         = require("./routes/coins");         // ✅ Lemon Coin
 const externalRouter      = require("./routes/external");      // ✅ Cargas Externas
 const notificationsRouter = require("./routes/notifications"); // ✅ Notificaciones LIMÓN
 const aiRouter            = require("./routes/ai");            // 🤖 AI Agent API
+const profileRouter       = require("./routes/profile");         // 👤 Perfil de usuario
 
 const app = express();
 
@@ -2586,6 +2587,7 @@ app.use("/coins",         coinsRouter);
 app.use("/external",      externalRouter);
 app.use("/notifications", notificationsRouter);
 app.use("/api/ai",        aiLimiter, aiRouter); // 🤖 AI Agent — protegido por API key
+app.use("/profile",       profileRouter);
 
 // ── Reclamar bonus primer envío (cliente) ──────────────────────────
 app.post("/coins/claim-first-bonus", authRequired, async (req, res) => {
