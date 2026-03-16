@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import Topbar from "../components/Topbar.jsx";
+import { AnimatedBadge, BadgeRow } from "../components/AnimatedBadge.jsx";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 const getToken = () => localStorage.getItem("token") || sessionStorage.getItem("token");
@@ -128,6 +129,7 @@ export default function ProfilePage() {
   const [editBio,  setEditBio]  = useState(false);
   const [bioText,  setBioText]  = useState("");
   const [toast,    setToast]    = useState(null);
+  const [claimingBeta, setClaimingBeta] = useState(false);
   const [equip,    setEquip]    = useState({ avatar_key:"avatar_lemon", frame_key:null, title_key:null, badges:[] });
 
   const hdrs = { Authorization: "Bearer " + getToken() };
@@ -189,6 +191,17 @@ export default function ProfilePage() {
       else { showToast("Máximo 4 insignias", "#ff6200"); return; }
     }
     setEquip(e2);
+  }
+
+  async function handleClaimBeta() {
+    setClaimingBeta(true);
+    try {
+      const res = await fetch(API + "/profile/claim-beta", { method:"POST", headers: hdrs });
+      const data = await res.json();
+      if (res.ok) { showToast("🧪 Badge BETA reclamado! Eres un Early Adopter!", "#22c55e"); await load(); }
+      else setMsg(data.error || "Error");
+    } catch { setMsg("Error de red"); }
+    setClaimingBeta(false);
   }
 
   async function handleSave() {
@@ -314,18 +327,7 @@ export default function ProfilePage() {
             ) : null}
 
             {equip.badges && equip.badges.length > 0 && (
-              <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
-                {equip.badges.map(bk => {
-                  const b = allItems.find(i => i.key === bk);
-                  if (!b) return null;
-                  const bd = b.data || {};
-                  return (
-                    <div key={bk} style={{ fontFamily:"'DM Mono',monospace",fontSize:9,letterSpacing:"1.5px",textTransform:"uppercase",padding:"4px 12px",borderRadius:100,background:(bd.color||"#f5e03a")+"15",border:"1px solid "+(bd.color||"#f5e03a")+"30",color:bd.color||"#f5e03a",display:"flex",alignItems:"center",gap:5 }}>
-                      {b.emoji} {b.name}
-                    </div>
-                  );
-                })}
-              </div>
+              <BadgeRow badges={equip.badges} allItems={allItems} />
             )}
           </div>
         </div>
@@ -416,6 +418,20 @@ export default function ProfilePage() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* BETA CLAIM BANNER */}
+        {tab === "tienda" && isOwn && !owned.includes("badge_beta") && (
+          <div style={{ marginBottom:20,padding:"20px 24px",background:"linear-gradient(135deg,rgba(34,197,94,.08),rgba(34,197,94,.04))",border:"1px solid rgba(34,197,94,.25)",borderRadius:14,display:"flex",alignItems:"center",gap:20 }}>
+            <div style={{ fontSize:32 }}>🧪</div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontFamily:"'Barlow Condensed',sans-serif",fontSize:16,fontWeight:800,letterSpacing:"1px",textTransform:"uppercase",color:"#4ade80",marginBottom:4 }}>BADGE BETA — Early Adopter</div>
+              <div style={{ fontSize:13,color:"rgba(237,233,224,.55)",lineHeight:1.6 }}>Entraste a Lemon's en sus primeros meses. Esta badge es exclusiva y no estará disponible para siempre. <strong style={{color:"#4ade80"}}>¡Reclamala gratis ahora!</strong></div>
+            </div>
+            <button onClick={handleClaimBeta} disabled={claimingBeta} style={{ fontFamily:"'Barlow Condensed',sans-serif",fontSize:13,fontWeight:800,letterSpacing:"1px",textTransform:"uppercase",background:"#22c55e",color:"#04060d",border:"none",padding:"12px 24px",borderRadius:10,cursor:"pointer",flexShrink:0,opacity:claimingBeta?.6:1 }}>
+              {claimingBeta ? "..." : "🎁 Reclamar gratis"}
+            </button>
           </div>
         )}
 

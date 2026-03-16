@@ -73,6 +73,19 @@ async function migrate() {
       ('badge_express',   'badge',  'Experto Express', '5 envíos Express completados',      '⚡', 150,  'common',    '{"color":"#f5e03a"}')
       ON CONFLICT (key) DO NOTHING
     `);
+    // Badges especiales animadas
+    await db.query(`
+      INSERT INTO profile_items (key, type, name, description, emoji, cost_coins, rarity, data) VALUES
+      ('badge_creator',  'badge', 'CREATOR',    'Creador de Lemon''s ARG',           '⚡', 0,    'legendary', '{"color":"#f5e03a","animated":true,"effect":"lightning","grantOnly":true}'),
+      ('badge_mod',      'badge', 'MOD',         'Moderador oficial',                  '🛡️', 0,    'legendary', '{"color":"#60a5fa","animated":true,"effect":"shield","grantOnly":true}'),
+      ('badge_bot',      'badge', 'BOT',         'Agente automatizado de Lemon''s',    '🤖', 0,    'legendary', '{"color":"#a78bfa","animated":true,"effect":"pulse","grantOnly":true}'),
+      ('badge_beta',     'badge', 'BETA',        'Early adopter — primeros meses',     '🧪', 0,    'legendary', '{"color":"#22c55e","animated":true,"effect":"glow","claimable":true}'),
+      ('badge_vip',      'badge', 'VIP',         'Cliente VIP de Lemon''s',            '💎', 2000, 'legendary', '{"color":"#f5e03a","animated":true,"effect":"sparkle"}'),
+      ('badge_thunder',  'badge', 'THUNDER',     'Importador veloz — siempre Express', '⚡', 800,  'epic',      '{"color":"#fbbf24","animated":true,"effect":"lightning"}'),
+      ('badge_phantom',  'badge', 'PHANTOM',     'El que importa en silencio',         '👻', 600,  'epic',      '{"color":"#818cf8","animated":true,"effect":"float"}'),
+      ('badge_gold_star','badge', 'GOLD STAR',   'Excelencia en cada envío',           '🌟', 1500, 'legendary', '{"color":"#f5e03a","animated":true,"effect":"spin"}')
+      ON CONFLICT (key) DO NOTHING
+    `);
   }
 }
 migrate().catch(e => console.error("[PROFILE MIGRATE]", e));
@@ -275,6 +288,30 @@ router.get("/:id", authRequired, async (req, res) => {
       coins:   { balance, total_earned: Number(coins.total_earned) },
       stats:   { total_shipments:Number(stats.total_shipments), delivered:Number(stats.delivered), total_usd:Number(stats.total_usd) },
     });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── POST /profile/claim-beta — reclamar badge BETA ──────────────────────────
+router.post("/claim-beta", authRequired, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    // Verificar que no lo tenga ya
+    const has = await db.query(`SELECT id FROM user_items WHERE user_id=$1 AND item_key='badge_beta'`, [userId]);
+    if (has.rows[0]) return res.status(400).json({ error: "Ya tenés el badge BETA" });
+    await db.query(`INSERT INTO user_items (user_id, item_key) VALUES ($1, 'badge_beta')`, [userId]);
+    res.json({ ok: true, message: "🧪 Badge BETA reclamado!" });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── POST /profile/grant-badge — dar badge especial (solo admin) ──────────────
+router.post("/grant-badge", authRequired, async (req, res) => {
+  try {
+    const { target_user_id, badge_key } = req.body;
+    // Solo admin puede dar badges especiales
+    const me = await db.query(`SELECT role FROM users WHERE id=$1`, [req.user.id]);
+    if (me.rows[0]?.role !== "admin") return res.status(403).json({ error: "Solo admin" });
+    await db.query(`INSERT INTO user_items (user_id, item_key) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [target_user_id, badge_key]);
+    res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
