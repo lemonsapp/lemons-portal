@@ -26,9 +26,9 @@
     body{background:var(--void);color:var(--white);font-family:'Barlow',sans-serif;overflow-x:hidden;cursor:none}
     body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");opacity:.022;pointer-events:none;z-index:9998}
 
-    #cur{position:fixed;width:10px;height:10px;background:var(--lemon);border-radius:50%;pointer-events:none;z-index:9999;left:-100px;top:-100px;transition:width .15s,height .15s;box-shadow:0 0 8px rgba(245,224,58,.6)}
+    #cur{position:fixed;width:10px;height:10px;background:var(--lemon);border-radius:50%;pointer-events:none;z-index:9999;left:-100px;top:-100px;transform:translate(-50%,-50%);transition:width .15s,height .15s;box-shadow:0 0 8px rgba(245,224,58,.6)}
     #cur.xl{width:38px;height:38px}
-    #cur-ring{position:fixed;width:36px;height:36px;border:1px solid rgba(245,224,58,.28);border-radius:50%;pointer-events:none;z-index:9997;left:-100px;top:-100px;transition:width .2s,height .2s,opacity .2s}
+    #cur-ring{position:fixed;width:36px;height:36px;border:1px solid rgba(245,224,58,.28);border-radius:50%;pointer-events:none;z-index:9997;left:-100px;top:-100px;transform:translate(-50%,-50%);transition:width .2s,height .2s,opacity .2s}
 
     ::-webkit-scrollbar{width:3px}
     ::-webkit-scrollbar-track{background:var(--void)}
@@ -819,10 +819,10 @@ const curR=document.getElementById('cur-ring');
 let mx=0,my=0,rx=0,ry=0;
 document.addEventListener('mousemove',e=>{
   mx=e.clientX;my=e.clientY;
-  cur.style.left=(mx-6)+'px';
-  cur.style.top=(my-6)+'px';
+  cur.style.left=mx+'px';
+  cur.style.top=my+'px';
 });
-(function animR(){rx+=(mx-rx)*.1;ry+=(my-ry)*.1;curR.style.left=(rx-18)+'px';curR.style.top=(ry-18)+'px';requestAnimationFrame(animR)})();
+(function animR(){rx+=(mx-rx)*.1;ry+=(my-ry)*.1;curR.style.left=rx+'px';curR.style.top=ry+'px';requestAnimationFrame(animR)})();
 document.querySelectorAll('a,button').forEach(el=>{
   el.addEventListener('mouseenter',()=>{cur.classList.add('xl');curR.style.width='54px';curR.style.height='54px';curR.style.opacity='.4'});
   el.addEventListener('mouseleave',()=>{cur.classList.remove('xl');curR.style.width='36px';curR.style.height='36px';curR.style.opacity='1'});
