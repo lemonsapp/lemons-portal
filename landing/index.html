@@ -23,17 +23,14 @@
       --border:rgba(237,233,224,.08);--border2:rgba(237,233,224,.14);
     }
     html{scroll-behavior:smooth}
-    body{background:var(--void);color:var(--white);font-family:'Barlow',sans-serif;overflow-x:hidden;cursor:none}
+    body{background:var(--void);color:var(--white);font-family:'Barlow',sans-serif;overflow-x:hidden}
     body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");opacity:.022;pointer-events:none;z-index:9998}
 
     
     
     
 
-    #cur{position:fixed;width:10px;height:10px;background:#f5e03a;border-radius:50%;pointer-events:none;z-index:9999;transform:translate(-50%,-50%);box-shadow:0 0 10px rgba(245,224,58,.7)}
-#cur.xl{width:30px;height:30px}
-#cur-ring{position:fixed;width:34px;height:34px;border:1.5px solid rgba(245,224,58,.35);border-radius:50%;pointer-events:none;z-index:9997;transform:translate(-50%,-50%)}
-::-webkit-scrollbar{width:3px}
+    ::-webkit-scrollbar{width:3px}
     ::-webkit-scrollbar-track{background:var(--void)}
     ::-webkit-scrollbar-thumb{background:var(--lemon);border-radius:2px}
 
@@ -329,9 +326,6 @@
   </style>
 </head>
 <body>
-
-<div id="cur"></div>
-<div id="cur-ring"></div>
 
 <nav id="nav">
   <a href="#" class="nl">LEMON<span class="y">'S</span>&nbsp;<span class="pulse"></span>&nbsp;ARG</a>
@@ -813,30 +807,9 @@
 </footer>
 
 <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
-// Add js-loaded for animations
-document.documentElement.classList.add('js-loaded');
 
-// Cursor - bulletproof version
-(function(){
-  var style = document.createElement('style');
-  style.textContent = '#cur{position:fixed;width:10px;height:10px;background:#f5e03a;border-radius:50%;pointer-events:none;z-index:9999;transform:translate(-50%,-50%);box-shadow:0 0 10px rgba(245,224,58,.7);transition:width .15s,height .15s}#cur-ring{position:fixed;width:34px;height:34px;border:1.5px solid rgba(245,224,58,.35);border-radius:50%;pointer-events:none;z-index:9997;transform:translate(-50%,-50%);transition:width .2s,height .2s}';
-  document.head.appendChild(style);
-  var c = document.getElementById('cur');
-  var r = document.getElementById('cur-ring');
-  if(!c||!r) return;
-  c.style.display='block';
-  r.style.display='block';
-  var mx=0,my=0,rx=0,ry=0;
-  document.addEventListener('mousemove',function(e){
-    mx=e.clientX; my=e.clientY;
-    c.style.left=mx+'px';
-    c.style.top=my+'px';
-  });
-  (function loop(){
-    rx+=(mx-rx)*.12; ry+=(my-ry)*.12;
-    r.style.left=rx+'px'; r.style.top=ry+'px';
-    requestAnimationFrame(loop);
-  })();
+
+
   document.querySelectorAll('a,button').forEach(function(el){
     el.addEventListener('mouseenter',function(){c.style.width='32px';c.style.height='32px'});
     el.addEventListener('mouseleave',function(){c.style.width='10px';c.style.height='10px'});
