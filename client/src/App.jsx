@@ -24,15 +24,20 @@ const getToken = () =>
 
 async function fetchMe() {
   const token = getToken();
+  console.log("[AUTH] token:", token ? "existe" : "NO HAY TOKEN");
   if (!token) return null;
 
   try {
+    console.log("[AUTH] fetching", API + "/auth/me");
     const res = await fetch(`${API}/auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
     });
+    console.log("[AUTH] status:", res.status);
     const data = await res.json().catch(() => ({}));
+    console.log("[AUTH] data:", data);
     return res.ok ? data.user : null;
-  } catch {
+  } catch(e) {
+    console.error("[AUTH] error:", e);
     return null;
   }
 }
