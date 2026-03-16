@@ -39,18 +39,26 @@ async function fetchMe() {
 
 function AuthGate({ children, allowRoles }) {
   const [loading, setLoading] = useState(true);
-  const [me, setMe] = useState(null);
+  const [me, setMe] = useState(undefined);
   const location = useLocation();
 
   useEffect(() => {
     (async () => {
       const user = await fetchMe();
-      setMe(user);
+      setMe(user || null);
       setLoading(false);
     })();
   }, []);
 
-  if (loading) return <div style={{ padding: 20 }}>Cargando…</div>;
+  if (loading || me === undefined) return (
+    <div style={{
+      minHeight: "100vh", display: "grid", placeItems: "center",
+      background: "#04060d", color: "rgba(237,233,224,.4)",
+      fontFamily: "'DM Mono',monospace", fontSize: 12, letterSpacing: "2px"
+    }}>
+      CARGANDO...
+    </div>
+  );
 
   if (!me) return <Navigate to="/" replace state={{ from: location.pathname }} />;
 
