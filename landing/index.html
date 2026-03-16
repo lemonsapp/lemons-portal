@@ -26,9 +26,9 @@
     body{background:var(--void);color:var(--white);font-family:'Barlow',sans-serif;overflow-x:hidden;cursor:none}
     body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");opacity:.022;pointer-events:none;z-index:9998}
 
-    #cur{position:fixed;width:12px;height:12px;background:var(--lemon);border-radius:50%;pointer-events:none;z-index:9999;transform:translate(-50%,-50%);transition:width .15s,height .15s;mix-blend-mode:difference}
+    #cur{position:fixed;width:12px;height:12px;background:var(--lemon);border-radius:50%;pointer-events:none;z-index:9999;left:-100px;top:-100px;transition:width .15s,height .15s,left .05s,top .05s;mix-blend-mode:difference}
     #cur.xl{width:38px;height:38px}
-    #cur-ring{position:fixed;width:36px;height:36px;border:1px solid rgba(245,224,58,.28);border-radius:50%;pointer-events:none;z-index:9997;transform:translate(-50%,-50%);transition:width .2s,height .2s,opacity .2s}
+    #cur-ring{position:fixed;width:36px;height:36px;border:1px solid rgba(245,224,58,.28);border-radius:50%;pointer-events:none;z-index:9997;left:-100px;top:-100px;transition:width .2s,height .2s,opacity .2s}
 
     ::-webkit-scrollbar{width:3px}
     ::-webkit-scrollbar-track{background:var(--void)}
@@ -430,7 +430,7 @@
     <div class="step rv"><div class="step-n">01</div><span class="step-ico">💬</span><div class="step-t">Consultanos primero</div><p class="step-d">Antes de comprar, hablamos. Evaluamos el producto, el régimen que aplica y la mejor forma de ingresarlo al país.</p></div>
     <div class="step rv d1"><div class="step-n">02</div><span class="step-ico">🛒</span><div class="step-t">Comprás con seguridad</div><p class="step-d">Con el asesoramiento listo, comprás y enviás a nuestro depósito. También ayudamos con gestión de pago si no tenés tarjeta internacional.</p></div>
     <div class="step rv d2"><div class="step-n">03</div><span class="step-ico">✈️</span><div class="step-t">Viaja y se gestiona</div><p class="step-d">Recibimos, consolidamos y despachamos. Gestionamos la documentación aduanera de forma conjunta para que el proceso sea fluido.</p></div>
-    <div class="step rv d3"><div class="step-n">04</div><span class="step-ico">🏠</span><div class="step-t">Lo recibís en casa</div><p class="step-d">Entregamos en todo el país. GBA sin cargo extra, interior con flete según destino. Seguí todo en tiempo real desde tu portal.</p></div>
+    <div class="step rv d3"><div class="step-n">04</div><span class="step-ico">🏠</span><div class="step-t">Lo recibís en casa</div><p class="step-d">Entregamos en todo el país. Retiro en oficina CABA o envío a todas las provincias (flete nacional aparte), interior con flete según destino. Seguí todo en tiempo real desde tu portal.</p></div>
   </div>
   <div class="img-banner rv" style="margin-top:52px">
     <img src="./LOGISTICA_FUTURISTA.jpg" alt="Logística Lemon's" onerror="this.src='https://images.unsplash.com/photo-1578575437130-527eed3abbec?w=1400&q=80'"/>
@@ -455,7 +455,69 @@
     <div class="pc"><div class="porg">🇨🇳 China</div><div class="psvc">Express</div><div class="ptime">~7 días hábiles</div><div><span class="pfrom">Desde</span><span class="pusd">$68</span><span class="punit">USD/kg</span></div><ul class="pfeats"><li>Despacho prioritario</li><li>Tiempos optimizados</li><li>Ideal para reposición</li></ul></div>
     <div class="pc"><div class="porg">🇪🇺 Europa</div><div class="psvc">Normal</div><div class="ptime">18 a 20 días hábiles</div><div><span class="pfrom">Desde</span><span class="pusd">$58</span><span class="punit">USD/kg</span></div><ul class="pfeats"><li>España y toda Europa</li><li>Gestión conjunta</li><li>Entrega a domicilio</li></ul></div>
   </div>
-  <div class="p-disc rv"><div class="p-disc-ico">📋</div><div><strong>Peso mínimo facturable: 1 kg.</strong> Volúmenes grandes tienen tarifas diferenciadas — a mayor cantidad, mejor precio por kilo. Envíos a todo el país: GBA sin cargo adicional, interior con flete nacional según destino. <strong>Para carga comercial, consultanos para una cotización personalizada.</strong></div></div>
+
+  <!-- MARITIMO -->
+  <div class="rv" style="margin-bottom:52px">
+    <div style="background:var(--mid);border:1px solid var(--border2);border-radius:16px;overflow:hidden">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0">
+        <div style="padding:44px 40px;border-right:1px solid var(--border)">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+            <span style="font-size:40px">🚢</span>
+            <div>
+              <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--ghost)">Servicio especial</div>
+              <div style="font-family:'Bebas Neue',sans-serif;font-size:38px;line-height:1;letter-spacing:1px">Marítimo</div>
+            </div>
+          </div>
+          <p style="font-size:14px;color:var(--ghost);line-height:1.8;margin-bottom:24px">
+            Para cargas grandes, contenedores o mercadería de alto volumen. El precio del marítimo depende 100% de una cotización personalizada — no hay tarifa fija. Evaluamos cada caso con vos.
+          </p>
+          <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">
+            <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ghost)">
+              <span style="color:var(--lemon);font-weight:900;font-size:11px">✓</span> Contenedor completo (FCL) o carga suelta (LCL)
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ghost)">
+              <span style="color:var(--lemon);font-weight:900;font-size:11px">✓</span> Cualquier origen: USA, China, Europa y más
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ghost)">
+              <span style="color:var(--lemon);font-weight:900;font-size:11px">✓</span> Ideal para volúmenes comerciales altos
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ghost)">
+              <span style="color:var(--lemon);font-weight:900;font-size:11px">✓</span> Asesoramiento aduanero incluido
+            </div>
+          </div>
+          <a href="https://wa.me/5491157479346?text=Hola!%20Quiero%20cotizar%20un%20envío%20marítimo" 
+             style="display:inline-flex;align-items:center;gap:8px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:800;letter-spacing:1px;text-transform:uppercase;background:var(--lemon);color:var(--void);padding:14px 28px;border-radius:8px;text-decoration:none;transition:all .2s"
+             onmouseover="this.style.background='#fff9b0';this.style.transform='translateY(-2px)'" 
+             onmouseout="this.style.background='var(--lemon)';this.style.transform='translateY(0)'">
+            💬 Cotizar marítimo →
+          </a>
+        </div>
+        <div style="padding:44px 40px;background:rgba(245,224,58,.025)">
+          <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--orange);margin-bottom:20px;display:flex;align-items:center;gap:8px"><span style="display:block;width:20px;height:1px;background:var(--orange)"></span>Para cotizar necesitamos</div>
+          <div style="display:flex;flex-direction:column;gap:14px">
+            <div style="padding:18px 20px;background:var(--dark);border-radius:12px;border:1px solid var(--border2)">
+              <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">🌍 País de origen</div>
+              <p style="font-size:13px;color:var(--ghost);line-height:1.6">Desde dónde sale la mercadería. Puerto o ciudad de origen.</p>
+            </div>
+            <div style="padding:18px 20px;background:var(--dark);border-radius:12px;border:1px solid var(--border2)">
+              <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">📦 Tipo de mercadería</div>
+              <p style="font-size:13px;color:var(--ghost);line-height:1.6">Qué es, posición arancelaria si la tenés, y si aplica alguna restricción.</p>
+            </div>
+            <div style="padding:18px 20px;background:var(--dark);border-radius:12px;border:1px solid var(--border2)">
+              <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">📋 Documentación</div>
+              <p style="font-size:13px;color:var(--ghost);line-height:1.6">Proforma / Invoice, Packing List. Cuanto más detalle, mejor la cotización.</p>
+            </div>
+            <div style="padding:18px 20px;background:rgba(245,224,58,.05);border-radius:12px;border:1px solid rgba(245,224,58,.15)">
+              <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;color:var(--lemon)">⚖️ Volumen y peso</div>
+              <p style="font-size:13px;color:var(--ghost);line-height:1.6">CBM (metros cúbicos) o peso total estimado. Si no lo sabés, lo calculamos juntos.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="p-disc rv"><div class="p-disc-ico">📋</div><div><strong>Peso mínimo facturable: 1 kg.</strong> Volúmenes grandes tienen tarifas diferenciadas — a mayor cantidad, mejor precio por kilo. Envíos a todo el país: Retiro en oficina CABA sin costo adicional, interior con flete nacional según destino. <strong>Para carga comercial, consultanos para una cotización personalizada.</strong></div></div>
   <div class="calc rv">
     <div>
       <div class="calc-title">Calculá tu envío</div>
@@ -501,7 +563,7 @@
         <div class="adp"><div class="adn">01</div><div><div class="adtitle">Análisis previo del producto</div><p class="addesc">Antes de importar evaluamos qué régimen aplica, qué aranceles pueden corresponder y cuál es la mejor forma de ingresar el producto al país.</p></div></div>
         <div class="adp"><div class="adn">02</div><div><div class="adtitle">Documentación en conjunto</div><p class="addesc">Trabajamos con vos en toda la documentación: facturas, certificados y todo lo que aduana requiera. Sin sorpresas de último momento.</p></div></div>
         <div class="adp"><div class="adn">03</div><div><div class="adtitle">Seguimiento en tiempo real</div><p class="addesc">Accedés al portal y ves el estado de tu envío en cada etapa, desde que llega a nuestro depósito hasta que lo tenés en mano.</p></div></div>
-        <div class="adp"><div class="adn">04</div><div><div class="adtitle">Entrega final</div><p class="addesc">Una vez liberado en aduana, coordinamos la entrega. GBA directo, interior vía logísticas nacionales con seguimiento hasta el final.</p></div></div>
+        <div class="adp"><div class="adn">04</div><div><div class="adtitle">Entrega final</div><p class="addesc">Una vez liberado en aduana, coordinamos la entrega. Retiro en oficina Palermo, CABA, interior vía logísticas nacionales con seguimiento hasta el final.</p></div></div>
       </div>
     </div>
     <div>
@@ -672,7 +734,7 @@
     <div class="fqi"><button class="fqq" onclick="tFaq(this)">¿Cuánto tarda en llegar?<span class="fqico">+</span></button><div class="fqa"><div class="fqa-in">USA Normal: 7 a 10 días hábiles. USA Express: 72 horas hábiles. China Normal: ~18 días. China Express: ~7 días. Europa: 18 a 20 días. Tiempos contados desde que el paquete ingresa a nuestro depósito. El trámite aduanero puede sumar días en casos puntuales.</div></div></div>
     <div class="fqi"><button class="fqq" onclick="tFaq(this)">¿Qué incluye la gestión aduanera?<span class="fqico">+</span></button><div class="fqa"><div class="fqa-in">Te acompañamos en todo el proceso de documentación e ingreso al país. Trabajamos junto a vos para que la declaración, el régimen y los trámites estén en orden. Es importante entender que importar en Argentina siempre involucra trámites y aranceles que se definen caso por caso — no somos un servicio sin trámites, somos el equipo que los hace manejables.</div></div></div>
     <div class="fqi"><button class="fqq" onclick="tFaq(this)">¿Cómo se calcula el costo?<span class="fqico">+</span></button><div class="fqa"><div class="fqa-in">El precio base se calcula por kilogramo (mínimo 1 kg). A mayor volumen, mejor tarifa por kilo. Al precio por kg se suman los aranceles y derechos aduaneros según el producto y el régimen. Usá la calculadora como referencia y luego hablamos para el número real.</div></div></div>
-    <div class="fqi"><button class="fqq" onclick="tFaq(this)">¿Hacen envíos a todo el país?<span class="fqico">+</span></button><div class="fqa"><div class="fqa-in">Sí. Primero importamos hacia Argentina y luego despachamos al destino final. El flete al GBA no tiene costo adicional. Para el interior se suma el costo de logística nacional según localidad y peso. Trabajamos con las principales empresas de logística del país.</div></div></div>
+    <div class="fqi"><button class="fqq" onclick="tFaq(this)">¿Hacen envíos a todo el país?<span class="fqico">+</span></button><div class="fqa"><div class="fqa-in">Sí. Primero importamos hacia Argentina y luego despachamos al destino final. Retiro en oficina de Palermo, CABA sin costo adicional. Para el interior se suma el costo de logística nacional según localidad y peso. Trabajamos con las principales empresas de logística del país.</div></div></div>
     <div class="fqi"><button class="fqq" onclick="tFaq(this)">¿Cómo sigo el estado de mi paquete?<span class="fqico">+</span></button><div class="fqa"><div class="fqa-in">Todos los clientes tienen acceso al portal en app.lemonsarg.com con el estado actualizado en tiempo real. También enviamos notificaciones por WhatsApp en cada cambio de estado: depósito, despacho, tránsito, listo para entrega y entregado.</div></div></div>
     <div class="fqi"><button class="fqq" onclick="tFaq(this)">¿Puedo importar para mi negocio?<span class="fqico">+</span></button><div class="fqa"><div class="fqa-in">Sí. Trabajamos con particulares, emprendedores y empresas. Para carga comercial o volúmenes frecuentes tenemos tarifas diferenciadas. Si estás pensando en importar para revender o para tu negocio, hablemos antes de arrancar — hay que definir bien el régimen y la forma más conveniente.</div></div></div>
   </div>
@@ -755,8 +817,12 @@ document.documentElement.classList.add('js-loaded');
 const cur=document.getElementById('cur');
 const curR=document.getElementById('cur-ring');
 let mx=0,my=0,rx=0,ry=0;
-document.addEventListener('mousemove',e=>{mx=e.clientX;my=e.clientY;cur.style.left=mx+'px';cur.style.top=my+'px'});
-(function animR(){rx+=(mx-rx)*.1;ry+=(my-ry)*.1;curR.style.left=rx+'px';curR.style.top=ry+'px';requestAnimationFrame(animR)})();
+document.addEventListener('mousemove',e=>{
+  mx=e.clientX;my=e.clientY;
+  cur.style.left=(mx-6)+'px';
+  cur.style.top=(my-6)+'px';
+});
+(function animR(){rx+=(mx-rx)*.1;ry+=(my-ry)*.1;curR.style.left=(rx-18)+'px';curR.style.top=(ry-18)+'px';requestAnimationFrame(animR)})();
 document.querySelectorAll('a,button').forEach(el=>{
   el.addEventListener('mouseenter',()=>{cur.classList.add('xl');curR.style.width='54px';curR.style.height='54px';curR.style.opacity='.4'});
   el.addEventListener('mouseleave',()=>{cur.classList.remove('xl');curR.style.width='36px';curR.style.height='36px';curR.style.opacity='1'});
