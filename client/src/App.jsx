@@ -38,19 +38,21 @@ async function fetchMe() {
 }
 
 function AuthGate({ children, allowRoles }) {
-  const [loading, setLoading] = useState(true);
-  const [me, setMe] = useState(undefined);
+  const [status, setStatus] = useState("loading"); // loading | ok | fail
+  const [me, setMe] = useState(null);
   const location = useLocation();
 
   useEffect(() => {
-    (async () => {
-      const user = await fetchMe();
-      setMe(user || null);
-      setLoading(false);
-    })();
+    let cancelled = false;
+    fetchMe().then(user => {
+      if (cancelled) return;
+      if (user) { setMe(user); setStatus("ok"); }
+      else setStatus("fail");
+    }).catch(() => { if (!cancelled) setStatus("fail"); });
+    return () => { cancelled = true; };
   }, []);
 
-  if (loading || me === undefined) return (
+  if (status === "loading") return (
     <div style={{
       minHeight: "100vh", display: "grid", placeItems: "center",
       background: "#04060d", color: "rgba(237,233,224,.4)",
@@ -60,7 +62,7 @@ function AuthGate({ children, allowRoles }) {
     </div>
   );
 
-  if (!me) return <Navigate to="/" replace state={{ from: location.pathname }} />;
+  if (status === "fail") return <Navigate to="/" replace state={{ from: location.pathname }} />;
 
   if (allowRoles && !allowRoles.includes(me.role)) {
     return <Navigate to="/client/shipments" replace />;
