@@ -43,8 +43,7 @@ async function migrate() {
     )
   `);
   // Seed items si no hay
-  const cnt = await db.query(`SELECT COUNT(*) FROM profile_items`);
-  if (Number(cnt.rows[0].count) === 0) {
+  if (true) {
     await db.query(`
       INSERT INTO profile_items (key, type, name, description, emoji, cost_coins, rarity, data) VALUES
       -- Avatares
