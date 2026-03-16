@@ -31,6 +31,8 @@ export default function Topbar({ title = "LEMON'S" }) {
   const [dropOpen, setDropOpen] = useState(null);
   const [dropPos, setDropPos]   = useState({ top: 0, left: 0 });
   const [scrolled, setScrolled] = useState(false);
+  const [userDrop, setUserDrop] = useState(false);
+  const [profileData, setProfileData] = useState(null);
   const btnRefs = useRef({});
   const location = useLocation();
 
@@ -58,17 +60,25 @@ export default function Topbar({ title = "LEMON'S" }) {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await res.json().catch(() => ({}));
-        if (res.ok) setMe(data.user);
+        if (res.ok) {
+          setMe(data.user);
+          // Cargar perfil para el avatar
+          try {
+            const pRes = await fetch(`${API}/profile`, { headers: { Authorization: `Bearer ${token}` } });
+            const pData = await pRes.json().catch(() => ({}));
+            if (pRes.ok) setProfileData(pData);
+          } catch { /* no-op */ }
+        }
       } catch { /* no-op */ }
     })();
   }, []);
 
   useEffect(() => {
-    if (!dropOpen) return;
-    const handler = () => setDropOpen(null);
+    if (!dropOpen && !userDrop) return;
+    const handler = () => { setDropOpen(null); setUserDrop(false); };
     document.addEventListener("click", handler);
     return () => document.removeEventListener("click", handler);
-  }, [dropOpen]);
+  }, [dropOpen, userDrop]);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -86,6 +96,24 @@ export default function Topbar({ title = "LEMON'S" }) {
   const navLinks     = isStaff ? NAV_STAFF : NAV_CLIENT;
   const roleLabel    = me?.role === "admin" ? "Admin" : isStaff ? "Operador" : "Cliente";
   const avatarLetter = (me?.name || "L").trim().slice(0, 1).toUpperCase();
+  const avatarItem = profileData?.profile && profileData.profile.avatar_key;
+  const shopItems  = [];
+  const avatarEmoji = (() => {
+    const key = profileData?.profile?.avatar_key || "avatar_lemon";
+    const map = {
+      avatar_lemon: "🍋", avatar_rocket: "🚀", avatar_globe: "🌍",
+      avatar_diamond: "💎", avatar_fire: "🔥", avatar_crown: "👑", avatar_lemon_fly: "🍋",
+    };
+    return map[key] || "🍋";
+  })();
+  const avatarBg = (() => {
+    const key = profileData?.profile?.avatar_key || "avatar_lemon";
+    const map = {
+      avatar_lemon: "#f5e03a", avatar_rocket: "#3b82f6", avatar_globe: "#22c55e",
+      avatar_diamond: "#a78bfa", avatar_fire: "#ff6200", avatar_crown: "#f5e03a", avatar_lemon_fly: "#f5e03a",
+    };
+    return map[key] || "#f5e03a";
+  })();
 
   const navLinkStyle = (active) => ({
     display: "flex", alignItems: "center", gap: 6,
@@ -169,6 +197,30 @@ export default function Topbar({ title = "LEMON'S" }) {
           background: rgba(237,233,224,.06); border: 1px solid rgba(237,233,224,.12);
           place-items: center; cursor: pointer; color: #ede9e0; font-size: 16px;
         }
+        .tb-user-btn {
+          cursor: pointer; position: relative;
+          transition: all .2s;
+        }
+        .tb-user-btn:hover { background: rgba(237,233,224,.08) !important; }
+        .tb-user-drop {
+          position: fixed;
+          background: rgba(7,10,20,.98);
+          border: 1px solid rgba(237,233,224,.12);
+          border-radius: 14px; overflow: hidden; min-width: 220px;
+          z-index: 9999; box-shadow: 0 16px 48px rgba(0,0,0,.7);
+          backdrop-filter: blur(20px);
+        }
+        .tb-user-drop-item {
+          display: flex; align-items: center; gap: 10px;
+          padding: 13px 18px;
+          font-family: "Barlow Condensed", sans-serif;
+          font-size: 13px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase;
+          color: rgba(237,233,224,.75); text-decoration: none;
+          border-bottom: 1px solid rgba(237,233,224,.06); transition: all .15s;
+          cursor: pointer; background: none; border-left: none; border-right: none; border-top: none; width: 100%; text-align: left;
+        }
+        .tb-user-drop-item:hover { background: rgba(245,224,58,.06); color: #f5e03a; }
+        .tb-user-drop-item:last-child { border-bottom: none; }
         .tb-dropdown {
           position: fixed;
           background: rgba(11,15,30,.98);
@@ -279,15 +331,62 @@ export default function Topbar({ title = "LEMON'S" }) {
           {/* Right */}
           <div className="tb-right">
             {me && (
-              <div className="tb-user">
-                <div className="tb-avatar">{avatarLetter}</div>
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span className="tb-role">{roleLabel}</span>
-                    <span className="tb-name">{me.name}</span>
+              <div style={{ position: "relative" }}>
+                <div
+                  className="tb-user tb-user-btn"
+                  onClick={(e) => { e.stopPropagation(); setUserDrop(o => !o); }}
+                >
+                  {/* Avatar con emoji del perfil */}
+                  <div style={{
+                    width: 32, height: 32, borderRadius: "50%",
+                    background: avatarBg,
+                    display: "grid", placeItems: "center",
+                    fontSize: 16, flexShrink: 0,
+                    color: "#04060d",
+                  }}>
+                    {avatarEmoji}
                   </div>
-                  <div className="tb-sub">#{me.client_number} · {me.email}</div>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span className="tb-role">{roleLabel}</span>
+                      <span className="tb-name">{me.name}</span>
+                    </div>
+                    <div className="tb-sub">#{me.client_number} · {me.email}</div>
+                  </div>
+                  <span style={{ fontSize: 9, color: "rgba(237,233,224,.3)", marginLeft: 2 }}>▼</span>
                 </div>
+
+                {/* Dropdown de usuario */}
+                {userDrop && (
+                  <div className="tb-user-drop" style={{ top: 70, right: 0 }} onClick={e => e.stopPropagation()}>
+                    {/* Header del dropdown */}
+                    <div style={{ padding: "14px 18px", borderBottom: "1px solid rgba(237,233,224,.08)", display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ width: 40, height: 40, borderRadius: "50%", background: avatarBg, display: "grid", placeItems: "center", fontSize: 20, flexShrink: 0 }}>
+                        {avatarEmoji}
+                      </div>
+                      <div>
+                        <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 16, letterSpacing: 2 }}>{me.name}</div>
+                        <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, letterSpacing: "1.5px", textTransform: "uppercase", color: "rgba(237,233,224,.4)", marginTop: 2 }}>
+                          #{me.client_number} · {profileData?.coins?.balance?.toLocaleString() || 0} 🍋
+                        </div>
+                      </div>
+                    </div>
+                    <a href="/perfil" className="tb-user-drop-item" onClick={() => setUserDrop(false)}>
+                      👤 Mi perfil
+                    </a>
+                    <a href="/coins" className="tb-user-drop-item" onClick={() => setUserDrop(false)}>
+                      🍋 Lemon Coins
+                    </a>
+                    {isStaff && (
+                      <a href="/dashboard" className="tb-user-drop-item" onClick={() => setUserDrop(false)}>
+                        📊 Dashboard
+                      </a>
+                    )}
+                    <button className="tb-user-drop-item" onClick={() => { setUserDrop(false); logout(); }} style={{ color: "rgba(255,98,0,.8)" }}>
+                      🚪 Cerrar sesión
+                    </button>
+                  </div>
+                )}
               </div>
             )}
             <button className="tb-logout" onClick={logout}>Salir</button>
