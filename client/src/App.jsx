@@ -15,6 +15,7 @@ import LemonCoins from "./pages/LemonCoins.jsx";
 import CoinsOperator from "./pages/CoinsOperator.jsx";
 import ExternalCargo from "./pages/ExternalCargo.jsx";
 import LemonNotification from "./components/LemonNotification.jsx";
+import ProfilePage from "./pages/ProfilePage.jsx";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
@@ -141,6 +142,16 @@ export default function App() {
           element={
             <AuthGate allowRoles={["operator", "admin"]}>
               <ExternalCargo />
+            </AuthGate>
+          }
+        />
+
+        {/* Perfil */}
+        <Route
+          path="/perfil"
+          element={
+            <AuthGate>
+              <ProfilePage />
             </AuthGate>
           }
         />
