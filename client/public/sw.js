@@ -1,9 +1,9 @@
 // Lemons Portal — Service Worker
 // Cache strategy: network-first para API, cache-first para assets estáticos
 
-const CACHE_NAME = 'lemons-v1';
-const STATIC_CACHE = 'lemons-static-v1';
-const API_CACHE = 'lemons-api-v1';
+const CACHE_NAME = 'lemons-v3';
+const STATIC_CACHE = 'lemons-static-v3';
+const API_CACHE = 'lemons-api-v3';
 
 // Assets estáticos a pre-cachear
 const STATIC_ASSETS = [
