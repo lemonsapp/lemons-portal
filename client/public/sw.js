@@ -26,6 +26,7 @@ const APP_ROUTES = [
   '/login',
   '/coins',
   '/coins/operator',
+  '/perfil',
 ];
 
 // Endpoints de API a cachear (solo GET, para offline)
