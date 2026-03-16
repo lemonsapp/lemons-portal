@@ -20,6 +20,7 @@ const NAV_STAFF = [
 
 const NAV_CLIENT = [
   { path: "/client/shipments", label: "Mis envíos",  icon: "📦" },
+  { path: "/perfil",             label: "Mi Perfil",   icon: "👤" },
   { path: "/client/quote",     label: "Presupuesto", icon: "🧮" },
   { path: "/coins",            label: "Coins",       icon: "🍋" },
 ];
