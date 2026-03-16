@@ -229,4 +229,53 @@ router.patch("/", authRequired, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── GET /profile/:id — ver perfil de otro usuario (solo staff) ───────────────
+router.get("/:id", authRequired, async (req, res) => {
+  try {
+    const requesterId = req.user.id;
+    const targetId    = parseInt(req.params.id);
+
+    // Solo staff puede ver perfiles ajenos
+    const requesterQ = await db.query(`SELECT role FROM users WHERE id=$1`, [requesterId]);
+    const role = requesterQ.rows[0]?.role;
+    if (requesterId !== targetId && role !== "operator" && role !== "admin") {
+      return res.status(403).json({ error: "Sin permiso" });
+    }
+
+    await db.query(`INSERT INTO user_profiles (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`, [targetId]);
+
+    const [profileQ, coinsQ, userQ, itemsQ, statsQ] = await Promise.all([
+      db.query(`SELECT * FROM user_profiles WHERE user_id=$1`, [targetId]),
+      db.query(`SELECT balance, total_earned FROM lemon_coins WHERE user_id=$1`, [targetId]),
+      db.query(`SELECT id, name, email, client_number, role, created_at FROM users WHERE id=$1`, [targetId]),
+      db.query(`SELECT item_key FROM user_items WHERE user_id=$1`, [targetId]),
+      db.query(`SELECT COUNT(*) AS total_shipments, COUNT(*) FILTER (WHERE status='Entregado') AS delivered, COALESCE(SUM(estimated_usd) FILTER (WHERE status='Entregado'),0) AS total_usd FROM shipments WHERE user_id=$1`, [targetId]),
+    ]);
+
+    if (!userQ.rows[0]) return res.status(404).json({ error: "Usuario no encontrado" });
+
+    const coins  = coinsQ.rows[0] || { balance:0, total_earned:0 };
+    const stats  = statsQ.rows[0];
+    const balance = Number(coins.balance);
+    const level   = balance >= 1500 ? "gold" : balance >= 500 ? "silver" : "bronze";
+    const items   = itemsQ.rows.map(r => r.item_key);
+
+    // Auto-badges
+    const autoBadges = [];
+    if (Number(stats.delivered) >= 1)    autoBadges.push("badge_first");
+    if (Number(stats.delivered) >= 10)   autoBadges.push("badge_x10");
+    if (Number(stats.total_usd) >= 5000) autoBadges.push("badge_whale");
+    for (const badge of autoBadges) {
+      await db.query(`INSERT INTO user_items (user_id,item_key) VALUES ($1,$2) ON CONFLICT DO NOTHING`, [targetId, badge]);
+    }
+
+    res.json({
+      user:    { ...userQ.rows[0], level },
+      profile: { ...profileQ.rows[0], owned_items: [...new Set([...items,...autoBadges])] },
+      coins:   { balance, total_earned: Number(coins.total_earned) },
+      stats:   { total_shipments:Number(stats.total_shipments), delivered:Number(stats.delivered), total_usd:Number(stats.total_usd) },
+    });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 module.exports = router;
